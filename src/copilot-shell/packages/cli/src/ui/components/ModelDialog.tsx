@@ -309,16 +309,18 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
         persistModelSelection(settings, effectiveModelId);
         persistAuthTypeSelection(settings, effectiveAuthType);
 
-        const baseUrl = after?.baseUrl ?? t('(default)');
-        const maskedKey = maskApiKey(after?.apiKey);
+        const showBaseUrlAndKey =
+          effectiveAuthType !== AuthType.USE_ALIYUN &&
+          effectiveAuthType !== AuthType.QWEN_OAUTH;
         uiState?.historyManager.addItem(
           {
             type: 'info',
             text:
               `authType: ${effectiveAuthType}\n` +
-              `Using model: ${effectiveModelId}\n` +
-              `Base URL: ${baseUrl}\n` +
-              `API key: ${maskedKey}`,
+              `Using model: ${effectiveModelId}` +
+              (showBaseUrlAndKey
+                ? `\nBase URL: ${after?.baseUrl ?? t('(default)')}\nAPI key: ${maskApiKey(after?.apiKey)}`
+                : ''),
           },
           Date.now(),
         );
@@ -352,20 +354,21 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
             badge={formatSourceBadge(sources['model'])}
           />
 
-          {authType !== AuthType.QWEN_OAUTH && (
-            <>
-              <ConfigRow
-                label="Base URL"
-                value={effectiveConfig?.baseUrl ?? t('(default)')}
-                badge={formatSourceBadge(sources['baseUrl'])}
-              />
-              <ConfigRow
-                label="API Key"
-                value={effectiveConfig?.apiKey ? t('(set)') : t('(not set)')}
-                badge={formatSourceBadge(sources['apiKey'])}
-              />
-            </>
-          )}
+          {authType !== AuthType.QWEN_OAUTH &&
+            authType !== AuthType.USE_ALIYUN && (
+              <>
+                <ConfigRow
+                  label="Base URL"
+                  value={effectiveConfig?.baseUrl ?? t('(default)')}
+                  badge={formatSourceBadge(sources['baseUrl'])}
+                />
+                <ConfigRow
+                  label="API Key"
+                  value={effectiveConfig?.apiKey ? t('(set)') : t('(not set)')}
+                  badge={formatSourceBadge(sources['apiKey'])}
+                />
+              </>
+            )}
         </Box>
       </Box>
 
