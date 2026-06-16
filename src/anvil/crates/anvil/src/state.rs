@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use crate::error::Result;
 use crate::metrics::Metrics;
+use crate::spawner::{DynSpawner, SpawnHandle};
 
 /// All daemon mutable state. Cloning is via `Arc` (see the `state.clone()`
 /// idiom in `daemon.rs`); the struct itself is never `Clone`.
@@ -31,6 +32,8 @@ pub struct ServerState {
     pub hook: Mutex<HookRegistry>,
     pub trajectory: TrajectoryRecorder,
     pub instances: Mutex<HashMap<Uuid, SandboxInstance>>,
+    pub spawn_handles: Mutex<HashMap<Uuid, SpawnHandle>>,
+    pub spawner: DynSpawner,
     pub state_dir: PathBuf,
     pub metrics: Metrics,
 }
@@ -45,6 +48,7 @@ impl ServerState {
         pool: PoolManager,
         template: TemplateRegistry,
         hook: HookRegistry,
+        spawner: DynSpawner,
     ) -> Self {
         let state_dir = config.daemon.state_dir.clone();
         let trajectory = TrajectoryRecorder::new(config.trajectory.dir.clone());
@@ -61,6 +65,8 @@ impl ServerState {
             hook: Mutex::new(hook),
             trajectory,
             instances: Mutex::new(instances),
+            spawn_handles: Mutex::new(HashMap::new()),
+            spawner,
             state_dir,
             metrics: Metrics::new(),
         }
