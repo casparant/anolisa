@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -182,6 +182,28 @@ fn default_retention() -> String {
     "7d".to_string()
 }
 
+impl PolicyFile {
+    /// 校验 policy 文件的内部一致性约束。
+    /// 当前规则：若 trajectory.record_args_plaintext == true，则 trajectory.data_classification 必须非空，
+    /// 否则返回错误（fail-closed，对应设计文档 D8 决议）。
+    pub fn validate(&self) -> Result<()> {
+        if let Some(ref traj) = self.trajectory
+            && traj.record_args_plaintext
+            && traj.data_classification.is_none()
+        {
+            return Err(AnvilError::PolicyLoadError {
+                path: PathBuf::from(self.policy_name.clone()),
+                source: Box::new(AnvilError::PolicyEvalError {
+                    reason:
+                        "record_args_plaintext=true requires data_classification field (D8 fail-closed)"
+                            .into(),
+                }),
+            });
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolicyPool {
     #[serde(default)]
@@ -316,6 +338,7 @@ impl PolicyEngine {
                 continue;
             }
             let policy = load_one(&path)?;
+            policy.validate()?;
             tracing::info!(
                 policy_name = %policy.policy_name,
                 priority = policy.priority,

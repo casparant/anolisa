@@ -169,6 +169,9 @@ impl TemplateRegistry {
     /// than `idle_ttl` (or that are invalidated, regardless of TTL).
     /// Returns the ids that were removed.
     pub fn gc_unused(&mut self, idle_ttl: Duration) -> Vec<Uuid> {
+        // TODO(Phase 3): gc_unused() 当前仅从内存 registry 删除 template。
+        // 当 Kernel Coordinator 实装后，此处需调用 kernel.deactivate() 或等价
+        // 内核接口释放 mm-template 占用的物理页，否则内核侧页帧永远被占据。
         let now = Utc::now();
         let ttl = chrono::Duration::from_std(idle_ttl).unwrap_or(chrono::Duration::zero());
         let stale: Vec<Uuid> = self

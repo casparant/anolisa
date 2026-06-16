@@ -4,6 +4,12 @@
 //! v0.1 ships the recorder interface and a working JSONL writer; replay
 //! is parked for v0.2 (see roadmap Phase 4). Every event line is one
 //! JSON object terminated by `\n`, so logs are tail-friendly.
+//!
+//! ## Sequence 作用域
+//!
+//! `TrajectoryEvent.sequence` 是 **per-instance** 的单调递增序列号，
+//! 不保证跨 instance 或跨 host 的全局有序性。
+//! 若 RL trainer 需要跨 host 重放，应在应用层维护全局 sequence 映射。
 
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -105,6 +111,8 @@ impl TrajectoryRecorder {
     /// Read events filtered by `[from_seq, to_seq]` (both inclusive,
     /// either bound optional). Lines that fail to parse are dropped
     /// with a warning so a single corrupt line never blocks tail/replay.
+    ///
+    /// 读取指定 instance 的 trajectory log。sequence 范围仅在该 instance 内有意义。
     pub fn read_log(
         &self,
         instance_id: Uuid,

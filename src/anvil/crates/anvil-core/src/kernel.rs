@@ -1,4 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
+//! # Kernel Coordinator (v0.1: state-only stub)
+//!
+//! v0.1 仅维护 hook 状态机，不推送系统调用到 `/proc/anolisa/...`。
+//! Phase 3 起接入真实内核接口（mm-template register、UFFD-WP activate 等）。
+//!
+//! ## 并发模型
+//!
+//! HookRegistry 本身不包含同步原语。调用方（anvil daemon）必须用
+//! `Mutex<HookRegistry>` 或等价机制保护，确保 activate/deactivate 的原子性。
+//!
 //! Kernel hook registry (design §6.2.4).
 //!
 //! v0.1: state-only stub. The registry tracks per-hook activation but
