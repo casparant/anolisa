@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Example anvil daemon configuration. Mirrors anvil-design.md §7.5.
+#
+# Production deployments install this file at /etc/anolisa/anvil/config.toml.
+
+[daemon]
+log_level = "info"
+state_dir = "/var/lib/anvil"
+socket = "/run/anvil/api.sock"
+
+[oci]
+shim_runtime_type = "io.containerd.anvil.v1"
+
+# v0.1 keeps the OCI shim out of tree; the table is preserved so that
+# Phase 2 can plug `containerd-shim-anvil-v1` in without a config break.
+[oci.delegate_shims]
+rund = "/usr/bin/containerd-shim-kata-v2"
+kata-fc = "/usr/bin/containerd-shim-kata-v2"
+kata-clh = "/usr/bin/containerd-shim-kata-v2"
+kata-qemu = "/usr/bin/containerd-shim-kata-v2"
+runc = "/usr/bin/runc"
+gvisor = "/usr/bin/runsc"
+firecracker = "/usr/bin/firecracker"
+linux-sandbox = "/usr/bin/anolisa-linux-sandbox"
+
+[policy]
+dir = "/etc/anolisa/anvil/policies"
+on_load_error = "fail"
+
+[pool]
+default_warm_ttl = "30m"
+gc_interval = "5m"
+
+[template]
+dir = "/var/lib/anvil/templates"
+gc_interval = "10m"
+idle_ttl = "1h"
+
+[trajectory]
+dir = "/var/lib/anvil/trajectories"
+default_retention = "7d"
+archive_dir = "/var/lib/anvil/trajectories/archive"
+
+[metrics]
+prometheus_socket = "/run/anvil/metrics.sock"

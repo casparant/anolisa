@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: Apache-2.0
+# Default policy for the agent-rl workload class. See anvil-design.md §7.2.2.
+
+manifest_version = 1
+policy_name = "agent-rl-default"
+priority = 100
+
+[match]
+workload_class = "agent-rl"
+image_labels = { "ai.anolisa.workload" = "rl-rollout" }
+
+[select]
+backend_priority = ["kata-fc", "kata-clh", "rund"]
+kernel_hooks = ["mm-template", "uffd-wp"]
+templates = ["mm-template"]
+fallback_on_missing_hook = "fail"
+
+[trajectory]
+enabled = true
+granularity = "tool-call"
+retention = "7d"
+record_args_plaintext = false
+data_classification = "internal-training"
+
+[pool]
+enabled = true
+min = 4
+target = 16
+max = 64
+warm_ttl = "30m"
+reset_mode = "mm-template"
+
+[checkpoint]
+enabled = true
+strategy = "uffd-wp-async"
+
+[quota]
+cpu_shares = 1024
+memory_high = "2G"
+memory_max = "4G"
+pids_max = 4096
+
+[hooks.on_create]
+sequence = ["template-reg:bind-mm-template"]
+
+[hooks.on_reset]
+sequence = ["mm-template:rollback"]
+
+[hooks.on_destroy]
+sequence = ["template-reg:unbind-mm-template"]

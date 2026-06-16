@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+# Default policy for the agent-tool workload class.
+
+manifest_version = 1
+policy_name = "agent-tool-default"
+priority = 90
+
+[match]
+workload_class = "agent-tool"
+
+[select]
+backend_priority = ["kata-fc", "rund", "gvisor"]
+kernel_hooks = []
+templates = []
+fallback_on_missing_hook = "fail"
+
+[trajectory]
+enabled = false
+
+[pool]
+enabled = true
+min = 2
+target = 8
+max = 32
+warm_ttl = "30m"
+reset_mode = "overlayfs-rollback"
+
+[quota]
+cpu_shares = 1024
+memory_high = "2G"
+memory_max = "4G"
+pids_max = 4096
