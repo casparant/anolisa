@@ -71,6 +71,58 @@ fn task_event_page_is_bounded_by_clap() {
 }
 
 #[test]
+fn managed_run_inspect_accepts_only_a_task_identity() {
+    let cli = Cli::try_parse_from([
+        "cosh-gateway",
+        "managed-run",
+        "inspect",
+        "tsk_00000000-0000-0000-0000-000000000000",
+    ])
+    .unwrap();
+    assert!(matches!(
+        cli.command,
+        Command::ManagedRun(ManagedRunArgs {
+            command: ManagedRunCommand::Inspect(TaskIdArgs { .. }),
+            ..
+        })
+    ));
+
+    let error = managed_run_command::parse_managed_task("run_00000000-0000-0000-0000-000000000000")
+        .unwrap_err();
+    assert!(matches!(error, CliError::InvalidInput(_)));
+}
+
+#[test]
+fn managed_run_start_reuses_the_governed_task_admission_contract() {
+    let cli = Cli::try_parse_from([
+        "cosh-gateway",
+        "managed-run",
+        "start",
+        "--idempotency-key",
+        "stable-managed-run-key",
+    ])
+    .unwrap();
+    let Command::ManagedRun(ManagedRunArgs {
+        command: ManagedRunCommand::Start(start),
+        ..
+    }) = cli.command
+    else {
+        panic!("expected managed-run start command");
+    };
+    assert_eq!(start.runtime, "core");
+    assert_eq!(start.runtime_profile, GATEWAY_BROKERED_CORE_RUNTIME_PROFILE);
+    assert!(Cli::try_parse_from([
+        "cosh-gateway",
+        "managed-run",
+        "start",
+        "private intent",
+        "--idempotency-key",
+        "stable-managed-run-key",
+    ])
+    .is_err());
+}
+
+#[test]
 fn task_submit_defaults_to_brokered_core_and_fixed_task_only_target() {
     let defaults = Cli::try_parse_from([
         "cosh-gateway",

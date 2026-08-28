@@ -48,6 +48,8 @@ mod acp_command;
 mod control;
 #[path = "cosh_gateway/input.rs"]
 mod input;
+#[path = "cosh_gateway/managed_run_command.rs"]
+mod managed_run_command;
 #[path = "cosh_gateway/serve.rs"]
 mod serve;
 
@@ -58,6 +60,9 @@ use acp_command::{doctor, install_interrupt_handler, run};
 use control::task_only_target;
 use control::{admin, task};
 use input::{read_intent, read_prompt, terminal_safe};
+#[cfg(test)]
+use managed_run_command::ManagedRunCommand;
+use managed_run_command::{managed_run, ManagedRunArgs};
 use serve::{serve, ServeArgs};
 
 const MAX_ACP_FRAME_BYTES: usize = 1024 * 1024;
@@ -94,6 +99,8 @@ enum Command {
     Serve(ServeArgs),
     /// Submit, inspect, follow, or cancel durable Tasks through the daemon.
     Task(TaskArgs),
+    /// Manage durable Tasks through explicit Managed Run semantics.
+    ManagedRun(ManagedRunArgs),
     /// Run local read-only Gateway administration commands.
     Admin(AdminArgs),
 }
@@ -364,6 +371,8 @@ enum CliError {
     Runtime(String),
     #[error("Gateway daemon request failed: {0}")]
     Daemon(String),
+    #[error("Managed Run projection failed: {0}")]
+    ManagedRun(String),
     #[error("Gateway Runtime containment failed: {0}")]
     Containment(String),
     #[error("Gateway store inspection failed: {0}")]
@@ -389,6 +398,7 @@ impl CliError {
             Self::Profile(_) => EXIT_PROFILE,
             Self::Runtime(_)
             | Self::Daemon(_)
+            | Self::ManagedRun(_)
             | Self::Containment(_)
             | Self::StoreInspection(_)
             | Self::Signal(_)
@@ -414,6 +424,7 @@ impl CliError {
             Self::Permission(_) => "permission_failed",
             Self::Runtime(_) => "runtime_failed",
             Self::Daemon(_) => "daemon_failed",
+            Self::ManagedRun(_) => "managed_run_invalid",
             Self::Containment(_) => "runtime_containment_unverified",
             Self::StoreInspection(_) => "store_inspection_failed",
             Self::Agent => "agent_incomplete",
@@ -464,7 +475,11 @@ impl Reporter {
             "task_submitted" => print_task_id(fields),
             "task" => println!("{}", human_json(fields)),
             "task_events" => println!("{}", human_json(fields)),
+            "managed_run" => println!("{}", human_json(fields)),
             "task_cancelled" => print_task_id(fields),
+            "task_retried" => print_task_id(fields),
+            "task_input_appended" => print_task_id(fields),
+            "approval_resolved" => print_task_id(fields),
             "store_inspection" => println!("{}", human_json(fields)),
             _ => {}
         }
@@ -498,6 +513,7 @@ fn main() -> ExitCode {
         Command::Run(args) => args.profile.output,
         Command::Serve(args) => args.output,
         Command::Task(args) => args.output,
+        Command::ManagedRun(args) => args.output,
         Command::Admin(args) => args.output,
     };
     let reporter = Reporter { output };
@@ -506,6 +522,7 @@ fn main() -> ExitCode {
         Command::Run(args) => run(args, &reporter),
         Command::Serve(args) => serve(args, &reporter),
         Command::Task(args) => task(args, &reporter),
+        Command::ManagedRun(args) => managed_run(args, &reporter),
         Command::Admin(args) => admin(args, &reporter),
     };
     match result {

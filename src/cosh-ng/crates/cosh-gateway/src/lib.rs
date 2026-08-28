@@ -3,6 +3,7 @@
 
 pub mod capability;
 pub mod daemon;
+pub mod managed_run;
 pub mod permission;
 pub mod runtime;
 pub mod storage;

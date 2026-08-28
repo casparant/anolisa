@@ -276,6 +276,30 @@ fn task_cli_rejects_invalid_identity_before_socket_io() {
 }
 
 #[test]
+fn managed_run_cli_rejects_an_attempt_identity_before_socket_io() {
+    let directory = tempfile::tempdir().unwrap();
+    let socket = directory.path().join("absent.sock");
+    let output = Command::new(env!("CARGO_BIN_EXE_cosh-gateway"))
+        .args([
+            "managed-run",
+            "--socket",
+            socket.to_str().unwrap(),
+            "--output",
+            "jsonl",
+            "inspect",
+            "run_00000000-0000-0000-0000-000000000000",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(10));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("\"code\":\"invalid_request\""));
+    assert!(stdout.contains("identifier prefix must be `tsk`"));
+    assert!(!socket.exists());
+}
+
+#[test]
 fn task_retry_cli_rejects_a_non_run_previous_identity_before_socket_io() {
     let directory = tempfile::tempdir().unwrap();
     let socket = directory.path().join("absent.sock");
