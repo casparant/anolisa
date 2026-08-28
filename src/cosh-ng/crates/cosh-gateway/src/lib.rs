@@ -1,6 +1,7 @@
 //! Durable Task coordination, supervised Agent Runtime integration, and
 //! fail-closed capability admission foundations.
 
+pub mod agent_workload;
 pub mod capability;
 pub mod daemon;
 pub mod permission;

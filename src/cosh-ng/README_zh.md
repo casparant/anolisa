@@ -104,7 +104,7 @@ Adapter，再通过 stdin 发送 prompt。
 
 下面的命令使用 ANOLISA 或 RPM 安装的 `cosh agent` launcher。源码构建或 unified build
 只安装 Gateway binary，此时请使用 `cosh-gateway doctor`、`cosh-gateway run` 或
-`cosh-gateway task`，其余参数保持不变。
+`cosh-gateway task`、`cosh-gateway workload`，其余参数保持不变。
 
 ```bash
 cosh agent doctor --profile codex --workspace "$PWD"
@@ -142,24 +142,30 @@ printf '%s\n' \
 sudo systemctl start "cosh-gateway@$USER.service"
 gateway_socket="/run/cosh-gateway-$USER/gateway.sock"
 printf '%s\n' 'inspect the failed service' | \
-  cosh agent task --socket "$gateway_socket" submit \
+  cosh agent workload --socket "$gateway_socket" start \
     --runtime core --runtime-profile gateway-brokered-v1 \
     --idempotency-key '<stable-submit-key>'
-cosh agent task --socket "$gateway_socket" get '<tsk_UUID>'
-cosh agent task --socket "$gateway_socket" events '<tsk_UUID>' --after 0 --limit 64
+cosh agent workload --socket "$gateway_socket" inspect '<tsk_UUID>'
 printf '%s\n' 'answer to the question' | \
-  cosh agent task --socket "$gateway_socket" append '<tsk_UUID>' \
+  cosh agent workload --socket "$gateway_socket" answer '<tsk_UUID>' \
     --input-request-id '<inp_UUID>' --idempotency-key '<stable-input-key>'
-cosh agent task --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
+cosh agent workload --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
   --idempotency-key '<stable-cancel-key>'
-cosh agent task --socket "$gateway_socket" retry '<tsk_UUID>' \
+cosh agent workload --socket "$gateway_socket" retry '<tsk_UUID>' \
   --previous-run-id '<run_UUID>' --idempotency-key '<stable-retry-key>'
 ```
 
 Daemon 首次启动时会生成并持久化 installation ID，也可以通过 `--installation-id` 显式 provision。
-请把示例中的 typed identifier 替换成 Task API 返回的值。Task API 支持 `submit`、`get`、
+请把示例中的 typed identifier 替换成 Task API 返回的值。低层 Task API 支持 `submit`、`get`、
 `events`、`append`、`cancel`、`retry` 和 `resolve-approval`；`append` 用来回答 profile
 产生的 durable user question，而这个 profile 不会产生 approval request。
+Provider-neutral Agent Workload surface 把这些操作映射为 `start`、`answer`、`cancel`、
+`retry` 与 `resolve-approval`。`workload inspect` 以有界分页读取完整的 authorized Task
+ledger，用一个稳定的 COSH `TaskId` 展示多个有序 `RunId` attempt。出现 `RuntimeBound`
+fact 时，attempt 还会显示最新 COSH logical Session、supervised process 与 opaque external
+provider Session。External Session 只作为 correlation metadata；COSH 不接管它的 harness 或
+provider lifecycle。Runtime success 会成为 `execution_completed`；在出现 authoritative
+durable fact 之前，独立 verification 与 workspace disposition 会明确保持为 `not_recorded`。
 Direct `serve` 没有 package unit 的 live `--systemd-unit` proof 时会 fail closed；Gateway 会在
 创建 socket 或 database 前完成校验。Daemon 会把 Unix peer 认证为 local OS actor，将 target
 固定为 `workspace/cosh/task-only-v1`，只接受 `core`/`gateway-brokered-v1` selector 与配置的
@@ -182,6 +188,7 @@ system-operations 路径，不会为这个 Gateway profile 增加 checkpoint cap
 - [交互式终端](../../docs/user-guide/zh/user-entrypoint/cosh-ng/shell/overview.md)
 - [配置](../../docs/user-guide/zh/user-entrypoint/cosh-ng/configuration.md)
 - [管理系统操作](../../docs/user-guide/zh/user-entrypoint/cosh-ng/cli/overview.md)
+- [查看 Agent Workload](../../docs/user-guide/zh/user-entrypoint/cosh-ng/agent-workload.md)
 - [Headless 集成](../../docs/user-guide/zh/user-entrypoint/cosh-ng/core/headless-mode.md)
 - [开发者入门](../../docs/developer-guide/zh/cosh-ng/getting-started.md)
 - [架构](../../docs/developer-guide/zh/cosh-ng/architecture.md)

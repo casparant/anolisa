@@ -48,7 +48,7 @@ Gateway profile 独立；package Gateway 不依赖 `ws-ckpt`，也不暴露 chec
 
 `cosh agent` launcher 由 ANOLISA 与 RPM package 安装。源码构建与 unified build 只安装
 Gateway binary；此时请替换为 `cosh-gateway doctor`、`cosh-gateway run` 或
-`cosh-gateway task`，其余参数保持不变。
+`cosh-gateway task`、`cosh-gateway workload`，其余参数保持不变。
 
 - 运行 `cosh agent doctor --profile codex --workspace "$PWD"` 检查单独安装的
   `codex-acp`，也可以选择 `claude-code` profile 检查 `claude-agent-acp`。把有界 UTF-8
@@ -97,25 +97,30 @@ Gateway binary；此时请替换为 `cosh-gateway doctor`、`cosh-gateway run` �
 
   ```bash
   printf '%s\n' 'inspect the failed service' | \
-    cosh agent task --socket "$gateway_socket" submit \
+    cosh agent workload --socket "$gateway_socket" start \
       --runtime core --runtime-profile gateway-brokered-v1 \
       --idempotency-key '<stable-submit-key>'
-  cosh agent task --socket "$gateway_socket" get '<tsk_UUID>'
-  cosh agent task --socket "$gateway_socket" events '<tsk_UUID>' --after 0 --limit 64
+  cosh agent workload --socket "$gateway_socket" inspect '<tsk_UUID>'
   printf '%s\n' 'answer to the question' | \
-    cosh agent task --socket "$gateway_socket" append '<tsk_UUID>' \
+    cosh agent workload --socket "$gateway_socket" answer '<tsk_UUID>' \
       --input-request-id '<inp_UUID>' --idempotency-key '<stable-input-key>'
-  cosh agent task --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
+  cosh agent workload --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
     --idempotency-key '<stable-cancel-key>'
-  cosh agent task --socket "$gateway_socket" retry '<tsk_UUID>' \
+  cosh agent workload --socket "$gateway_socket" retry '<tsk_UUID>' \
     --previous-run-id '<run_UUID>' --idempotency-key '<stable-retry-key>'
   ```
 
-  Task API 支持 `submit`、`get`、`events`、`append`、`cancel`、`retry` 和
+  低层 Task API 支持 `submit`、`get`、`events`、`append`、`cancel`、`retry` 和
   `resolve-approval`。`append` 用来回答 profile 的 durable `ask_user_question` request。
   `resolve-approval` 仍属于通用 API，但这个 profile 没有需要 approval 的 side effect，因此
   不会产生 approval flow。Idempotency key 让客户端在 I/O 不确定后可以安全重试；durable Task、
   Runtime 和 Outbox state 支持查看、取消和显式 retry，不会重放未知的 side effect。
+  Provider-neutral Agent Workload surface 把相同 coordinator decision 暴露为 `start`、
+  `answer`、`cancel`、`retry` 和 `resolve-approval`，并增加 evidence-aware 的 `inspect`
+  投影。Runtime binding 把 attempt 与 COSH logical Session 和 opaque provider Session
+  关联起来，但不会把 harness 或 provider lifecycle ownership 转给 COSH。
+- [Agent Workload](agent-workload.md)：查看 Host Task identity、有序 Run attempt、provider
+  Session correlation，以及互相独立的 execution、verification 与 workspace outcome。
 - Task-only profile 有意不暴露 checkpoint、write、Shell、slash command、Web、channel 或
   remote capability。交互式 slash command 仍由 `cosh-shell` 负责，不是 Gateway Task command。
   `SIGINT` 与 `SIGTERM` 会触发有界的 scheduler 与 Runtime shutdown，Gateway 只监听本地 Unix

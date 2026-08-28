@@ -50,8 +50,8 @@ does not depend on `ws-ckpt` or expose checkpoint operations.
 
 The `cosh agent` launcher is installed by ANOLISA and RPM packages. Source and
 unified builds install the bare Gateway binary instead; substitute
-`cosh-gateway doctor`, `cosh-gateway run`, or `cosh-gateway task` and keep the
-remaining arguments unchanged.
+`cosh-gateway doctor`, `cosh-gateway run`, `cosh-gateway task`, or
+`cosh-gateway workload` and keep the remaining arguments unchanged.
 
 - Run `cosh agent doctor --profile codex --workspace "$PWD"` to verify a
   separately installed `codex-acp`, or select `claude-code` for
@@ -107,27 +107,34 @@ remaining arguments unchanged.
 
   ```bash
   printf '%s\n' 'inspect the failed service' | \
-    cosh agent task --socket "$gateway_socket" submit \
+    cosh agent workload --socket "$gateway_socket" start \
       --runtime core --runtime-profile gateway-brokered-v1 \
       --idempotency-key '<stable-submit-key>'
-  cosh agent task --socket "$gateway_socket" get '<tsk_UUID>'
-  cosh agent task --socket "$gateway_socket" events '<tsk_UUID>' --after 0 --limit 64
+  cosh agent workload --socket "$gateway_socket" inspect '<tsk_UUID>'
   printf '%s\n' 'answer to the question' | \
-    cosh agent task --socket "$gateway_socket" append '<tsk_UUID>' \
+    cosh agent workload --socket "$gateway_socket" answer '<tsk_UUID>' \
       --input-request-id '<inp_UUID>' --idempotency-key '<stable-input-key>'
-  cosh agent task --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
+  cosh agent workload --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
     --idempotency-key '<stable-cancel-key>'
-  cosh agent task --socket "$gateway_socket" retry '<tsk_UUID>' \
+  cosh agent workload --socket "$gateway_socket" retry '<tsk_UUID>' \
     --previous-run-id '<run_UUID>' --idempotency-key '<stable-retry-key>'
   ```
 
-  The Task API supports `submit`, `get`, `events`, `append`, `cancel`, `retry`,
+  The lower-level Task API supports `submit`, `get`, `events`, `append`, `cancel`, `retry`,
   and `resolve-approval`. `append` answers the profile's durable
   `ask_user_question` request. `resolve-approval` remains part of the generic
   API, but this profile has no approvable side effect and therefore produces no
   approval flow. Idempotency keys make retries safe after uncertain client I/O;
   durable Task, Runtime, and Outbox state supports inspection, cancellation, and
   explicit retry without replaying an unknown side effect.
+  The provider-neutral Agent Workload surface exposes the same coordinator
+  decisions as `start`, `answer`, `cancel`, `retry`, and `resolve-approval`,
+  plus the evidence-aware `inspect` projection. A Runtime binding correlates an
+  attempt with a COSH logical Session and an opaque provider Session without
+  transferring harness or provider-lifecycle ownership to COSH.
+- [Agent Workloads](agent-workload.md) — inspect host Task identity, ordered Run
+  attempts, provider Session correlation, and separate execution,
+  verification, and workspace outcomes.
 - The task-only profile intentionally exposes no checkpoint, write, Shell,
   slash-command, Web, channel, or remote capability. Interactive slash commands
   remain owned by `cosh-shell`; they are not Gateway Task commands. `SIGINT` and

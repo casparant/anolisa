@@ -111,8 +111,8 @@ Shell, verify it first and then pipe the prompt through stdin:
 
 The commands below use the `cosh agent` launcher installed by ANOLISA or the
 RPM. A source or unified build installs the bare Gateway binary instead; use
-`cosh-gateway doctor`, `cosh-gateway run`, or `cosh-gateway task` with the same
-remaining arguments.
+`cosh-gateway doctor`, `cosh-gateway run`, `cosh-gateway task`, or
+`cosh-gateway workload` with the same remaining arguments.
 
 ```bash
 cosh agent doctor --profile codex --workspace "$PWD"
@@ -156,26 +156,35 @@ printf '%s\n' \
 sudo systemctl start "cosh-gateway@$USER.service"
 gateway_socket="/run/cosh-gateway-$USER/gateway.sock"
 printf '%s\n' 'inspect the failed service' | \
-  cosh agent task --socket "$gateway_socket" submit \
+  cosh agent workload --socket "$gateway_socket" start \
     --runtime core --runtime-profile gateway-brokered-v1 \
     --idempotency-key '<stable-submit-key>'
-cosh agent task --socket "$gateway_socket" get '<tsk_UUID>'
-cosh agent task --socket "$gateway_socket" events '<tsk_UUID>' --after 0 --limit 64
+cosh agent workload --socket "$gateway_socket" inspect '<tsk_UUID>'
 printf '%s\n' 'answer to the question' | \
-  cosh agent task --socket "$gateway_socket" append '<tsk_UUID>' \
+  cosh agent workload --socket "$gateway_socket" answer '<tsk_UUID>' \
     --input-request-id '<inp_UUID>' --idempotency-key '<stable-input-key>'
-cosh agent task --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
+cosh agent workload --socket "$gateway_socket" cancel '<tsk_UUID>' --run-id '<run_UUID>' \
   --idempotency-key '<stable-cancel-key>'
-cosh agent task --socket "$gateway_socket" retry '<tsk_UUID>' \
+cosh agent workload --socket "$gateway_socket" retry '<tsk_UUID>' \
   --previous-run-id '<run_UUID>' --idempotency-key '<stable-retry-key>'
 ```
 
 The daemon generates and persists its installation ID on first start; an
 operator may provision one explicitly with `--installation-id`. Replace the
-typed identifiers with values returned by the Task API. The Task API supports
+typed identifiers with values returned by the Task API. The lower-level Task API supports
 `submit`, `get`, `events`, `append`, `cancel`, `retry`, and
 `resolve-approval`; `append` answers the profile's durable user questions, while
 this profile does not generate approval requests.
+The provider-neutral Agent Workload surface maps those operations to `start`,
+`answer`, `cancel`, `retry`, and `resolve-approval`. `workload inspect` reads
+the complete authorized Task ledger in bounded pages and presents one stable
+COSH `TaskId` with its ordered `RunId` attempts. A `RuntimeBound` fact also
+shows the latest COSH logical Session, supervised process, and opaque external
+provider Session for an attempt. The external Session remains correlation
+metadata: COSH does not take ownership of its harness or provider lifecycle.
+Runtime success becomes `execution_completed`; independent verification and
+workspace disposition remain explicitly `not_recorded` until authoritative
+durable facts exist.
 Direct `serve` fails closed without the packaged unit's live `--systemd-unit`
 proof, which is verified before the socket or database is created. The daemon
 authenticates the Unix peer as a local OS actor, fixes the target to
@@ -202,6 +211,7 @@ acceptance before treating a particular ACP installation as production-validated
 - [Interactive terminal](../../docs/user-guide/en/user-entrypoint/cosh-ng/shell/overview.md)
 - [Configuration](../../docs/user-guide/en/user-entrypoint/cosh-ng/configuration.md)
 - [Manage system operations](../../docs/user-guide/en/user-entrypoint/cosh-ng/cli/overview.md)
+- [Inspect Agent Workloads](../../docs/user-guide/en/user-entrypoint/cosh-ng/agent-workload.md)
 - [Headless integration](../../docs/user-guide/en/user-entrypoint/cosh-ng/core/headless-mode.md)
 - [Developer getting started](../../docs/developer-guide/en/cosh-ng/getting-started.md)
 - [Architecture](../../docs/developer-guide/en/cosh-ng/architecture.md)
