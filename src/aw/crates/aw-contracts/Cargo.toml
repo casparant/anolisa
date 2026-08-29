@@ -1,5 +1,5 @@
 [package]
-name = "cosh-gateway-contracts"
+name = "aw-contracts"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,10 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-aw-contracts = { path = "../../../aw/crates/aw-contracts" }
 serde.workspace = true
-thiserror.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true
-sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

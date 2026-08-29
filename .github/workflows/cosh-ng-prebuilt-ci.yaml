@@ -10,6 +10,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/cosh-ng/**'
+      - 'src/aw/crates/aw-contracts/**'
   pull_request:
     branches: [main, 'release/**']
     paths:
@@ -19,6 +20,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/cosh-ng/**'
+      - 'src/aw/crates/aw-contracts/**'
   workflow_dispatch:
 
 permissions:

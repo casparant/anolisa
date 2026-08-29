@@ -134,6 +134,26 @@ runs:
             cp -rp "$skill_dir" /tmp/build/${ARCHIVE_NAME}/skills/
           done
 
+        elif [ "${{ inputs.component }}" = "cosh-ng" ]; then
+          cp -r ${SRC_DIR}/. /tmp/build/${ARCHIVE_NAME}/
+
+          # The repository keeps shared Contracts under src/aw so COSH is a
+          # consumer, not their owner. A component source archive is flattened,
+          # however, so preserve a buildable snapshot inside that archive and
+          # rewrite only the archived path dependency.
+          mkdir -p /tmp/build/${ARCHIVE_NAME}/vendor
+          cp -r src/aw/crates/aw-contracts \
+            /tmp/build/${ARCHIVE_NAME}/vendor/aw-contracts
+          # Workspace-inherited package fields would otherwise bind the copied
+          # crate to the COSH workspace and change its locked package version.
+          # The archive-only manifest preserves the released AW contract
+          # identity without changing the source-of-truth crate manifest.
+          cp "$GITHUB_ACTION_PATH/aw-contracts-vendored.toml" \
+            /tmp/build/${ARCHIVE_NAME}/vendor/aw-contracts/Cargo.toml
+          sed -i \
+            's|path = "../../../aw/crates/aw-contracts"|path = "../../vendor/aw-contracts"|' \
+            /tmp/build/${ARCHIVE_NAME}/crates/cosh-gateway-contracts/Cargo.toml
+
         elif [ "${{ inputs.component }}" = "agent-sec-core" ]; then
           cp -r ${SRC_DIR}/. /tmp/build/${ARCHIVE_NAME}/
           # Replace example keys in trusted-keys with the real GPG public key
