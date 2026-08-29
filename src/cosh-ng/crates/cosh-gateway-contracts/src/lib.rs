@@ -11,5 +11,6 @@ pub mod error;
 pub mod external;
 pub mod ids;
 pub mod profile;
+pub mod provider;
 pub mod runtime;
 pub mod task;

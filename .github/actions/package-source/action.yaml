@@ -134,6 +134,16 @@ runs:
             cp -rp "$skill_dir" /tmp/build/${ARCHIVE_NAME}/skills/
           done
 
+        elif [ "${{ inputs.component }}" = "cosh-ng" ]; then
+          cp -r ${SRC_DIR}/. /tmp/build/${ARCHIVE_NAME}/
+
+          # The repository keeps shared Contracts under src/aw so COSH is a
+          # consumer, not their owner. A component source archive is flattened,
+          # however, so preserve a buildable snapshot inside that archive and
+          # rewrite every archived consumer to the vendored path.
+          "$GITHUB_ACTION_PATH/vendor-cosh-aw-contracts.sh" \
+            "/tmp/build/${ARCHIVE_NAME}"
+
         elif [ "${{ inputs.component }}" = "agent-sec-core" ]; then
           cp -r ${SRC_DIR}/. /tmp/build/${ARCHIVE_NAME}/
           # Replace example keys in trusted-keys with the real GPG public key
