@@ -10,6 +10,7 @@ mod compression;
 mod config;
 mod context;
 mod core;
+mod execution_scope;
 mod extension;
 mod headless;
 mod hook;

@@ -679,6 +679,7 @@ dependencies = [
  "aes-gcm",
  "async-trait",
  "atty",
+ "aw-contracts",
  "chrono",
  "clap",
  "cosh-platform",
