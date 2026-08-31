@@ -1,12 +1,14 @@
 //! Inode-bound local executable and directory handles for Runtime launch.
 
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{self, Read};
 use std::os::fd::{AsRawFd, RawFd};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[cfg(target_os = "linux")]
+use std::fs::OpenOptions;
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
@@ -118,7 +120,7 @@ impl PinnedExecutable {
         self.descriptor.as_raw_fd()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn descriptor_weak(&self) -> std::sync::Weak<File> {
         Arc::downgrade(&self.descriptor)
     }
@@ -189,7 +191,7 @@ impl PinnedDirectory {
         proc_descriptor_path(self.descriptor.as_raw_fd())
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub(crate) fn descriptor_weak(&self) -> std::sync::Weak<File> {
         Arc::downgrade(&self.descriptor)
     }
