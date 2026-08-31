@@ -12,8 +12,6 @@
 
 - [开发入门](./cosh-ng/getting-started.md)
 - [架构](./cosh-ng/architecture.md)
-- [添加命令](./cosh-ng/adding-commands.md)
-- [添加发行版](./cosh-ng/adding-distros.md)
 - [IPC 协议](./cosh-ng/ipc-protocol.md)
 - [安全启发式规则](./cosh-ng/security-heuristics.md)
 - [测试](./cosh-ng/testing.md)

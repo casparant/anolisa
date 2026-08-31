@@ -65,7 +65,6 @@ pub(super) fn message(id: MessageId) -> Option<&'static str> {
         MessageId::HelpSummaryExplain => "analyze the last failed command",
         MessageId::HelpSummaryCancel => "cancel active Agent work",
         MessageId::HelpSummaryDetails => "inspect approval/activity details",
-        MessageId::HelpSummaryAudit => "show audit entry points",
         MessageId::HelpSummaryHooks => "show hook status",
         MessageId::HelpSummaryHealth => "run an on-demand health check",
         MessageId::HelpSummarySelect => "show a displayed recommendation",
@@ -88,14 +87,6 @@ pub(super) fn message(id: MessageId) -> Option<&'static str> {
         MessageId::SlashQuotedArgumentsUnsupported => {
             "Quoted arguments are not supported. Use /mode approval trust confirm instead."
         }
-        MessageId::SlashInfoAuditTitle => "Audit",
-        MessageId::SlashInfoAuditApprovalsBody => {
-            "Approval decisions are available with Details actions."
-        }
-        MessageId::SlashInfoAuditActivityBody => {
-            "Activity output refs are available with Details actions."
-        }
-        MessageId::SlashInfoAuditFooter => "Audit views are read-only; no shell command runs.",
         MessageId::SlashInfoConfigTitle => "Config",
         MessageId::SlashInfoConfigLanguageLine => "language: {effective} source: {source}",
         MessageId::SlashInfoConfigLanguageEffectiveLine => {

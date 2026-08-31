@@ -26,7 +26,6 @@ cargo build --workspace
 cargo build --workspace --release
 
 # Build a specific binary
-cargo build --bin cosh-cli
 cargo build --bin cosh-core
 cargo build --bin cosh-shell
 ```
@@ -69,8 +68,7 @@ cosh-ng/
 ├── rust-toolchain.toml     # stable + rustfmt + clippy
 └── crates/
     ├── cosh-types/         # Pure types, zero side effects
-    ├── cosh-platform/      # Platform abstraction (distro detection, backend routing)
-    ├── cosh-cli/           # CLI entry
+    ├── cosh-platform/      # Audit persistence and process support
     ├── cosh-core/          # Agent core
     ├── cosh-shell/         # Interactive terminal
     ├── cosh-gateway-contracts/ # Side-effect-free Gateway contracts

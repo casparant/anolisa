@@ -63,7 +63,6 @@ pub(super) fn message(id: MessageId) -> Option<&'static str> {
         MessageId::HelpSummaryExplain => "分析上一个失败命令",
         MessageId::HelpSummaryCancel => "取消正在运行的 Agent 工作",
         MessageId::HelpSummaryDetails => "查看审批或活动详情",
-        MessageId::HelpSummaryAudit => "显示审计入口",
         MessageId::HelpSummaryHooks => "显示 Hook 状态",
         MessageId::HelpSummaryHealth => "按需运行健康检查",
         MessageId::HelpSummarySelect => "展示一条推荐",
@@ -84,10 +83,6 @@ pub(super) fn message(id: MessageId) -> Option<&'static str> {
         MessageId::SlashQuotedArgumentsUnsupported => {
             "不支持带引号的参数。本例请改用 /mode approval trust confirm。"
         }
-        MessageId::SlashInfoAuditTitle => "审计",
-        MessageId::SlashInfoAuditApprovalsBody => "审批决策可通过 Details 操作查看。",
-        MessageId::SlashInfoAuditActivityBody => "活动 output ref 可通过 Details 操作查看。",
-        MessageId::SlashInfoAuditFooter => "审计视图是只读的；不会运行 shell 命令。",
         MessageId::SlashInfoConfigTitle => "配置",
         MessageId::SlashInfoConfigLanguageLine => "语言: {effective} 来源: {source}",
         MessageId::SlashInfoConfigLanguageEffectiveLine => {

@@ -16,7 +16,6 @@ SEMVER = re.compile(
 )
 REQUIRED_SOURCES = {
     ".anolisa/component.toml",
-    "bin/cosh-cli",
     "bin/cosh",
     "bin/cosh-switch",
     "libexec/anolisa/cosh-ng/cosh-core",

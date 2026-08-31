@@ -16,8 +16,6 @@ mod agent_input;
 mod animation;
 #[path = "raw_cli/approval.rs"]
 mod approval;
-#[path = "raw_cli/audit.rs"]
-mod audit;
 #[path = "raw_cli/auth.rs"]
 mod auth;
 #[path = "raw_cli/cancellation.rs"]

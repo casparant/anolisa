@@ -2,33 +2,21 @@
 
 [English](../../../en/user-entrypoint/cosh-ng/supported-distros.md)
 
-cosh-ng的交互式终端可在Linux和macOS上运行。软件包和服务命令使用主机原生的管理工具。
+cosh-ng 的交互式终端可在 Linux 和 macOS 上运行。Linux 提供完整运行环境；
+macOS 支持交互体验，但存在下述限制。
 
-| 平台 | 交互式Shell | 软件包命令 | 服务命令 |
-|---|---|---|---|
-| Linux | Bash或zsh | dnf、apt或zypper | systemd |
-| macOS | Bash或zsh | Homebrew | 不可用 |
+| 平台 | 交互式 Shell | 支持级别 |
+|---|---|---|
+| Linux | Bash 或 zsh | 完整的 cosh-ng 功能 |
+| macOS arm64 | Bash 或 zsh | 功能受限；依赖 Linux 的能力不可用 |
 
 ## Linux发行版
 
-以下`/etc/os-release` ID有内置路由：
+Alibaba Cloud Linux 4 提供推荐的 RPM 安装路径。其他 Linux 发行版可以从
+源码构建 cosh-ng，但当前发布的 raw 包还不是覆盖所有发行版的可移植契约。
+支持的安装路径见[快速开始](QUICKSTART.md)。
 
-| ID | 包管理器 |
-|---|---|
-| `alinux`、`centos`、`fedora` | dnf |
-| `ubuntu`、`debian` | apt |
-| `opensuse-leap`、`opensuse-tumbleweed`、`sles` | zypper |
+## 安装前
 
-未列出的发行版如果`ID_LIKE`包含以下值之一，可以复用对应的软件包家族：
-
-| `ID_LIKE`家族 | 包管理器 |
-|---|---|
-| `alinux`、`centos`、`fedora`、`rhel` | dnf |
-| `debian`、`ubuntu` | apt |
-| `opensuse`、`suse` | zypper |
-
-家族路由只表示软件包后端兼容，不代表对每个衍生版或版本做认证。未知软件包家族会返回结构化的`UnsupportedDistro`错误。
-
-## 修改主机前
-
-安装前运行`anolisa env`。在目标主机上，先使用`cosh-cli`只读命令和对应操作的`--dry-run`选项确认路由，再执行软件包或服务变更。服务命令需要Linux和systemd；macOS用户可以通过Homebrew使用软件包命令，但不能使用`cosh-cli svc`。
+在目标主机上运行 `anolisa env`，查看检测到的平台和可用 backend。安装后，
+先运行 `cosh-shell --version` 验证组件，再进入工作空间启动 `cosh`。

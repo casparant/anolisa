@@ -64,12 +64,12 @@ verify_native_binary_version() {
     if [ "$HAS_BUILD_METADATA" -eq 1 ]; then
         return
     fi
-    if ! output="$("$BIN_DIR/cosh-cli" --version 2>&1)"; then
-        die "cosh-cli --version failed: $output"
+    if ! output="$("$BIN_DIR/cosh-shell" --version 2>&1)"; then
+        die "cosh-shell --version failed: $output"
     fi
     reported="$(printf '%s\n' "$output" | awk 'NR == 1 { print $NF; exit }')"
     [ "$reported" = "$VERSION" ] || \
-        die "cosh-cli reports $reported but contract says $VERSION"
+        die "cosh-shell reports $reported but contract says $VERSION"
 }
 
 normalize_modes() {
@@ -78,7 +78,6 @@ normalize_modes() {
     find "$stage" -type d -exec chmod 0755 {} +
     find "$stage" -type f -exec chmod 0644 {} +
     chmod 0755 \
-        "$stage/bin/cosh-cli" \
         "$stage/bin/cosh" \
         "$stage/bin/cosh-switch" \
         "$stage/libexec/anolisa/cosh-ng/cosh-core" \
@@ -99,7 +98,6 @@ stage_payload() {
         "$stage/libexec/anolisa/cosh-ng" \
         "$stage/share/doc/cosh-ng"
     install -p -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
-    install -p -m 0755 "$BIN_DIR/cosh-cli" "$stage/bin/cosh-cli"
     install -p -m 0755 "$BIN_DIR/cosh-core" "$BIN_DIR/cosh-gateway" \
         "$BIN_DIR/cosh-shell" \
         "$stage/libexec/anolisa/cosh-ng/"
@@ -155,7 +153,7 @@ for input in \
     "$SCRIPT_DIR/assets/bin/cosh-switch"; do
     require_file "$input"
 done
-for binary in cosh-cli cosh-core cosh-gateway cosh-shell; do
+for binary in cosh-core cosh-gateway cosh-shell; do
     [ -x "$BIN_DIR/$binary" ] || die "missing executable: $BIN_DIR/$binary"
 done
 
@@ -175,16 +173,14 @@ if [ -f "$BUILD_METADATA" ]; then
         --arch "$TARGET_ARCH" \
         --metadata "$BUILD_METADATA" \
         --component-version "$VERSION" \
-        "$BIN_DIR/cosh-cli" "$BIN_DIR/cosh-core" "$BIN_DIR/cosh-gateway" \
-        "$BIN_DIR/cosh-shell"
+        "$BIN_DIR/cosh-core" "$BIN_DIR/cosh-gateway" "$BIN_DIR/cosh-shell"
 elif [ "$(detect_os)-$(detect_arch)" != "$TARGET_OS-$TARGET_ARCH" ]; then
     die "cross-target packaging requires build metadata: $BUILD_METADATA"
 else
     python3 "$SCRIPT_DIR/verify-binaries.py" \
         --os "$TARGET_OS" \
         --arch "$TARGET_ARCH" \
-        "$BIN_DIR/cosh-cli" "$BIN_DIR/cosh-core" "$BIN_DIR/cosh-gateway" \
-        "$BIN_DIR/cosh-shell"
+        "$BIN_DIR/cosh-core" "$BIN_DIR/cosh-gateway" "$BIN_DIR/cosh-shell"
 fi
 verify_native_binary_version
 

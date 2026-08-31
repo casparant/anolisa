@@ -34,9 +34,9 @@ fn raw_cli_help_renders_slash_command_reference() {
         "{output}"
     );
     assert!(normalized.contains("/status"), "{output}");
-    // /auth renders as an indented group entry with its own summary line; the
-    // contextual /audit stays hidden below. Config-group membership is pinned
-    // by the registry unit test recommendations_and_auth_are_public_config_controls.
+    // /auth renders as an indented group entry with its own summary line.
+    // Config-group membership is pinned by the registry unit test
+    // recommendations_and_auth_are_public_config_controls.
     assert!(normalized.contains("│   /auth"), "{output}");
     assert!(
         normalized.contains("│       configure AI provider credentials"),
@@ -74,7 +74,6 @@ fn raw_cli_help_renders_slash_command_reference() {
     assert!(!output.contains("command_id"), "{output}");
     assert!(!output.contains("output_id"), "{output}");
     assert!(!output.contains("insight_id"), "{output}");
-    assert!(!output.contains("/audit"), "{output}");
     assert!(!output.contains("/select N"), "{output}");
     assert!(!output.contains("/copy N"), "{output}");
     assert!(!output.contains("/mode [recommend|auto|trust]"), "{output}");
@@ -219,7 +218,6 @@ fn raw_cli_informational_slash_commands_render_feedback() {
     assert!(output.contains("after-info-slash"), "{output}");
     assert!(!output.contains("bash: /skill"), "{output}");
     assert!(!output.contains("bash: /config"), "{output}");
-    assert!(!output.contains("bash: /audit"), "{output}");
 }
 
 #[test]

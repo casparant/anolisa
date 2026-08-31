@@ -38,19 +38,16 @@ Alibaba Cloud Linux 4 users can also install the RPM directly:
 sudo yum install cosh-ng
 ```
 
-Verify both user-facing commands:
+Verify the installed shell binary:
 
 ```bash
-cosh --version
-cosh-cli --version
+cosh-shell --version
 ```
-
-Package and service changes normally need root privileges. Workspace checkpoint commands also need a running `ws-ckpt` daemon.
 
 The published Linux raw contract is not currently portable across all routed
 distributions, so it is not the recommended Linux installation path. The raw
-package supports macOS arm64, where Linux-only package and service operations
-remain unavailable. Source builds are for contributors; follow the
+package supports macOS arm64, where Linux-only capabilities remain unavailable.
+Source builds are for contributors; follow the
 [developer setup](../../../../developer-guide/en/cosh-ng/getting-started.md)
 after the packaged options above.
 
@@ -119,7 +116,6 @@ Workspace, user, extension, and system Skill directories are merged by priority.
 | Resume or compact conversations | [Session recovery](shell/session-recovery.md) |
 | Choose a model and authenticate | [Model providers](core/providers.md) |
 | Connect tools from another service | [Connect an MCP server](mcp.md) |
-| Automate package, service, checkpoint, or audit work | [Structured OS CLI](cli/overview.md) |
 | Integrate another frontend | [Headless mode](core/headless-mode.md) |
 
 The [full user guide](README.md) is organized by task.

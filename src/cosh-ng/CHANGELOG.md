@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING**: Retire the standalone `cosh-cli` binary and its `pkg`, `svc`, `checkpoint`, and `audit` command domains, along with the contextual `/audit` Shell command. COSH no longer exposes an unstructured collection of system-command wrappers; audit recording in `cosh-core` and `cosh-shell` remains available.
+
 ## [0.22.2] — 2026-08-28
 
 ### Fixed

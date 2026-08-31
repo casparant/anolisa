@@ -185,14 +185,6 @@ pub fn slash_command_registry() -> &'static [SlashCommandSpec] {
             state: SlashCommandState::Contextual,
         },
         SlashCommandSpec {
-            name: "/audit",
-            usage: "/audit status|trace current|export current <dir>",
-            summary_id: MessageId::HelpSummaryAudit,
-            group: None,
-            scope: "read-only",
-            state: SlashCommandState::Contextual,
-        },
-        SlashCommandSpec {
             name: "/hooks",
             usage: "/hooks",
             summary_id: MessageId::HelpSummaryHooks,
@@ -409,7 +401,6 @@ mod tests {
         assert!(!visible.iter().any(|usage| usage.starts_with("/explain")));
         assert!(!visible.iter().any(|usage| usage.starts_with("/cancel")));
         assert!(!visible.iter().any(|usage| usage.starts_with("/details")));
-        assert!(!visible.iter().any(|usage| usage.starts_with("/audit")));
         assert!(!visible.iter().any(|usage| usage.starts_with("/select")));
         assert!(!visible.iter().any(|usage| usage.starts_with("/copy")));
         assert!(!visible.iter().any(|usage| usage.starts_with("/debug")));
@@ -446,7 +437,6 @@ mod tests {
             "/explain",
             "/cancel",
             "/details",
-            "/audit",
             "/select",
             "/copy",
             "/send-to-shell",

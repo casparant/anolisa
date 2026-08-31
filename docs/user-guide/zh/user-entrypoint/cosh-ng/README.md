@@ -10,7 +10,7 @@ cosh-ng 是一个 AI 原生 Linux 终端，默认使用 Enhanced Assisted，也�
 - [快速开始](QUICKSTART.md)：安装 cosh-ng 并完成第一个任务。
 - [模型提供商](core/providers.md)：配置认证并选择模型提供商。
 - [配置](configuration.md)：了解配置文件、设置项和优先级。
-- [支持的平台](supported-distros.md)：确认软件包和服务后端。
+- [支持的平台](supported-distros.md)：确认主机支持范围和平台限制。
 
 ## 在终端工作
 
@@ -29,20 +29,6 @@ cosh-ng 是一个 AI 原生 Linux 终端，默认使用 Enhanced Assisted，也�
 | 接入本地进程或远程服务提供的工具 | [接入 MCP 服务](mcp.md) |
 | 打包 Skills、Hooks、设置和工具 | [Extensions](core/extensions.md) |
 | 在 Agent 生命周期事件前后运行检查 | [Hooks](core/hooks.md) |
-
-## 管理系统操作
-
-先运行只读命令。对支持的包管理或服务变更先加 `--dry-run` 预览；这类操作通常需要 root 权限。
-
-| 目标 | 继续阅读 |
-|---|---|
-| 查找、安装或删除软件包 | [软件包管理](cli/package-management.md) |
-| 查看或修改 systemd 服务 | [服务管理](cli/service-management.md) |
-| 使用现有的 `cosh-cli` 工作区快照命令 | [工作区快照](cli/checkpoint.md) |
-| 查看策略决策和审计事件 | [安全审计](cli/audit.md) |
-
-工作区快照页面描述现有的 `cosh-cli` system-operations 路径。它与 task-only
-Gateway profile 独立；package Gateway 不依赖 `ws-ckpt`，也不暴露 checkpoint operation。
 
 ## 集成与自动化
 
@@ -121,7 +107,5 @@ Gateway binary；此时请替换为 `cosh-gateway doctor`、`cosh-gateway run` �
   `SIGINT` 与 `SIGTERM` 会触发有界的 scheduler 与 Runtime shutdown，Gateway 只监听本地 Unix
   socket。仓库自动执行 Fake Adapter conformance；真实 Codex/Claude Adapter 检查与人工 Terminal
   验收仍是独立的、与具体安装相关的 gate。
-- [结构化 OS CLI](cli/overview.md)：命令域和安全的自动化方式。
-- [输出格式](output-format.md)：`CoshResponse<T>` 成功和失败响应封装。
 - [无界面模式](core/headless-mode.md)：供其他前端使用的 JSONL 集成。
 - [Agent 工具](core/tools.md)：工具边界和审批行为。

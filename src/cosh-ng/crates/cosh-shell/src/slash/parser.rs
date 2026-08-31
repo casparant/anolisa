@@ -17,7 +17,6 @@ pub(super) enum SlashCommand<'a> {
     Help,
     Agent,
     Auth,
-    Audit(&'a str),
     Hooks(Option<&'a str>, Option<&'a str>, Option<&'a str>),
     Mode(Option<&'a str>, Option<&'a str>, Option<&'a str>),
     Config(Option<&'a str>, Option<&'a str>),
@@ -79,9 +78,6 @@ impl<'a> SlashCommand<'a> {
                 Some(Self::Removed(RemovedCommand::ApprovalDecision(token)))
             }
             "/answer" => Some(Self::Removed(RemovedCommand::QuestionAnswer)),
-            "/audit" => Some(Self::Audit(
-                input.strip_prefix("/audit").unwrap_or_default().trim(),
-            )),
             "/config" => {
                 let sub = parts.next();
                 let value = parts.next();
@@ -157,7 +153,6 @@ fn parser_owned_command(token: &str) -> bool {
             | "/approve"
             | "/deny"
             | "/answer"
-            | "/audit"
             | "/config"
             | "/debug"
             | "/health"
@@ -177,8 +172,6 @@ fn parser_owned_command(token: &str) -> bool {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum SlashInfoCommand {
-    #[allow(dead_code)]
-    Audit,
     Config,
 }
 
@@ -356,9 +349,13 @@ mod tests {
                 hints.iter().map(|hint| hint.name).collect::<Vec<_>>()
             );
         }
-        // /au matches the public /auth but must never surface the contextual /audit
-        assert!(slash_hints("/au").iter().any(|hint| hint.name == "/auth"));
-        assert!(slash_hints("/au").iter().all(|hint| hint.name != "/audit"));
+        assert_eq!(
+            slash_hints("/au")
+                .iter()
+                .map(|hint| hint.name)
+                .collect::<Vec<_>>(),
+            ["/auth"]
+        );
         // /ex and /skill now match public commands
         assert!(slash_hints("/ex")
             .iter()

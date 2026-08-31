@@ -2,6 +2,12 @@
 
 Date: 2026-07-22
 
+Status: **Historical design record.** The standalone `cosh-cli` binary and
+contextual `/audit` command were retired before this design became the current
+COSH product surface. Storage and wire decisions remain compatibility context;
+the command and troubleshooting UX described below are not installed or
+supported interfaces.
+
 Related documents: [ADR-009](../adr/ADR-009-audit-event-segment-and-sls-contract.md),
 [ADR-010](../adr/ADR-010-audit-operations-retention-and-export-policy.md), and
 [Implementation Spec](../spec/audit-log-spec.md)
