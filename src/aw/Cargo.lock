@@ -78,6 +78,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aw-cosh-hook"
+version = "0.1.0"
+dependencies = [
+ "aw-contracts",
+ "aw-core",
+ "aw-provider-host",
+ "clap",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "aw-provider-host"
 version = "0.1.0"
 dependencies = [
