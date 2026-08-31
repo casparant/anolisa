@@ -38,19 +38,20 @@ Alibaba Cloud Linux 4 users can also install the RPM directly:
 sudo yum install cosh-ng
 ```
 
-Verify both user-facing commands:
+Verify that the public launcher is on `PATH`:
 
 ```bash
-cosh --version
-cosh-cli --version
+command -v cosh
 ```
 
-Package and service changes normally need root privileges. Workspace checkpoint commands also need a running `ws-ckpt` daemon.
+When ANOLISA manages the installation, use `anolisa status cosh-ng` for the
+installed component version. The `cosh` launcher intentionally preserves Shell
+invocation semantics, so `cosh --version` belongs to the selected bash or zsh.
 
 The published Linux raw contract is not currently portable across all routed
 distributions, so it is not the recommended Linux installation path. The raw
-package supports macOS arm64, where Linux-only package and service operations
-remain unavailable. Source builds are for contributors; follow the
+package supports macOS arm64, where Linux-only capabilities remain unavailable.
+Source builds are for contributors; follow the
 [developer setup](../../../../developer-guide/en/cosh-ng/getting-started.md)
 after the packaged options above.
 
@@ -92,11 +93,15 @@ Useful first commands in Enhanced Assisted mode:
 /auth
 /help
 /status
+/audit status
 /mode approval recommend
 /session list
 ```
 
-`/auth` chooses or updates provider authentication, `/help` lists slash commands, `/status` shows runtime and session status, `/mode approval recommend` asks for confirmation before each Agent tool call, and `/session list` lists resumable conversations in this workspace.
+`/auth` chooses or updates provider authentication, `/help` lists public slash
+commands, `/status` shows runtime and session status, `/audit status` checks the
+audit store, `/mode approval recommend` asks for confirmation before each Agent
+tool call, and `/session list` lists resumable conversations in this workspace.
 
 Use `/session list --all` to include conversations from other workspaces. Resume a conversation from the workspace where it was created.
 
@@ -116,10 +121,10 @@ Workspace, user, extension, and system Skill directories are merged by priority.
 | Goal | Read next |
 |---|---|
 | Control approval and safety | [Tool approval](shell/approval.md) |
+| Inspect or export an audit record | [Audit and incident export](shell/audit.md) |
 | Resume or compact conversations | [Session recovery](shell/session-recovery.md) |
 | Choose a model and authenticate | [Model providers](core/providers.md) |
 | Connect tools from another service | [Connect an MCP server](mcp.md) |
-| Automate package, service, checkpoint, or audit work | [Structured OS CLI](cli/overview.md) |
 | Integrate another frontend | [Headless mode](core/headless-mode.md) |
 
 The [full user guide](README.md) is organized by task.

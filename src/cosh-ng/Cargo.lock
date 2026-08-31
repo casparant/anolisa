@@ -673,21 +673,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
-name = "cosh-cli"
-version = "0.22.2"
-dependencies = [
- "chrono",
- "clap",
- "cosh-platform",
- "cosh-types",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "cosh-core"
 version = "0.22.2"
 dependencies = [
@@ -765,8 +750,8 @@ dependencies = [
 name = "cosh-platform"
 version = "0.22.2"
 dependencies = [
- "bincode",
  "chrono",
+ "clap",
  "cosh-types",
  "nix 0.29.0",
  "regex",
@@ -776,6 +761,7 @@ dependencies = [
  "tempfile",
  "toml",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 

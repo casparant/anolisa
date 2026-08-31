@@ -12,7 +12,7 @@ Any process matched by a discovery rule is traced. The shipped rule set (31 rule
 | Agent | Reported name |
 |---|---|
 | cosh (Copilot Shell) | `Cosh` |
-| cosh-ng (`cosh-shell`, `cosh-core`, `cosh-cli`) | `CoshNG` |
+| cosh-ng (`cosh-shell`, `cosh-core`, `cosh-audit`) | `CoshNG` |
 | Claude Code | `Claude` |
 | Codex CLI | `Codex` |
 | Qwen Code | `QwenCode` |

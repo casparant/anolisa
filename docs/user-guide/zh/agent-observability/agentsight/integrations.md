@@ -12,7 +12,7 @@ AgentSight 观测 Agent 时不需要被嵌进 Agent 里；同样，当机器上�
 | Agent | 上报名称 |
 |---|---|
 | cosh（Copilot Shell） | `Cosh` |
-| cosh-ng（`cosh-shell`、`cosh-core`、`cosh-cli`） | `CoshNG` |
+| cosh-ng（`cosh-shell`、`cosh-core`、`cosh-audit`） | `CoshNG` |
 | Claude Code | `Claude` |
 | Codex CLI | `Codex` |
 | Qwen Code | `QwenCode` |

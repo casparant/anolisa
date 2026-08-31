@@ -34,7 +34,7 @@ non-fatal write failures. Audit work must not change that contract.
 
 ### Use one unique, append-only segment per process
 
-- Each `cosh-cli`, `cosh-core`, and `cosh-shell` process creates a unique file with a random
+- Each `cosh-audit`, `cosh-core`, and `cosh-shell` process creates a unique file with a random
   `segment_id` and appends only to the active segment it created.
 - An active segment uses `.jsonl.active`; its writer holds an exclusive advisory file lock for the
   full writer lifetime. At 16 MiB, a UTC date boundary, or clean shutdown, the owner calls
@@ -50,7 +50,7 @@ non-fatal write failures. Audit work must not change that contract.
 
 ### Preserve the five-crate architecture and existing owners
 
-- `cosh-types` defines canonical Core and CLI types and remains side-effect free.
+- `cosh-types` defines canonical Core and audit utility types and remains side-effect free.
 - `cosh-platform::audit` owns segment storage, compatibility reading, query, retention, and export.
 - `cosh-shell` gains no internal crate dependency. It keeps a wire mirror in `types/audit.rs`,
   implements its producer in `journal/`, and proves bidirectional conformance with canonical golden

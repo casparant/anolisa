@@ -31,7 +31,7 @@ SLS records.
 | --- | --- | --- |
 | `cosh-types::audit::LogEntry` | Records actor, `Action`, policy `Decision`, and source | No schema version, event ID, lifecycle, or cross-process correlation; policy decisions only |
 | `cosh-platform::audit::log` | JSONL, `0600`, 16 MiB rotation, per-record `sync_data` | Shared-file rotation races; seven-file retention; silent cleanup and corrupt-line handling |
-| `cosh-cli audit log` | Filters by session, outcome, time, and limit | Does not read rotations; no health, correlated trace, redacted export, or retention diagnostics |
+| `cosh-audit` | Single-purpose structured status, query, trace, export, retention, and policy utility | End-to-end completeness still depends on Core and Shell producers |
 | Core tool policy | Loads `LoadedPolicy`, but `classify_tool()` uses approval mode and tool kind | Core tool execution does not call `audit::check()`, so real agent decisions are not logged by the PDP |
 | Core SLS/metrics | Aggregates tokens, API, tools, approvals, and latency | Turn counters are not a timeline; identity and diagnostic detail are missing; writes fail silently |
 | Shell `events.jsonl` | Writes a redacted snapshot when the Shell host closes | Not an incremental durable journal and does not cover provider/tool/approval lifecycles |
@@ -48,7 +48,7 @@ entry point, but it does not treat the current v0 `LogEntry` as a complete runti
 - Define a versioned, backward-readable, bounded stable file format.
 - Apply explicit time and disk-budget retention, rotation, and cleanup rules.
 - Produce incident bundles that are safe by default and demonstrably redacted.
-- Provide a `cosh-cli audit` operational path independent of live UI state.
+- Provide a single-purpose `cosh-audit` operational path independent of live UI state.
 - Make audit failures visible and block unauditable governed execution in managed production mode.
 - Preserve the standalone `cosh-shell` crate boundary and existing owner-module constraints.
 
@@ -81,11 +81,11 @@ boundaries and cannot mutate metrics or become an SLS data source.
 ### Ownership
 
 - `cosh-types` defines canonical `AuditEventV1`, event payloads, filters, and export manifests used
-  by Core and CLI while remaining side-effect free.
+  by Core and the audit utility while remaining side-effect free.
 - `cosh-platform::audit` owns segment storage, compatibility reading, retention, query, and export.
   The current PDP emits `policy.decision` events through this layer.
-- `cosh-cli` exposes stable machine-readable operational commands and does not duplicate parsing or
-  redaction.
+- The single-purpose `cosh-audit` utility exposes stable machine-readable audit commands and does
+  not duplicate parsing or redaction.
 - `cosh-core` emits provider, hook, tool, approval, and turn events on an independent side path.
   Existing `TurnMetrics`, `build_sls_record()`, and `append_sls_log()` contracts remain unchanged.
 - `cosh-shell` writes Shell, approval, and evidence events under `journal/`; `types/audit.rs` holds a
@@ -135,6 +135,9 @@ uses the `.jsonl.active` suffix and holds an exclusive advisory lock on the file
 entire lifetime. At 16 MiB, a UTC date boundary, or clean shutdown, the owner calls `sync_data`,
 renames the file to `.jsonl` while still holding the lock, and only then releases the lock. No
 process renames a segment whose lock is held by another process.
+
+The `cosh-audit` binary retains the `cosh-cli` component label in version 1 segment names and event
+schemas for backward compatibility. The label is wire data, not the installed command name.
 
 Cleanup never infers liveness from PID or modification time. It deletes only `.jsonl` files. A
 crash-orphaned `.jsonl.active` file becomes eligible for recovery only after cleanup acquires its
@@ -298,8 +301,8 @@ only opaque references, hashes, types, and sizes.
 
 1. Cleanup handles closed `.jsonl` segments and never deletes a locked `.jsonl.active` segment.
    An orphaned active segment is recovered only after a successful non-blocking exclusive lock.
-2. It runs asynchronously after writer startup and at most every 24 hours; CLI supports
-   `prune --dry-run`.
+2. It runs asynchronously after writer startup and at most every 24 hours; the audit utility
+   supports `prune --dry-run`.
 3. It deletes segments older than `retention_days`, then continues oldest-first if the byte cap is
    exceeded.
 4. Cleanup uses a bounded lock and bounded work. Lock timeout skips the pass without blocking an
@@ -311,13 +314,13 @@ only opaque references, hashes, types, and sizes.
 
 Current `main` already provides `cosh-shell diagnostics export`. It remains a general best-effort
 snapshot of environment, configuration, health, recent events, logs, and crashes. The following
-`cosh-cli audit export` is a separate audit-specific bundle that consumes only the version 0/version
+`cosh-audit export` is a separate audit-specific bundle that consumes only the version 0/version
 1 audit store and supplies stable schemas, correlation IDs, gaps, and an integrity manifest. The
 first release does not make either command invoke or read the other, preserving Shell's standalone
 boundary and existing diagnostic behavior.
 
 ```text
-cosh-cli audit export \
+cosh-audit export \
   --session <shell-or-provider-session-id> \
   --since 2h \
   --output ./cosh-audit-incident/
@@ -346,26 +349,26 @@ cosh-audit-incident/
 ## Production Troubleshooting Surface
 
 Keep `cosh-shell diagnostics export` as the broad incident snapshot. Use the following
-`cosh-cli audit` commands when troubleshooting requires stable event correlation, audit-retention
+`cosh-audit` commands when troubleshooting requires stable event correlation, audit-retention
 health, or an exact timeline.
 
 Keep existing `check` and `policy`, and add:
 
 ```text
-cosh-cli audit status
-cosh-cli audit events --since 2h --event tool.failed,provider.request.failed
-cosh-cli audit trace <event|session|run|request|tool|command-id>
-cosh-cli audit export --session <id> --since 2h --output <dir>
-cosh-cli audit prune --dry-run
+cosh-audit status
+cosh-audit events --since 2h --event tool.failed,provider.request.failed
+cosh-audit trace <event|session|run|request|tool|command-id>
+cosh-audit export --session <id> --since 2h --output <dir>
+cosh-audit prune --dry-run
 ```
 
 - `status` reports paths, mode, retention, disk use, time bounds, segments, corrupt/partial counts,
   and last write/retention/export errors.
 - `events` uses bounded pages and stable cursors and never eagerly loads all segments.
-- `trace` returns a correlated timeline, durations, and gaps in `CoshResponse<T>`.
+- `trace` returns a correlated timeline, durations, and gaps in the structured JSON envelope.
 - Existing `audit log` remains a one-cycle alias for `events --event policy.decision` and reads both
   legacy `audit.log` and v1 segments.
-- Shell later provides `/audit status`, `/audit trace current`, and `/audit export current <dir>` as
+- Shell provides `/audit status`, `/audit trace current`, and `/audit export current <dir>` as
   a thin current-session UX over the canonical store semantics.
 - Activity, approval, and `/details` cards expose `audit_ref: <event_id>` for direct tracing.
 
@@ -384,8 +387,9 @@ cosh-cli audit prune --dry-run
 
 1. [Event and storage](../spec/audit-log-spec.md#stage-1-event-contract-and-storage): add canonical fixtures, v0 compatibility,
    configuration resolution, locked active segments, crash recovery, and the v1 store.
-2. [CLI, retention, and export](../spec/audit-log-spec.md#stage-2-cli-retention-and-export): deliver
-   status/events/trace/export/prune so schema and failure behavior are independently testable.
+2. [Audit utility, retention, and export](../spec/audit-log-spec.md#stage-2-audit-utility-retention-and-export):
+   deliver status/events/trace/export/prune so schema and failure behavior are independently
+   testable.
 3. [Core producers](../spec/audit-log-spec.md#stage-3-core-producers-and-sls-compatibility): integrate Provider, Hook, Tool, approval,
    and turn side-path events; prove that SLS JSON, path, call timing, and failure semantics remain
    unchanged.
@@ -399,8 +403,8 @@ No phase may claim a complete production timeline before the corresponding produ
 
 ## Acceptance Criteria
 
-- Core, Shell, and CLI processes never share an active segment or rename a segment locked by
-  another process.
+- Core, Shell, and audit utility processes never share an active segment or rename a segment locked
+  by another process.
 - A crashed writer leaves `.jsonl.active`; cleanup cannot reclaim it while its lock is held and can
   recover it deterministically after the process exits.
 - Any stable ID yields an ordered `audit trace` with explicit gaps.
@@ -408,7 +412,7 @@ No phase may claim a complete production timeline before the corresponding produ
 - Interior corruption and crash-tail partial records are reported rather than silently disappearing.
 - The 30-day/1 GiB retention policy executes deterministically without changing existing Shell
   evidence lifecycles.
-- Secret corpora and randomized nested inputs do not appear in segments, bundles, manifests, CLI
+- Secret corpora and randomized nested inputs do not appear in segments, bundles, manifests, utility
   errors, or test snapshots.
 - `required` blocks Provider/Agent governed execution on critical flush failure; `best_effort`
   persistently reports degradation and records recovery.

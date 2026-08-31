@@ -8,7 +8,7 @@ Related documents: [Design](../design/audit-log.md),
 
 ## Objective
 
-Implement one stable, bounded, redacted audit timeline across `cosh-cli`, `cosh-core`, and
+Implement one stable, bounded, redacted audit timeline across `cosh-audit`, `cosh-core`, and
 `cosh-shell` without changing SLS metrics, existing Shell evidence, or the standalone Shell crate
 boundary. Delivery is split into five ordered stages inside this single Spec so each stage can be
 implemented and verified independently while sharing one contract and acceptance gate.
@@ -18,7 +18,7 @@ implemented and verified independently while sharing one contract and acceptance
 | Stage | Outcome | Depends on |
 | --- | --- | --- |
 | 1 | Canonical event types, configuration, segment store, legacy reader, and retention planner | Accepted Design and ADRs |
-| 2 | `cosh-cli audit` status, query, trace, retention dry-run, and redacted export | Stage 1 |
+| 2 | `cosh-audit` status, query, trace, retention dry-run, and redacted export | Stage 1 |
 | 3 | Core Provider, Hook, Tool, approval, turn, and session producers with exact SLS compatibility | Stage 1 |
 | 4 | Standalone Shell producers, audit references, and thin `/audit` UX | Stages 1-3 |
 | 5 | Isolated integration and real Linux Shell/Core E2E validation | Stages 1-4 |
@@ -208,23 +208,24 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo doc --workspace --no-deps
 ```
 
-## Stage 2: CLI, Retention, and Export
+## Stage 2: Audit Utility, Retention, and Export
 
 ### Scope
 
-- `crates/cosh-cli/src/cmd/audit.rs` and focused child modules as needed.
+- `crates/cosh-platform/src/bin/cosh-audit.rs` and
+  `crates/cosh-platform/src/bin/cosh-audit/command.rs`.
 - Platform query, trace, retention execution, export, alias, and final-byte scanning.
-- Audit result types and CLI integration tests.
+- Audit result types and utility integration tests.
 - Required user documentation after implementation.
 
 Keep `audit check` and `audit policy` unchanged. Add:
 
 ```text
-cosh-cli audit status
-cosh-cli audit events [filters] [--limit N] [--cursor CURSOR]
-cosh-cli audit trace <id> [--since DURATION] [--until TIMESTAMP]
-cosh-cli audit export [filters] --output PATH [--force]
-cosh-cli audit prune --dry-run
+cosh-audit status
+cosh-audit events [filters] [--limit N] [--cursor CURSOR]
+cosh-audit trace <id> [--since DURATION] [--until TIMESTAMP]
+cosh-audit export [filters] --output PATH [--force]
+cosh-audit prune --dry-run
 ```
 
 Keep `audit log` for one compatibility cycle as a deprecated alias for
@@ -284,7 +285,7 @@ SHA256SUMS
 
 ### Stage 2 tests
 
-- Clap parsing and `CoshResponse<T>` JSON/exit snapshots for all commands.
+- Clap parsing and structured JSON/exit snapshots for all commands.
 - Pagination limits, cursor continuation/mismatch/corruption, cross-segment order, unknown events,
   legacy alias, gaps, duplicates, and conflicts.
 - Status under missing root, permissions, corrupt state, live writer, orphan, and legacy discovery.
@@ -299,7 +300,7 @@ SHA256SUMS
 cargo fmt --all -- --check
 cargo test --package cosh-types
 cargo test --package cosh-platform
-cargo test --package cosh-cli --test cli_integration
+cargo test --package cosh-platform --test cosh_audit_cli
 cargo clippy --workspace --all-targets -- -D warnings
 cargo doc --workspace --no-deps
 ```
@@ -411,7 +412,7 @@ cargo doc --workspace --no-deps
 - Add optional event-ID `audit_ref` fields to approval, activity, cancellation, command details, and
   evidence result models. Never fabricate references from projection IDs.
 - Implement `/audit status`, `/audit trace current`, and `/audit export current <dir>` by invoking
-  bounded `cosh-cli audit` subprocesses and parsing `CoshResponse<T>`.
+  bounded `cosh-audit` subprocesses and parsing the structured JSON response envelope.
 - Resolve `current` only from stable runtime IDs; require explicit export destination.
 - Bound subprocess duration, output bytes, and parsed depth; all errors restore prompt/terminal state.
 - Explain diagnostics export versus audit export in command help.
@@ -425,7 +426,8 @@ cargo doc --workspace --no-deps
 - Required Shell-owned approval failure proves execution did not start.
 - Evidence events contain only metadata/reference.
 - Real references render in approval/activity/cancellation/details surfaces.
-- `/audit` success, missing CLI, timeout, malformed/oversize JSON, query failure, and prompt recovery.
+- `/audit` success, missing audit utility, timeout, malformed/oversize JSON, query failure, and
+  prompt recovery.
 - Existing events, output refs, diagnostics, approval, activity, evidence, and layout tests remain green.
 
 ### Stage 4 gate
@@ -465,14 +467,16 @@ obtain user approval. This Spec does not itself authorize cloud spend or externa
 
 ### Local integration matrix
 
-1. Concurrent Core/Shell/CLI writers have distinct locked active files and ordered query results.
+1. Concurrent Core/Shell/audit utility writers have distinct locked active files and ordered query
+   results.
 2. A killed writer releases its lock; cleanup recovers only its orphan.
 3. A live lock prevents rename/deletion during retention.
 4. Interior corruption and final partial tail remain distinct diagnostics.
 5. Fake-clock age/byte dry-run equals automatic cleanup.
 6. Permission, no-root, symlink, owner, rename, sync, lock, and bounded disk-full failures.
 7. Real/no-op audit produces byte-identical SLS.
-8. Secret corpus is absent from segments, state, bundles, CLI/errors, stderr, and snapshots.
+8. Secret corpus is absent from segments, state, bundles, utility output/errors, stderr, and
+   snapshots.
 
 Faults unsafe on a real filesystem use narrow injected operations and remain labelled diagnostic,
 not E2E.
@@ -528,8 +532,9 @@ crates/cosh-shell/scripts/check-layout.sh
 
 ## Documentation Required with Implementation
 
-New CLI commands and `[audit]` settings require updates to the component README summary and full
-user-guide reference under the repository documentation standard. Design/ADR/Spec remain English;
+New audit behavior, `/audit` projections, and `[audit]` settings require updates to the component
+README summary and full user-guide reference under the repository documentation standard.
+Design/ADR/Spec remain English;
 user documentation follows its own required language structure. Do not update CHANGELOG outside a
 release version-bump change.
 

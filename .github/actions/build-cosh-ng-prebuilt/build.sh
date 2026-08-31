@@ -159,7 +159,7 @@ cargo metadata \
 BIN_DIR="$COMPONENT_ROOT/target/release"
 TARGET_BIN_DIR="$COMPONENT_ROOT/target/$RUST_TARGET/release"
 install -d -m 0755 "$BIN_DIR"
-for binary in cosh-cli cosh-core cosh-gateway cosh-shell; do
+for binary in cosh-audit cosh-core cosh-gateway cosh-shell; do
     [ -x "$TARGET_BIN_DIR/$binary" ] || \
         die "Cross build did not produce $TARGET_BIN_DIR/$binary"
     install -p -m 0755 "$TARGET_BIN_DIR/$binary" "$BIN_DIR/$binary"
@@ -177,7 +177,7 @@ METADATA="$BIN_DIR/cosh-ng-build.toml"
     printf 'target_os = "%s"\n' "$TARGET_OS"
     printf 'target_arch = "%s"\n\n' "$TARGET_ARCH"
     printf '[binaries]\n'
-    for binary in cosh-cli cosh-core cosh-gateway cosh-shell; do
+    for binary in cosh-audit cosh-core cosh-gateway cosh-shell; do
         printf '%s = "%s"\n' \
             "$binary" "$(sha256sum "$BIN_DIR/$binary" | awk '{print $1}')"
     done

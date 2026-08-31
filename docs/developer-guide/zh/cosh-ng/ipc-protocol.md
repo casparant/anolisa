@@ -1,28 +1,17 @@
-# ws-ckpt 与会话管理 IPC 协议
+# 兼容性与会话管理 IPC 协议
 
 [English](../../en/cosh-ng/ipc-protocol.md)
 
-## 概述
+## 冻结的 ws-ckpt 兼容子集
 
-cosh-ng 通过 Unix Domain Socket 与 ws-ckpt 守护进程通信，实现工作空间快照管理。
-通信使用 **bincode 序列化 + 4 字节小端长度前缀** 的帧格式。
+`cosh-types` 保留 guarded operation 出现之前的 ws-ckpt wire 子集，确保持久化
+fixture 和下游 decoder 在迁移期间保持原有语义。cosh-ng 当前既不安装 checkpoint
+命令，也不交付 runtime client。这个冻结子集不等于当前 ws-ckpt V2 协议：daemon
+已经追加 guarded operation 变体，而这里有意不包含它们。未来的 Aweft
+State/Recovery Provider 必须复用这个子集，或引入显式的版本边界。
 
-## 架构
-
-```
-cosh-cli / cosh-core          ws-ckpt daemon
-     │                              │
-     │  Unix socket                 │
-     │  /run/ws-ckpt/ws-ckpt.sock   │
-     │─────────────────────────────→│
-     │  [4B LE len][bincode req]    │
-     │                              │
-     │←─────────────────────────────│
-     │  [4B LE len][bincode resp]   │
-```
-
-客户端实现位于 `crates/cosh-platform/src/checkpoint.rs`（`CkptClient`），
-类型定义位于 `crates/cosh-types/src/checkpoint.rs`。
+`crates/cosh-types/src/checkpoint.rs` 中的类型保留历史 Unix Domain Socket
+载荷结构：**bincode 序列化 + 4 字节小端长度前缀**。
 
 ## 帧格式
 
@@ -35,9 +24,9 @@ cosh-cli / cosh-core          ws-ckpt daemon
 └──────────────────┴───────────────────────────────┘
 ```
 
-- 长度前缀使用小端序无符号 32 位整数，表示后续 bincode 载荷的字节数
-- 最大响应限制为 64 MiB，避免耗尽内存
-- 默认超时为 5000 ms，可通过 `CkptClient::with_timeout()` 配置
+- 长度前缀使用小端序无符号 32 位整数，表示后续 bincode 载荷的字节数。
+- `cosh-types` 当前只保留类型，不包含 active frame reader，因此也不定义响应大小
+  上限；未来 client 必须显式定义该 transport bound。
 
 ## 请求类型（WsCkptRequest）
 
@@ -47,7 +36,7 @@ bincode 按枚举变体索引序列化（第一个变体 = index 0）。**变体
 |------|------|------|
 | 0 | `Init { workspace }` | 初始化工作空间 |
 | 1 | `Checkpoint { workspace, id, message, metadata, pin }` | 创建快照 |
-| 2 | `Rollback { workspace, to }` | 回滚到指定快照 |
+| 2 | `Rollback { workspace, to, num_ancestors }` | 回滚到指定快照或祖先 |
 | 3 | `Delete { workspace, snapshot, force }` | 删除快照 |
 | 4 | `List { workspace, format }` | 列出快照 |
 | 5 | `Diff { workspace, from, to }` | 两个快照间的差异 |
@@ -55,27 +44,37 @@ bincode 按枚举变体索引序列化（第一个变体 = index 0）。**变体
 | 7 | `Cleanup { workspace, keep }` | 清理旧快照 |
 | 8 | `Config` | 获取守护进程配置 |
 | 9 | `ReloadConfig` | 重新加载配置 |
-| 10 | `Recover { workspace }` | 恢复工作空间 |
-| 11 | `HealthAdvisory` | 健康检查 |
+| 10 | `ReloadGlobalConfig` | 只重新加载全局配置 |
+| 11 | `ReloadWorkspacePolicy { workspace }` | 重新加载一个工作空间策略 |
+| 12 | `ConfigOverview` | 获取全局配置和工作空间 override 数量 |
+| 13 | `Recover { workspace }` | 恢复工作空间 |
+| 14 | `HealthAdvisory` | 查询聚合健康指标 |
+| 15 | `GetWorkspacePolicy { workspace }` | 读取一个工作空间策略 |
+| 16 | `ResetWorkspacePolicy { workspace }` | 删除一个工作空间策略 override |
+| 17 | `PatchWorkspacePolicy { workspace, auto_cleanup, auto_cleanup_keep }` | 修改指定工作空间策略字段 |
+| 18 | `RollbackPreview { workspace, to, num_ancestors }` | 预览回滚 |
 
 ## 响应类型（WsCkptResponse）
 
-| 变体 | 对应请求 | 关键字段 |
-|------|----------|----------|
-| `InitOk { ws_id }` | Init | 工作空间 ID |
-| `CheckpointOk { snapshot_id }` | Checkpoint | 快照 ID |
-| `RollbackOk { from, to }` | Rollback | 回滚源和目标 |
-| `DeleteOk { target }` | Delete | 被删除的快照标识 |
-| `Error { code, message }` | 任意 | 错误码 + 人类可读描述 |
-| `ListOk { snapshots }` | List | `Vec<SnapshotEntry>` |
-| `DiffOk { changes }` | Diff | `Vec<DiffEntry>` |
-| `StatusOk { report }` | Status | `StatusReport` |
-| `CleanupOk { removed }` | Cleanup | 被移除的快照 ID 列表 |
-| `ConfigOk { config }` | Config | `ConfigReport` |
-| `ReloadConfigOk` | ReloadConfig | 无载荷 |
-| `CheckpointSkipped { reason }` | Checkpoint | 跳过原因（如无变更） |
-| `RecoverOk { workspace }` | Recover | 恢复的工作空间路径 |
-| `HealthAdvisoryOk { ... }` | HealthAdvisory | 超限工作空间数、磁盘用量 |
+| 索引 | 变体 | 对应请求或结果 |
+|---|---|---|
+| 0 | `InitOk { ws_id }` | 初始化后的工作空间 ID |
+| 1 | `CheckpointOk { snapshot_id }` | 新建的快照 ID |
+| 2 | `RollbackOk { from, to }` | 回滚源和目标 |
+| 3 | `DeleteOk { target }` | 被删除的快照标识 |
+| 4 | `Error { code, message }` | 任意请求的类型化失败 |
+| 5 | `ListOk { snapshots }` | `Vec<SnapshotEntry>` |
+| 6 | `DiffOk { changes }` | `Vec<DiffEntry>` |
+| 7 | `StatusOk { report }` | `StatusReport` |
+| 8 | `CleanupOk { removed }` | 被移除的快照 ID |
+| 9 | `ConfigOk { config }` | `ConfigReport` |
+| 10 | `ReloadConfigOk { config }` | reload 后的 `ConfigReport` |
+| 11 | `CheckpointSkipped { reason }` | 请求已接受，但未创建新快照 |
+| 12 | `RecoverOk { workspace }` | 恢复后的工作空间路径 |
+| 13 | `HealthAdvisoryOk { over_limit_workspace_count, fs_total_bytes, fs_used_bytes }` | 聚合健康指标 |
+| 14 | `WorkspacePolicyOk { ws_id, effective, local, global }` | 工作空间策略状态 |
+| 15 | `ConfigOverviewOk { config, ws_total, ws_with_override }` | 全局配置和 override 数量 |
+| 16 | `RollbackPreviewOk { to, changes }` | 回滚目标和变更预览 |
 
 ## 错误码（WsCkptErrorCode）
 
@@ -92,39 +91,16 @@ bincode 按枚举变体索引序列化（第一个变体 = index 0）。**变体
 | 8 | `SnapshotAlreadyExists` | 快照 ID 冲突 |
 | 9 | `WriteLockConflict` | 写锁冲突 |
 | 10 | `DiskSpaceInsufficient` | 磁盘空间不足 |
-
-## 客户端使用
-
-```rust
-use cosh_platform::checkpoint::CkptClient;
-
-// 默认路径 /run/ws-ckpt/ws-ckpt.sock
-let client = CkptClient::default_path();
-
-// 或指定路径和超时
-let client = CkptClient::with_timeout("/custom/path.sock", 10000);
-
-// 健康检查
-if !client.is_available() {
-    eprintln!("ws-ckpt daemon not running");
-}
-
-// 操作示例
-let result = client.create("/home/user/project", "snap-001", Some("initial"), None, false)?;
-let list = client.list(Some("/home/user/project"))?;
-let restored = client.restore("/home/user/project", "snap-001")?;
-```
+| 11 | `CwdOccupied` | 当前工作目录阻止该操作 |
+| 12 | `CwdScanFailed` | 扫描当前工作目录失败 |
 
 ## 关键约束
 
 | 约束 | 说明 |
 |------|------|
 | 变体顺序不可变 | bincode 使用索引序列化枚举，重排即破坏线格式 |
-| 新增只能追加 | 新的 Request/Response 变体只能在末尾添加 |
-| 类型必须同步 | `cosh-types` 中的定义必须与 `ws-ckpt-common` 完全一致 |
-| 超时处理 | 客户端对 read/write 设置超时，避免守护进程无响应时阻塞 |
-| 长度限制 | 响应超过 64 MiB 视为异常，立即断开 |
-| socket 路径 | 默认 `/run/ws-ckpt/ws-ckpt.sock`，可通过环境变量或 CLI 参数覆盖 |
+| 冻结范围明确 | 该子集止于 request index 18 和 response index 16，不包含当前 ws-ckpt V2 guarded-operation 变体 |
+| 后续接入必须版本化 | State/Recovery Provider 必须保留这些索引，或引入新的显式 contract version |
 
 ## 测试验证
 
@@ -137,9 +113,10 @@ cargo test --locked -p cosh-types -- checkpoint
 # 变体索引契约测试
 cargo test --locked -p cosh-types test_request_bincode_variant_index
 
-# CkptClient 单元测试（不需要运行的守护进程）
-cargo test --locked -p cosh-platform -- checkpoint
 ```
+
+这些测试只证明冻结的本地序列化结构，不连接 live ws-ckpt daemon，也不声明与
+daemon 当前 V2 extension 完全兼容。
 
 ## cosh-core 会话管理 JSON 协议
 

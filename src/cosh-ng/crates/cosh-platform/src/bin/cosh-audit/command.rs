@@ -1,8 +1,4 @@
-//! `cosh audit` command surface.
-//!
-//! Replaces the original stub (which always returned `allowed: true` with a
-//! `meta.warning` admitting it was not connected to a policy engine) with a
-//! real PEP→PDP→log dispatcher. See `docs/audit-design.md` §5.
+//! Single-purpose command surface for audit policy, storage, and incident data.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -11,17 +7,16 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use serde_json::json;
 
+use crate::{
+    build_meta, build_meta_with_warning, print_failure, print_success, Distro, ResponseMeta,
+};
 use cosh_platform::audit::{
     self, parse_action_string, split_compound_command, LoadedPolicy, ParseError,
 };
-use cosh_platform::detect::Distro;
 use cosh_types::audit::{
     Action, ActionSubsystem, AuditEventV1, Decision, LogSource, Outcome, Policy,
 };
 use cosh_types::error::{CoshError, ErrorCode};
-use cosh_types::output::ResponseMeta;
-
-use crate::{build_meta, build_meta_with_warning, print_failure, print_success};
 
 #[derive(Subcommand)]
 pub enum AuditCommands {
@@ -188,7 +183,7 @@ pub enum PolicyCommands {
     },
     /// Explain how `<action>` would be evaluated under the active policy.
     Explain {
-        /// Action string (parsed via the same rules as `audit check
+        /// Action string (parsed via the same rules as `cosh-audit check
         /// --action-string`).
         action: String,
     },
@@ -208,7 +203,7 @@ pub fn run(action: AuditCommands, distro: &Distro, start: Instant) -> i32 {
 }
 
 // ===========================================================================
-// `cosh audit check`
+// `cosh-audit check`
 // ===========================================================================
 
 #[derive(Debug, Clone, Serialize)]
@@ -327,7 +322,7 @@ fn run_check(args: CheckArgs, distro: &Distro, start: Instant) -> i32 {
         }
         BuiltAction::Malformed(msg) => print_failure(
             CoshError::new(ErrorCode::AuditActionMalformed, msg, "audit")
-                .with_hint("see `cosh audit check --help` for valid argument combinations"),
+                .with_hint("see `cosh-audit check --help` for valid argument combinations"),
             build_meta("audit", distro, start, false),
         ),
     }
@@ -350,7 +345,7 @@ fn run_check_evaluate(
 }
 
 // ===========================================================================
-// `cosh audit log`
+// `cosh-audit log`
 // ===========================================================================
 
 fn run_log(args: LogArgs, distro: &Distro, start: Instant) -> i32 {
@@ -401,6 +396,10 @@ fn run_log(args: LogArgs, distro: &Distro, start: Instant) -> i32 {
     )
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the audit response schema requires the shared structured CoshError"
+)]
 fn parse_outcome_filter(s: &str) -> Result<Outcome, CoshError> {
     match s.to_ascii_lowercase().as_str() {
         "allow" => Ok(Outcome::Allow),
@@ -417,6 +416,10 @@ fn parse_outcome_filter(s: &str) -> Result<Outcome, CoshError> {
     }
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the audit response schema requires the shared structured CoshError"
+)]
 fn parse_duration_filter(s: &str) -> Result<chrono::Duration, CoshError> {
     let trimmed = s.trim();
     if trimmed.is_empty() {
@@ -597,6 +600,10 @@ fn run_prune(args: PruneArgs, distro: &Distro, start: Instant) -> i32 {
     }
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the audit response schema requires the shared structured CoshError"
+)]
 fn build_event_filter(args: &EventArgs) -> Result<audit::query::AuditEventFilter, CoshError> {
     let since = args.since.as_deref().map(parse_since_bound).transpose()?;
     let until = args.until.as_deref().map(parse_timestamp).transpose()?;
@@ -641,6 +648,10 @@ struct SinceBound {
     relative: bool,
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the audit response schema requires the shared structured CoshError"
+)]
 fn parse_since_bound(value: &str) -> Result<SinceBound, CoshError> {
     if let Ok(duration) = parse_duration_filter(value) {
         return chrono::Utc::now()
@@ -663,6 +674,10 @@ fn parse_since_bound(value: &str) -> Result<SinceBound, CoshError> {
     })
 }
 
+#[allow(
+    clippy::result_large_err,
+    reason = "the audit response schema requires the shared structured CoshError"
+)]
 fn parse_timestamp(value: &str) -> Result<chrono::DateTime<chrono::Utc>, CoshError> {
     chrono::DateTime::parse_from_rfc3339(value)
         .map(|timestamp| timestamp.with_timezone(&chrono::Utc))
@@ -676,7 +691,7 @@ fn parse_timestamp(value: &str) -> Result<chrono::DateTime<chrono::Utc>, CoshErr
 }
 
 // ===========================================================================
-// `cosh audit policy ...`
+// `cosh-audit policy ...`
 // ===========================================================================
 
 fn run_policy(action: PolicyCommands, distro: &Distro, start: Instant) -> i32 {

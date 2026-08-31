@@ -55,7 +55,13 @@ sessions, or use the environment variable for one launch.
 | `/skills [list\|detail\|enable\|disable]` | Manage Skills. |
 | `/mcp [list\|connect\|inspect\|refresh\|disconnect\|login\|logout]` | Manage MCP servers. |
 
-Commands such as `/details`, `/audit`, and `/send-to-shell` appear only when the current card or run provides their required context. `/mcp login` requires the shell-based OAuth flow described by the MCP guide.
+`/details` and `/send-to-shell` are contextual card or run actions. `/audit` is
+contextual only in command discovery: it is intentionally omitted from the
+ordinary `/help` list and slash hints. You can enter `/audit status` at any time
+in Enhanced mode; `/audit trace current` and `/audit export current <dir>`
+require the current Shell session identity. See
+[Audit and incident export](audit.md). `/mcp login` requires the shell-based
+OAuth flow described by the MCP guide.
 
 ## Compose a one-shot Agent request
 

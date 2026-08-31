@@ -90,7 +90,7 @@ audit/
 - Delete by age first, then oldest-first while usage exceeds the byte cap.
 - Run cleanup asynchronously after writer startup and at most once every 24 hours. Skip on lock
   timeout without blocking execution.
-- `cosh-cli audit prune --dry-run` returns exact candidates, bytes, and reasons.
+- `cosh-audit prune --dry-run` returns exact candidates, bytes, and reasons.
 - Record cleanup results in `retention.pruned`; if that event cannot be written, still record the
   last error in `state.json`.
 
@@ -98,9 +98,9 @@ audit/
 
 - Keep the existing `cosh-shell diagnostics export` command unchanged as a general best-effort
   diagnostic snapshot. It does not become an audit reader or audit retention surface.
-- `cosh-cli audit export` is a distinct audit-only contract. It reads only version 0/version 1 audit
+- `cosh-audit export` is a distinct audit-only contract. It reads only version 0/version 1 audit
   storage and does not invoke, consume, or rewrite Shell diagnostic bundles.
-- `cosh-cli audit export` requires explicit `--output` and creates a `0700` bundle directory by
+- `cosh-audit export` requires explicit `--output` and creates a `0700` bundle directory by
   default.
 - A bundle contains only `manifest.json`, `summary.json`, re-redacted `events.jsonl`, and
   `SHA256SUMS`.
@@ -150,8 +150,8 @@ native PTY commands. Managed `required` covers only cosh-governed Provider and A
 
 ## Consequences
 
-- Core, Shell, and CLI must share `[audit]` defaults and effective-source semantics. Project-level
-  forbidden fields need stable warnings and tests.
+- Core, Shell, and the audit utility must share `[audit]` defaults and effective-source semantics.
+  Project-level forbidden fields need stable warnings and tests.
 - The directory may consume up to 1 GiB of user state and needs clear `status`, `prune --dry-run`,
   and cleanup diagnostics.
 - Incident bundles are safe by default but contain no raw content; troubleshooting relies on event
