@@ -44,6 +44,11 @@ Agent 框架和沙箱。ANOLISA CLI 提供统一的安装入口，各项能力�
 
 ## 组件
 
+**AweftOS 系统边界：** [AW workspace](src/aw/) 承载共享的
+Provider Contracts 和 Headless 能力托管。当前 PoC 已能以版本化 Provider
+的方式发现、准入并调用 tokenless；COSH 和第三方 Agent Environment 的
+常规启动路径尚未接入该 Host。
+
 <table width="100%">
   <thead>
     <tr>
@@ -53,6 +58,9 @@ Agent 框架和沙箱。ANOLISA CLI 提供统一的安装入口，各项能力�
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td colspan="3"><strong><a href="src/aw/">AweftOS</a></strong><br><sub>Provider Contracts 与 Headless 能力托管（PoC）</sub></td>
+    </tr>
     <tr>
       <td><strong><a href="https://agentic-os.sh/zh/docs/user-guide/user-entrypoint/cosh-ng/quickstart/">cosh-ng</a></strong><br><sub>Shell AI 副驾</sub></td>
       <td><strong><a href="https://agentic-os.sh/zh/docs/user-guide/token-saving/tokenless/quickstart/">Token-less</a></strong><br><sub>压缩工具输出</sub></td>

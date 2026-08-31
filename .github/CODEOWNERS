@@ -37,6 +37,7 @@
 /src/anolisa/                           @kongche-jbw @ikunkun-sys   # auto-label: component:anolisa
 /src/cosh-ng/                           @KaiLongZhou                # auto-label: component:cosh-ng
 /src/cosh-ng/crates/cosh-shell/         @SunnyQjm                   # auto-label: component:cosh-ng
+/src/aw/                             @casparant                  # auto-label: component:aw
 
 # ---------------------------------------------------------------------------
 # Scope paths
