@@ -7,6 +7,7 @@
 //! system contract.
 
 pub mod common;
+pub mod context;
 pub mod error;
 pub mod ids;
 pub mod provider;
