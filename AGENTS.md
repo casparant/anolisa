@@ -10,6 +10,7 @@ This file provides context for AI coding assistants (Qoder, Claude, etc.) workin
 |-----------|------|------|----------|
 | **copilot-shell** (`cosh`) | `src/copilot-shell/` | TypeScript / Node.js | All |
 | **cosh-ng** | `src/cosh-ng/` | Rust | Linux (full); macOS (limited functionality) |
+| **AW Core** | `src/aw/` | Rust | Linux + macOS |
 | **agent-sec-core** | `src/agent-sec-core/` | Rust + Python | Linux only |
 | **agentsight** | `src/agentsight/` | Rust (eBPF) | Linux (full); macOS (trajectory/serve only) |
 | **tokenless** | `src/tokenless/` | Rust | Linux (full); macOS x64/arm64 (CLI binaries + adapters, via npm) |
@@ -51,6 +52,13 @@ cargo build --workspace
 cargo fmt --all -- --check
 # Select the closest targeted test from src/cosh-ng/CONTRIBUTING.md.
 # Full gates require a large/cross-cutting change and an explicit request.
+
+# AW Core (per-component)
+cd src/aw
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo doc --workspace --no-deps
 
 # agent-sec-core (Linux only; Python 3.11.6 + uv, per-component)
 cd src/agent-sec-core
@@ -118,7 +126,7 @@ cargo test --workspace
 
 ## 3. Rust Common Conventions
 
-> Applies to these Rust components: `anolisa`, `agentsight`, `tokenless`, `agent-memory`, `skillfs`, `ktuner`, `blaze`.
+> Applies to these Rust components: `aw`, `anolisa`, `agentsight`, `tokenless`, `agent-memory`, `skillfs`, `ktuner`, `blaze`.
 
 ### 3.1 Comment Guidelines
 
@@ -283,6 +291,7 @@ When generating commits, detect the active tool and fill in the actual version. 
 |---|---|
 | `src/copilot-shell/` | `cosh` |
 | `src/cosh-ng/` | `cosh-ng` |
+| `src/aw/` | `aw` |
 | `src/agent-sec-core/` | `sec-core` |
 | `src/os-skills/` | `skill` |
 | `src/agentsight/` | `sight` |
@@ -359,6 +368,7 @@ Components with complex architectures maintain their own AGENTS.md for module-sp
 | **agent-sec-core** | [`src/agent-sec-core/AGENTS.md`](src/agent-sec-core/AGENTS.md) | Python environment, ruff/black rules, hermes-plugin, capability system |
 | **anolisa** | [`src/anolisa/AGENTS.md`](src/anolisa/AGENTS.md) | Workspace structure, crate responsibilities |
 | **cosh-ng** | [`src/cosh-ng/AGENTS.md`](src/cosh-ng/AGENTS.md) | 5-crate workspace, security heuristics, PTY testing strategy |
+| **aw** | [`src/aw/AGENTS.md`](src/aw/AGENTS.md) | Contracts, Provider admission, and dependency boundaries |
 | **skillfs** | [`src/skillfs/AGENTS.md`](src/skillfs/AGENTS.md) | Three-crate layout, dependency exceptions, FUSE e2e testing |
 | **blaze** | [`src/blaze/AGENTS.md`](src/blaze/AGENTS.md) | Two-crate workspace, sandbox backends, daemon lifecycle |
 

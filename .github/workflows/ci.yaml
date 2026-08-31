@@ -62,6 +62,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_aw:
+        description: 'Force run AW Core tests (ignore change detection)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -87,6 +92,7 @@ jobs:
       anolisa: ${{ steps.changes.outputs.anolisa }}
       skillfs: ${{ steps.changes.outputs.skillfs }}
       cosh_ng: ${{ steps.changes.outputs.cosh_ng }}
+      aw: ${{ steps.changes.outputs.aw }}
       ktuner: ${{ steps.changes.outputs.ktuner }}
       blaze: ${{ steps.changes.outputs.blaze }}
     steps:
@@ -118,6 +124,7 @@ jobs:
           ANOLISA=false
           SKILLFS=false
           COSH_NG=false
+          AW=false
           KTUNER=false
           BLAZE=false
 
@@ -150,6 +157,11 @@ jobs:
             SKILLFS=true
           fi
           if echo "$CHANGED" | grep -q "^src/cosh-ng/"; then
+            COSH_NG=true
+          fi
+          if echo "$CHANGED" | grep -q "^src/aw/"; then
+            AW=true
+            # cosh-gateway-contracts re-exports shared AW Contracts.
             COSH_NG=true
           fi
           if echo "$CHANGED" | grep -q "^src/ktuner/"; then
@@ -187,6 +199,9 @@ jobs:
           if [[ "${{ inputs.run_cosh_ng }}" == "true" ]]; then
             COSH_NG=true
           fi
+          if [[ "${{ inputs.run_aw }}" == "true" ]]; then
+            AW=true
+          fi
           if [[ "${{ inputs.run_ktuner }}" == "true" ]]; then
             KTUNER=true
           fi
@@ -203,6 +218,7 @@ jobs:
           echo "anolisa=$ANOLISA" >> $GITHUB_OUTPUT
           echo "skillfs=$SKILLFS" >> $GITHUB_OUTPUT
           echo "cosh_ng=$COSH_NG" >> $GITHUB_OUTPUT
+          echo "aw=$AW" >> $GITHUB_OUTPUT
           echo "ktuner=$KTUNER" >> $GITHUB_OUTPUT
           echo "blaze=$BLAZE" >> $GITHUB_OUTPUT
 
@@ -218,6 +234,7 @@ jobs:
           echo "| anolisa | $ANOLISA |" >> $GITHUB_STEP_SUMMARY
           echo "| SkillFS | $SKILLFS |" >> $GITHUB_STEP_SUMMARY
           echo "| cosh-ng | $COSH_NG |" >> $GITHUB_STEP_SUMMARY
+          echo "| AW Core | $AW |" >> $GITHUB_STEP_SUMMARY
           echo "| ktuner | $KTUNER |" >> $GITHUB_STEP_SUMMARY
           echo "| blaze | $BLAZE |" >> $GITHUB_STEP_SUMMARY
 
@@ -1205,7 +1222,48 @@ jobs:
           scripts/test.sh
 
   # =========================================================================
-  # Step 11: Test cosh-ng (Rust workspace)
+  # Step 11: Test AW Core (Rust workspace)
+  # =========================================================================
+  test-aw:
+    name: Test AW Core
+    needs: detect-changes
+    if: needs.detect-changes.outputs.aw == 'true'
+    runs-on: anolisa-k8s-general-ci-x64
+    env:
+      RUSTUP_TOOLCHAIN: '1.88.0'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: 'rustfmt, clippy'
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/aw
+
+      - name: Check formatting
+        run: |
+          cd src/aw
+          cargo fmt --all -- --check
+
+      - name: Lint
+        run: |
+          cd src/aw
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run tests
+        run: |
+          cd src/aw
+          cargo test --workspace --locked
+
+      - name: Build API documentation
+        run: |
+          cd src/aw
+          cargo doc --workspace --no-deps --locked
+
+  # =========================================================================
+  # Step 12: Test cosh-ng (Rust workspace)
   # =========================================================================
   # Split into three parallel jobs so the critical path stays within the
   # five-minute budget: integration (the longest gate, keeps the historical
@@ -1322,7 +1380,7 @@ jobs:
           cargo build --workspace --release --locked
 
   # =========================================================================
-  # Step 12: Test ktuner (deterministic kernel-tuning engine)
+  # Step 13: Test ktuner (deterministic kernel-tuning engine)
   # =========================================================================
   test-ktuner:
     name: Test ktuner
@@ -1357,7 +1415,7 @@ jobs:
           cargo test
 
   # =========================================================================
-  # Step 13: Test blaze (per-host sandbox daemon)
+  # Step 14: Test blaze (per-host sandbox daemon)
   # =========================================================================
   test-blaze:
     name: Test blaze
