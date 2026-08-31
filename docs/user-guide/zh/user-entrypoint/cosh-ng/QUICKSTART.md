@@ -37,18 +37,15 @@ Alibaba Cloud Linux 4 用户也可以直接安装 RPM。
 sudo yum install cosh-ng
 ```
 
-验证两个用户命令：
+验证已安装的 Shell binary：
 
 ```bash
-cosh --version
-cosh-cli --version
+cosh-shell --version
 ```
 
-修改软件包和服务通常需要 root 权限；工作区快照命令还需要运行中的 `ws-ckpt` 守护进程。
-
 当前发布的 Linux raw 契约无法覆盖所有已路由的发行版，因此不作为推荐的
-Linux 安装路径。raw 包支持 macOS arm64，但依赖 Linux 的软件包和服务操作
-不可用。源码构建仅供贡献者使用，请参阅
+Linux 安装路径。raw 包支持 macOS arm64，但依赖 Linux 的能力不可用。
+源码构建仅供贡献者使用，请参阅
 [开发者入门指南](../../../../developer-guide/zh/cosh-ng/getting-started.md)。
 
 ## 2. 启动终端
@@ -114,7 +111,6 @@ Enhanced Assisted 中的常用起始命令如下。
 | 恢复或压缩会话 | [会话恢复](shell/session-recovery.md) |
 | 选择模型并完成认证 | [模型提供商](core/providers.md) |
 | 接入其他服务提供的工具 | [接入 MCP 服务](mcp.md) |
-| 自动处理软件包、服务、快照或审计工作 | [结构化 OS CLI](cli/overview.md) |
 | 集成其他前端 | [无界面模式](core/headless-mode.md) |
 
 [完整用户手册](README.md)按任务整理了其余内容。

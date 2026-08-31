@@ -4,15 +4,13 @@ This file provides guidance to AI coding assistants when working with code in th
 
 ## Project Overview
 
-cosh-ng (Computable Operating System Harness) is a deterministic Agent-OS interface. It provides a `cosh-cli` binary for structured JSON output:
-- **CLI mode** (`cosh-cli <subsystem> <action>`): structured JSON output for AI Agents
+cosh-ng (Computable Operating System Harness) is the default interactive Agent environment for AweftOS. It provides the COSH shell, bundled Agent core, and local task gateway.
 
 ## Build & Test Commands
 
 ```bash
 cargo build --workspace          # Build all crates
 cargo test --workspace           # Run all tests (unit + integration)
-cargo test --package cosh-cli --test cli_integration   # Integration tests only
 cargo test --package cosh-platform   # Platform crate unit tests only
 cargo test --package cosh-types      # Types crate unit tests only
 ```
@@ -58,15 +56,14 @@ crates/cosh-shell/scripts/check-layout.sh
 
 该脚本必须保持通过；新增或迁移代码不能增加新的 violation group。脚本中的 registered debt 只表示迁移债务被 inventory 追踪，不代表最终验收已完成。
 
-Prerequisites: Linux (or macOS for limited functionality), Rust 1.88+. pkg/svc commands need root/sudo. Checkpoint commands need a running ws-ckpt daemon.
+Prerequisites: Linux (or macOS for limited functionality), Rust 1.88+.
 
 ## Architecture
 
-7-crate workspace. Dependency direction: `cosh-cli` / `cosh-core` → `cosh-platform` → `cosh-types`; `cosh-shell` is standalone (no internal crate deps). `cosh-gateway` depends only on the side-effect-free `cosh-gateway-contracts` leaf among internal crates.
+6-crate workspace. Dependency direction: `cosh-core` → `cosh-platform` → `cosh-types`; `cosh-shell` is standalone (no internal crate deps). `cosh-gateway` depends only on the side-effect-free `cosh-gateway-contracts` leaf among internal crates.
 
-- **cosh-types**: Pure types, zero side effects. Defines `CoshResponse<T>` envelope, `CoshError` (with error codes, recoverable flag, hint), and ws-ckpt IPC protocol types.
-- **cosh-platform**: Platform abstraction layer. Distro detection from `/etc/os-release`, package manager routing (dnf/apt/zypper/brew), systemd service adapter, ws-ckpt daemon Unix socket IPC client.
-- **cosh-cli**: CLI entry point (binary: `cosh-cli`). 4 command domains: `pkg`, `svc`, `checkpoint`, `audit`. All output is JSON via `CoshResponse<T>`. Uses clap derive for argument parsing.
+- **cosh-types**: Pure types, zero side effects. Defines audit contracts, `CoshError`, and the retained ws-ckpt wire types.
+- **cosh-platform**: Runtime support for audit persistence and process-group management.
 - **cosh-core**: Unified agent core (binary: `cosh-core`). Headless JSONL backend + LLM provider integration (OpenAI-compat, SysOM/Aliyun). Includes hooks, tools, skills, extensions, and config management. Interactive TUI mode is declared but not yet implemented.
 - **cosh-shell**: AI-augmented interactive shell (binary: `cosh-shell`). PTY wrapper over bash/zsh with OSC marker-based command boundary detection, streaming AI analysis (Claude/Qwen adapters), inline card rendering (ratatui), tool approval control protocol.
 - **cosh-gateway-contracts**: Side-effect-free Gateway Task, Runtime, Capability, identity, and error contracts. It must not own storage, processes, transports, providers, or OS execution.
@@ -99,9 +96,6 @@ Prerequisites: Linux (or macOS for limited functionality), Rust 1.88+. pkg/svc c
 ## Key Design Constraints
 
 - **ws-ckpt IPC wire format**: Uses bincode with 4-byte LE length prefix framing. Enum variant order in `WsCkptRequest`/`WsCkptResponse`/`WsCkptErrorCode` is the binary wire contract — **never reorder variants** without coordinating with the ws-ckpt daemon.
-- **Unified JSON envelope**: Every CLI command returns `CoshResponse<T>` with `ok`, `data`/`error`, and `meta` fields. Exit code 0 = success, 1 = failure.
-- **Cross-distro routing**: `Distro::detect()` reads `/etc/os-release` and routes to the correct package manager. Adding a new distro means adding a variant to the `Distro` enum in `cosh-platform/src/detect.rs` and updating the `pkg_manager()` method.
-- **CLI helpers**: `print_success()`, `print_failure()`, `build_meta()` in `cosh-cli/src/main.rs` handle all JSON serialization and exit codes — command modules return `i32` exit codes.
 
 ## Security Heuristics
 
@@ -112,15 +106,6 @@ When writing safety gates that auto-approve commands, don't pattern-match substr
 - **No host mutation outside isolated environments**: Unless explicitly running inside a container, VM, or other isolated environment, never execute operations that modify host system state (installing/removing packages, changing system config, managing systemd services, etc.).
 - **Require a rollback plan before execution**: Before performing any debugging operation with side effects, explicitly list the steps and their corresponding rollback steps. Every operation must be reversible.
 - **Roll back all side effects after debugging**: Any system changes produced during debugging (temp files, env vars, service state changes, etc.) must be fully reverted to the original state once debugging is complete.
-- **Prefer `--dry-run`**: cosh pkg/svc commands support `--dry-run` — always use it first to verify behavior without actual execution.
-
-## Adding a New CLI Command Domain
-
-1. Create `crates/cosh-cli/src/cmd/<domain>.rs` with a `<Domain>Commands` enum (clap Subcommand) and a `pub fn run(...)` returning `i32`
-2. Add the domain to the `Commands` enum in `cosh-cli/src/main.rs`
-3. Add return types to `cosh-types/src/`
-4. Add platform logic to `cosh-platform/src/`
-5. Add integration tests in `crates/cosh-cli/tests/cli_integration.rs`
 
 ## Production-Readiness Checklist
 

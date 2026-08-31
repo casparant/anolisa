@@ -26,7 +26,6 @@ cargo build --workspace
 cargo build --workspace --release
 
 # 单独构建某个二进制
-cargo build --bin cosh-cli
 cargo build --bin cosh-core
 cargo build --bin cosh-shell
 ```
@@ -66,8 +65,7 @@ cosh-ng/
 ├── rust-toolchain.toml     # stable + rustfmt + clippy
 └── crates/
     ├── cosh-types/         # 纯类型，零副作用
-    ├── cosh-platform/      # 平台抽象（发行版检测、后端路由）
-    ├── cosh-cli/           # CLI 入口
+    ├── cosh-platform/      # 审计持久化和进程支持
     ├── cosh-core/          # Agent 核心
     ├── cosh-shell/         # 交互终端
     ├── cosh-gateway-contracts/ # 无副作用的 Gateway contract

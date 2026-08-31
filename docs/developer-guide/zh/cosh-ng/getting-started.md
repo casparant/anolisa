@@ -17,20 +17,21 @@ rustup show
 cargo build --workspace
 ```
 
-不要在开发主机上安装软件包、修改服务或运行会产生修改的 `cosh-cli` 命令。请使用单元
-测试、模拟实现、`--dry-run` 或明确隔离的环境。
+不要让测试修改开发主机的软件包、服务或其他宿主状态。请使用单元测试、模拟实现或
+明确隔离的环境。
 
 ## 2. 先看清运行边界
 
-工作空间包含五个 crate，其中三个会生成面向用户的进程。
+工作空间包含六个 crate，并安装三个进程。
 
 | 区域 | 阅读入口 | 边界 |
 |---|---|---|
-| 结构化系统操作 | `crates/cosh-cli/src/main.rs` | Clap → `cosh-platform` → JSON 信封 |
 | Agent 运行时 | `crates/cosh-core/src/main.rs` | JSONL 和注册表输入，模型服务、工具与会话状态 |
 | 交互式终端 | `crates/cosh-shell/src/main.rs` | 终端输入、PTY 事件、卡片和 cosh-core 子进程 |
-| 共享平台代码 | `crates/cosh-platform/src/lib.rs` | 发行版、软件包、服务、审计和快照适配器 |
-| 协议与输出类型 | `crates/cosh-types/src/lib.rs` | 无副作用的数据契约 |
+| 本地 Task Gateway | `crates/cosh-gateway/src/main.rs` | 本地 Task API、持久状态和 ACP Adapter 入口 |
+| 共享平台代码 | `crates/cosh-platform/src/lib.rs` | 审计持久化和进程组支持 |
+| 共享类型 | `crates/cosh-types/src/lib.rs` | 无副作用的审计、错误和兼容类型 |
+| Gateway Contracts | `crates/cosh-gateway-contracts/src/lib.rs` | 无副作用的 Task、Runtime、Capability、Identity 和 Error Contracts |
 
 `cosh-shell` 不链接工作空间中的其他 crate。它会启动 `cosh-core`，并通过带版本约束的
 JSONL 控制协议通信。两端必须共同维护这个兼容性边界。
@@ -61,10 +62,9 @@ crates/cosh-shell/scripts/check-layout.sh
 ## 4. 使用最窄反馈循环
 
 ```bash
-# Shared types/platform/CLI
+# Shared types and platform support
 cargo test --locked -p cosh-types
 cargo test --locked -p cosh-platform
-cargo test --locked -p cosh-cli --test cli_integration
 
 # Core
 cargo test --locked -p cosh-core --lib
@@ -99,8 +99,8 @@ cargo doc --workspace --no-deps
 
 ## 6. 明确维护契约
 
-- 每个 `cosh-cli` 结果都使用 `CoshResponse<T>` 和稳定退出状态。
-- 未与守护进程协调时，禁止调整 ws-ckpt 协议枚举的变体顺序。
+- 未与守护进程协调时，禁止调整保留的 ws-ckpt 协议枚举变体顺序。即使 COSH 不再
+  暴露 checkpoint 命令，这些索引仍是兼容性契约。
 - 修改 cosh-core 协议时，必须同步更新协议类型、生产端、消费端、测试数据和协议测试。
 - 安全允许规则必须先切分参数，拒绝 Shell 元字符，并在无法判断时拒绝执行。测试要覆盖
   制表符、换行和紧邻参数的元字符。
@@ -110,8 +110,6 @@ cargo doc --workspace --no-deps
 ## 下一步
 
 - [测试策略](testing.md)
-- [添加 CLI 命令](adding-commands.md)
-- [添加发行版](adding-distros.md)
 - [IPC 协议](ipc-protocol.md)
 - [安全启发式](security-heuristics.md)
 - [组件贡献规则](../../../../src/cosh-ng/CONTRIBUTING_zh.md)

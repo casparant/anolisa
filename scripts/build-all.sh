@@ -19,7 +19,7 @@
 #   tokenless tokenless         (Rust compression library, cross-platform)
 #   ws-ckpt  ws-ckpt           (Rust workspace checkpoint daemon)
 #   memory   agent-memory       (Rust MCP filesystem memory server, Linux only)
-#   cosh-ng  cosh-ng            (Rust Agent-OS CLI, core, and interactive shell)
+#   cosh-ng  cosh-ng            (Rust Agent environment, core, and local gateway)
 #   sight    agentsight         (eBPF / Rust, Linux only, NOT built by default)
 # ──────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -1623,7 +1623,7 @@ build_cosh_ng() {
         echo "DRY-RUN: rm -rf $component_root"
         echo "DRY-RUN: ensure Rust $cosh_ng_toolchain via rustup, or validate the PATH toolchain"
         echo "DRY-RUN: CARGO_NET_GIT_FETCH_WITH_CLI=true rustup run $cosh_ng_toolchain cargo build --manifest-path $dir/Cargo.toml --workspace --release"
-        for bin in cosh-cli cosh-core cosh-gateway cosh-shell; do
+        for bin in cosh-core cosh-gateway cosh-shell; do
             echo "DRY-RUN: install $dir/target/release/$bin -> $component_root/bin/$bin"
         done
         ok "cosh-ng build plan generated"
@@ -1656,7 +1656,7 @@ build_cosh_ng() {
         "${cargo_command[@]}" build \
             --manifest-path "$dir/Cargo.toml" --workspace --release
 
-    for bin in cosh-cli cosh-core cosh-gateway cosh-shell; do
+    for bin in cosh-core cosh-gateway cosh-shell; do
         source="$dir/target/release/$bin"
         copy_file "$source" "$component_root/bin/$bin" 0755
     done
@@ -2409,14 +2409,15 @@ install_cosh_ng() {
     staged="$(component_target_dir cosh-ng)/bin"
 
     if $DRY_RUN; then
-        for bin in cosh-cli cosh-core cosh-gateway cosh-shell; do
+        for bin in cosh-core cosh-gateway cosh-shell; do
             echo "DRY-RUN: install -p -m 0755 $staged/$bin $INSTALL_BIN_DIR/$bin"
         done
+        echo "DRY-RUN: rm -f $INSTALL_BIN_DIR/cosh-cli"
         ok "cosh-ng install plan generated for ${INSTALL_BIN_DIR}/"
         return 0
     fi
 
-    for bin in cosh-cli cosh-core cosh-gateway cosh-shell; do
+    for bin in cosh-core cosh-gateway cosh-shell; do
         [[ -f "$staged/$bin" ]] || die "Built cosh-ng binary not found: $staged/$bin"
         target="$INSTALL_BIN_DIR/$bin"
         if [[ "$INSTALL_MODE" == "system" ]]; then
@@ -2428,7 +2429,16 @@ install_cosh_ng() {
         fi
     done
 
-    ok "cosh-ng installed to ${INSTALL_BIN_DIR}/{cosh-cli,cosh-core,cosh-gateway,cosh-shell}"
+    # cosh-cli was part of earlier cosh-ng releases. Remove the exact
+    # component-owned path so an in-place source installation cannot leave a
+    # retired command surface callable after upgrade.
+    if [[ "$INSTALL_MODE" == "system" ]]; then
+        as_root rm -f "$INSTALL_BIN_DIR/cosh-cli"
+    else
+        rm -f "$INSTALL_BIN_DIR/cosh-cli"
+    fi
+
+    ok "cosh-ng installed to ${INSTALL_BIN_DIR}/{cosh-core,cosh-gateway,cosh-shell}"
     info "Start cosh-ng with: ${INSTALL_BIN_DIR}/cosh-shell"
     info "The existing cosh launcher was not changed."
 }
@@ -2584,6 +2594,8 @@ uninstall_cosh_ng() {
 
     stop_systemd_service 'cosh-gateway@*.service'
 
+    # Keep cosh-cli in uninstall cleanup for installations made before the
+    # binary was retired.
     for bin in cosh-cli cosh-core cosh-gateway cosh-shell; do
         if $DRY_RUN; then
             echo "DRY-RUN: rm -f $INSTALL_BIN_DIR/$bin"
@@ -2866,7 +2878,7 @@ $(echo -e "${BOLD}Components:${NC}")
   tokenless tokenless         Rust token compression library (cross-platform)   [default]
   ws-ckpt  ws-ckpt           Rust workspace checkpoint daemon                   [default]
   memory   agent-memory      Rust MCP filesystem memory server                   [default]
-  cosh-ng  cosh-ng           Rust Agent-OS CLI, core, and interactive shell      [optional]
+  cosh-ng  cosh-ng           Rust Agent environment, core, and local gateway     [optional]
   sight    agentsight         eBPF observability/audit agent (Linux only)        [optional]
 
 $(echo -e "${BOLD}What this script does:${NC}")

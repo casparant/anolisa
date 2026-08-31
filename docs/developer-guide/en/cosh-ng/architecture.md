@@ -2,8 +2,8 @@
 
 [中文版](../../zh/cosh-ng/architecture.md)
 
-cosh-ng separates the interactive terminal, Agent runtime, deterministic OS
-API, and Gateway Task Plane so each boundary can be tested and integrated
+cosh-ng separates the interactive terminal, Agent runtime, and Gateway Task
+Plane so each boundary can be tested and integrated
 independently. The packaged Gateway path is intentionally narrow: it provides
 durable local Task coordination around a contained Core Runtime, not a general
 remote capability service.
@@ -21,14 +21,11 @@ bash/zsh <--- cosh-shell
                   |
                   +--> cosh-platform ---> cosh-types
 
-caller ---> cosh-cli ---> cosh-platform ---> cosh-types
-
 caller ---> cosh agent task ---> cosh-gateway (local Unix/systemd)
                                       |
                                       +--> Task/Event/Outbox SQLite
                                       +--> contained cosh-core
 
-cosh-cli checkpoint -----------> existing ws-ckpt path (separate)
 ```
 
 The launcher installed as `cosh` normally executes `cosh-shell raw cosh-core`.
@@ -37,11 +34,9 @@ owns a long-lived cosh-core child at runtime. The stdin/stdout protocol between
 them must remain backward-aware because either side can fail or restart
 independently.
 
-The Gateway addition keeps the existing Shell/Core/CLI paths intact. The
+The Gateway addition keeps the existing Shell/Core paths intact. The
 `cosh agent task` entrypoint is a local Unix control surface; it is not a Shell
-slash-command surface and it does not open a network listener. The existing
-`cosh-cli checkpoint` path remains separate from the Gateway profile and may
-continue to use the ws-ckpt protocol documented for that CLI domain.
+slash-command surface and it does not open a network listener.
 
 ## Gateway Task Plane
 
@@ -86,9 +81,8 @@ process. Shell slash commands remain a Shell concern, not Gateway commands.
 
 | Crate | Binary | Owns | Must not own |
 |---|---|---|---|
-| `cosh-types` | — | Side-effect-free response, error, config, audit, and existing checkpoint wire types | OS access or runtime policy |
-| `cosh-platform` | — | Distro detection, package/service adapters, audit policy/store, and the existing ws-ckpt client used by `cosh-cli checkpoint` | CLI rendering, Gateway Task policy, or Agent UX |
-| `cosh-cli` | `cosh-cli` | Clap commands, JSON envelope, exit status | Distro-specific branching outside platform adapters |
+| `cosh-types` | — | Side-effect-free audit and compatibility wire types | OS access or runtime policy |
+| `cosh-platform` | — | Audit policy/store and process helpers | Gateway Task policy or Agent UX |
 | `cosh-core` | `cosh-core` | Providers, tool loop, hooks, Skills, MCP, extensions, registry, sessions, and compaction | Terminal ownership or foreground PTY interaction |
 | `cosh-shell` | `cosh-shell` | PTY host, input routing, cards, approvals, evidence, UI, core process lifecycle | Provider implementation or direct OS API abstraction |
 | `cosh-gateway-contracts` | — | Side-effect-free Task, Runtime, Capability, identity, header, and error contracts with bounded leaf strings/digests | Storage, process ownership, transport, provider, or OS execution |
@@ -109,22 +103,6 @@ process. Shell slash commands remain a Shell concern, not Gateway commands.
    is correlated with the Agent run and returned to core when requested.
 7. Registry mutations such as extension reload use the same long-lived core
    and publish changes at a safe generation boundary.
-
-## Deterministic CLI data flow
-
-```text
-Clap command
-  → command module validates arguments
-  → cosh-platform selects the backend
-  → backend returns typed data or CoshError
-  → cosh-cli emits CoshResponse<T>
-  → exit 0 on success, exit 1 on operation failure
-```
-
-Package and service writes support `--dry-run`. The existing `cosh-cli
-checkpoint` domain crosses a Unix socket using bincode with a four-byte
-little-endian length prefix; this ws-ckpt path is separate from the task-only
-Gateway profile.
 
 ## cosh-shell ownership map
 
@@ -148,9 +126,9 @@ after structural changes.
 
 ## Compatibility and safety contracts
 
-- `CoshResponse<T>` is the stable automation envelope.
-- The existing `cosh-cli checkpoint` ws-ckpt enum order is part of its binary
-  wire format; the task-only Gateway does not depend on that daemon.
+- Legacy ws-ckpt enum order remains a binary compatibility contract even
+  though COSH no longer exposes a checkpoint command; the task-only Gateway
+  does not depend on that daemon.
 - cosh-core messages are newline-delimited JSON; stdout must not contain logs or
   UI prose in headless mode.
 - A running Agent turn is pinned to its registry generation. A healthy candidate
@@ -163,8 +141,6 @@ after structural changes.
 - Foreground shell handoffs are serialized. Input-wait timeouts apply only when
   kernel evidence shows a foreground process waiting for input; pipelines and
   full-screen programs are exempt.
-- Linux package routing may use the first recognized `ID_LIKE` family while
-  preserving the distribution's real `ID` in typed and JSON output.
 - Tool auto-approval fails closed. Raw command substring matching is not a
   security boundary.
 - Gateway Task submissions are fixed to `workspace/cosh/task-only-v1` and the

@@ -22,7 +22,7 @@ serde_json.workspace = true
 sha2.workspace = true
 signal-hook.workspace = true
 # Anonymous temp files for guarded executor output capture; already used
-# by cosh-cli, cosh-core, and cosh-platform on the same major line.
+# by cosh-core and cosh-platform on the same major line.
 tempfile = "3"
 toml.workspace = true
 uuid.workspace = true

@@ -2,7 +2,7 @@
 
 [English](../../en/cosh-ng/architecture.md)
 
-cosh-ng 将交互式终端、Agent 运行时、确定性的操作系统 API 和 Gateway Task Plane 分开。
+cosh-ng 将交互式终端、Agent 运行时和 Gateway Task Plane 分开。
 每个边界都能独立测试，也可以由其他程序单独集成。Package Gateway path 有意保持窄范围：
 它围绕 contained Core Runtime 提供 durable local Task coordination，不是通用的 remote capability service。
 
@@ -19,21 +19,17 @@ bash/zsh <--- cosh-shell
                   |
                   +--> cosh-platform ---> cosh-types
 
-caller ---> cosh-cli ---> cosh-platform ---> cosh-types
-
 caller ---> cosh agent task ---> cosh-gateway（local Unix/systemd）
                                       |
                                       +--> Task/Event/Outbox SQLite
                                       +--> contained cosh-core
 
-cosh-cli checkpoint -----------> existing ws-ckpt path（separate）
 ```
 
 安装后的 `cosh` 启动器通常执行 `cosh-shell raw cosh-core`。`cosh-shell` 编译时不依赖工作空间中的其他 crate，运行时则维护一个长时间存活的 cosh-core 子进程。两端都可能独立失败或重启，因此 stdin/stdout 协议需要保持向后兼容。
 
-Gateway addition 保持现有 Shell/Core/CLI path 不变。`cosh agent task` entrypoint 是 local Unix
-control surface，不是 Shell slash-command surface，也不开放 network listener。现有的
-`cosh-cli checkpoint` path 与 Gateway profile 独立，可以继续使用该 CLI domain 文档中的 ws-ckpt protocol。
+Gateway addition 保持现有 Shell/Core path 不变。`cosh agent task` entrypoint 是 local Unix
+control surface，不是 Shell slash-command surface，也不开放 network listener。
 
 ## Gateway Task Plane
 
@@ -72,9 +68,8 @@ native PTY 与 compatibility cosh-core process。Shell slash command 仍属于 S
 
 | Crate | 二进制 | 拥有 | 不应拥有 |
 |---|---|---|---|
-| `cosh-types` | 无 | 无副作用的响应、错误、配置、审计和现有 checkpoint wire type | 操作系统访问或运行策略 |
-| `cosh-platform` | 无 | 发行版检测、软件包和服务适配器、审计策略与存储，以及供 `cosh-cli checkpoint` 使用的现有 ws-ckpt 客户端 | CLI 展示、Gateway Task policy 或 Agent 交互 |
-| `cosh-cli` | `cosh-cli` | Clap 命令、JSON 响应、退出状态 | 平台适配器之外的发行版分支 |
+| `cosh-types` | 无 | 无副作用的错误、审计和历史 checkpoint wire type | 操作系统访问或运行策略 |
+| `cosh-platform` | 无 | 审计策略与存储、进程支持 | Gateway Task policy 或 Agent 交互 |
 | `cosh-core` | `cosh-core` | 模型服务、工具循环、Hooks、Skills、MCP、Extensions、注册表、会话和压缩 | 终端控制或前台 PTY 交互 |
 | `cosh-shell` | `cosh-shell` | PTY 宿主、输入路由、卡片、审批、终端证据、界面、core 进程生命周期 | 模型服务实现或直接抽象操作系统 API |
 | `cosh-gateway-contracts` | 无 | 无副作用的 Task、Runtime、Capability、identity、header 与 error contract，leaf string/digest 有界 | Storage、process ownership、transport、provider 或 OS execution |
@@ -89,20 +84,6 @@ native PTY 与 compatibility cosh-core process。Shell slash command 仍属于 S
 5. cosh-shell 治理这些事件，并渲染文本、问题卡片或审批卡片。
 6. 经过审批的 Shell 命令交回前台 PTY。OSC 终端证据与 Agent 任务关联，并在 core 请求时返回。
 7. Extension 重载等注册表修改复用同一个长期运行的 core，并在安全的版本边界发布。
-
-## 确定性 CLI 数据流
-
-```text
-Clap command
-  → command module 校验参数
-  → cosh-platform 选择后端
-  → 后端返回类型化数据或 CoshError
-  → cosh-cli 输出 CoshResponse<T>
-  → 成功退出 0，操作失败退出 1
-```
-
-软件包和服务写操作支持 `--dry-run`。现有的 `cosh-cli checkpoint` domain 通过 Unix socket，
-以 bincode 和四字节小端长度前缀进行通信；这条 ws-ckpt path 与 task-only Gateway profile 独立。
 
 ## cosh-shell 模块职责
 
@@ -124,15 +105,12 @@ Clap command
 
 ## 兼容性和安全契约
 
-- `CoshResponse<T>` 是稳定的自动化信封。
-- 现有 `cosh-cli checkpoint` 的 ws-ckpt enum 顺序属于它的二进制 wire format；task-only Gateway
-  不依赖这个 daemon。
+- 为历史兼容保留的 ws-ckpt enum 顺序属于二进制 wire format；task-only Gateway 不依赖这个 daemon。
 - cosh-core 消息使用逐行 JSON，headless 模式的 stdout 不能混入日志或界面文本。
 - 正在运行的 Agent 任务固定使用启动时的注册表版本。新版本检查通过后，在空闲时立即启用，否则等待安全时机。
 - 会话状态按工作区隔离。恢复只还原模型可见对话，不还原历史终端证据。
 - Core 读取工具固定在启动时规范化的工作区。后续 `cd` 只改变 Shell 目录，不会移动读取边界。越过路径或挂载点时会拒绝访问。
 - 前台 Shell 交接串行执行。只有内核证据表明前台进程正在等待输入时，才应用输入等待超时。管道和全屏程序不受此限制。
-- Linux 包路由可使用 `ID_LIKE` 中第一个可识别家族，但 typed 和 JSON 输出仍保留发行版的真实 `ID`。
 - 工具自动审批在无法判断时拒绝执行。直接匹配原始命令子串不能充当安全边界。
 - Gateway Task submission 固定使用 `workspace/cosh/task-only-v1` 与接纳的
   `core`/`gateway-brokered-v1` selector。Durable API 使用 idempotency key，因此客户端 I/O

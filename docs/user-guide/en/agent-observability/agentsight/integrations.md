@@ -7,12 +7,12 @@ components when they happen to be installed. Nothing on this page is required to
 
 ## Supported Agents
 
-Any process matched by a discovery rule is traced. The shipped rule set (31 rules) covers:
+Any process matched by a discovery rule is traced. The shipped rule set (30 rules) covers:
 
 | Agent | Reported name |
 |---|---|
 | cosh (Copilot Shell) | `Cosh` |
-| cosh-ng (`cosh-shell`, `cosh-core`, `cosh-cli`) | `CoshNG` |
+| cosh-ng (`cosh-shell`, `cosh-core`) | `CoshNG` |
 | Claude Code | `Claude` |
 | Codex CLI | `Codex` |
 | Qwen Code | `QwenCode` |

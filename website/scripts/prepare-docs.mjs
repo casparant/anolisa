@@ -203,13 +203,11 @@ function sidebarLabel(document, title, locale) {
       'user-guide/user-entrypoint/cosh-ng/mcp.md': 'MCP Integration',
       'user-guide/user-entrypoint/cosh-ng/configuration.md': 'Configuration',
       'user-guide/user-entrypoint/cosh-ng/supported-distros.md': 'Platform Support',
-      'user-guide/user-entrypoint/cosh-ng/output-format.md': 'Output Format',
     },
     zh: {
       'user-guide/user-entrypoint/cosh-ng/mcp.md': '接入 MCP',
       'user-guide/user-entrypoint/cosh-ng/configuration.md': '配置',
       'user-guide/user-entrypoint/cosh-ng/supported-distros.md': '平台支持',
-      'user-guide/user-entrypoint/cosh-ng/output-format.md': '输出格式',
     },
   };
   if (coshNgLabels[locale][document.target]) return coshNgLabels[locale][document.target];
@@ -286,7 +284,6 @@ const categoryPositions = {
   'user-guide/user-entrypoint': 3,
   'user-guide/user-entrypoint/cosh-ng/shell': 3,
   'user-guide/user-entrypoint/cosh-ng/core': 5,
-  'user-guide/user-entrypoint/cosh-ng/cli': 6,
   'user-guide/token-saving': 4,
   'user-guide/runtime': 5,
   'user-guide/agent-observability': 6,
@@ -302,7 +299,6 @@ const documentPositions = {
   'user-guide/user-entrypoint/cosh-ng/mcp.md': 4,
   'user-guide/user-entrypoint/cosh-ng/configuration.md': 7,
   'user-guide/user-entrypoint/cosh-ng/supported-distros.md': 8,
-  'user-guide/user-entrypoint/cosh-ng/output-format.md': 9,
   'user-guide/troubleshooting.md': 8,
 };
 

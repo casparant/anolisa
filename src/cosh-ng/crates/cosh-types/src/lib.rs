@@ -1,14 +1,9 @@
 #![forbid(unsafe_code)]
-//! cosh-types: Core type definitions for the cosh deterministic interaction layer.
+//! Shared, side-effect-free COSH compatibility and audit types.
 //!
-//! Pure type layer — no I/O, no runtime logic.
-//! Defines errors, responses, and data types for package management,
-//! service management, checkpoint, and audit operations.
+//! The checkpoint module preserves the historical ws-ckpt binary wire contract;
+//! COSH no longer exposes a checkpoint command.
 
 pub mod audit;
 pub mod checkpoint;
-pub mod config;
 pub mod error;
-pub mod output;
-pub mod pkg;
-pub mod svc;

@@ -1,28 +1,13 @@
-# ws-ckpt 与会话管理 IPC 协议
+# 兼容性与会话管理 IPC 协议
 
 [English](../../en/cosh-ng/ipc-protocol.md)
 
-## 概述
+## 保留的 ws-ckpt 兼容协议
 
-cosh-ng 通过 Unix Domain Socket 与 ws-ckpt 守护进程通信，实现工作空间快照管理。
-通信使用 **bincode 序列化 + 4 字节小端长度前缀** 的帧格式。
-
-## 架构
-
-```
-cosh-cli / cosh-core          ws-ckpt daemon
-     │                              │
-     │  Unix socket                 │
-     │  /run/ws-ckpt/ws-ckpt.sock   │
-     │─────────────────────────────→│
-     │  [4B LE len][bincode req]    │
-     │                              │
-     │←─────────────────────────────│
-     │  [4B LE len][bincode resp]   │
-```
-
-客户端实现位于 `crates/cosh-platform/src/checkpoint.rs`（`CkptClient`），
-类型定义位于 `crates/cosh-types/src/checkpoint.rs`。
+`cosh-types` 保留历史 ws-ckpt wire type，避免迁移期间改变持久化 fixture 和下游
+decoder 的含义。COSH 不再安装 checkpoint 命令或 ws-ckpt 客户端。
+`crates/cosh-types/src/checkpoint.rs` 中的类型描述原 Unix Domain Socket 载荷：
+**bincode 序列化 + 4 字节小端长度前缀**。
 
 ## 帧格式
 
@@ -37,7 +22,6 @@ cosh-cli / cosh-core          ws-ckpt daemon
 
 - 长度前缀使用小端序无符号 32 位整数，表示后续 bincode 载荷的字节数
 - 最大响应限制为 64 MiB，避免耗尽内存
-- 默认超时为 5000 ms，可通过 `CkptClient::with_timeout()` 配置
 
 ## 请求类型（WsCkptRequest）
 
@@ -93,28 +77,6 @@ bincode 按枚举变体索引序列化（第一个变体 = index 0）。**变体
 | 9 | `WriteLockConflict` | 写锁冲突 |
 | 10 | `DiskSpaceInsufficient` | 磁盘空间不足 |
 
-## 客户端使用
-
-```rust
-use cosh_platform::checkpoint::CkptClient;
-
-// 默认路径 /run/ws-ckpt/ws-ckpt.sock
-let client = CkptClient::default_path();
-
-// 或指定路径和超时
-let client = CkptClient::with_timeout("/custom/path.sock", 10000);
-
-// 健康检查
-if !client.is_available() {
-    eprintln!("ws-ckpt daemon not running");
-}
-
-// 操作示例
-let result = client.create("/home/user/project", "snap-001", Some("initial"), None, false)?;
-let list = client.list(Some("/home/user/project"))?;
-let restored = client.restore("/home/user/project", "snap-001")?;
-```
-
 ## 关键约束
 
 | 约束 | 说明 |
@@ -122,9 +84,6 @@ let restored = client.restore("/home/user/project", "snap-001")?;
 | 变体顺序不可变 | bincode 使用索引序列化枚举，重排即破坏线格式 |
 | 新增只能追加 | 新的 Request/Response 变体只能在末尾添加 |
 | 类型必须同步 | `cosh-types` 中的定义必须与 `ws-ckpt-common` 完全一致 |
-| 超时处理 | 客户端对 read/write 设置超时，避免守护进程无响应时阻塞 |
-| 长度限制 | 响应超过 64 MiB 视为异常，立即断开 |
-| socket 路径 | 默认 `/run/ws-ckpt/ws-ckpt.sock`，可通过环境变量或 CLI 参数覆盖 |
 
 ## 测试验证
 
@@ -137,8 +96,6 @@ cargo test --locked -p cosh-types -- checkpoint
 # 变体索引契约测试
 cargo test --locked -p cosh-types test_request_bincode_variant_index
 
-# CkptClient 单元测试（不需要运行的守护进程）
-cargo test --locked -p cosh-platform -- checkpoint
 ```
 
 ## cosh-core 会话管理 JSON 协议

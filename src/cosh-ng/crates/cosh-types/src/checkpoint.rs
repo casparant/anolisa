@@ -392,7 +392,7 @@ pub struct GlobalPolicySnapshot {
 }
 
 // ===========================================================================
-// CLI output types (used for CoshResponse mapping)
+// Legacy command output types retained for downstream deserialization.
 // ===========================================================================
 
 /// Result of creating a checkpoint (CLI display layer).

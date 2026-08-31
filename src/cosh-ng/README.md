@@ -7,8 +7,8 @@ cosh-ng is an AI-native terminal built around the shell you already use.
 natural-language routing, Skills, approval cards, and resumable Agent
 conversations in the same terminal. Choose Native integration at startup when
 bash or zsh must own the session without Cosh hooks, observation, or insights.
-Structured JSON and JSONL interfaces remain available for automation and
-Agent integration.
+Versioned JSONL and local Task APIs remain available for automation and Agent
+integration.
 
 ## Why cosh-ng
 
@@ -18,7 +18,6 @@ Agent integration.
 | Automation is scattered across scripts | Package repeatable workflows as Skills |
 | AI context is tied to one chat window | Resume workspace-scoped Agent conversations |
 | AI actions are hard to inspect | Review tool calls in approval cards and audit records |
-| Every distro has different system commands | Use `cosh-cli` for stable, structured OS operations |
 
 Interactive programs, pipes, redirects, job control, bash/zsh configuration,
 and `Ctrl+C` continue to work in the foreground terminal.
@@ -61,10 +60,9 @@ On Alibaba Cloud Linux 4, the RPM is also available directly:
 sudo yum install cosh-ng
 ```
 
-The published Linux raw contract is not currently portable across all routed
-distributions, so it is not the recommended Linux installation path. The raw
-package supports macOS arm64, where Linux-only package and service operations
-remain unavailable. Source builds are for contributors; follow the
+The published Linux raw contract is not currently portable across every target,
+so it is not the recommended Linux installation path. The raw package also
+supports macOS arm64. Source builds are for contributors; follow the
 [developer setup](../../docs/developer-guide/en/cosh-ng/getting-started.md).
 
 ## Start in 30 seconds
@@ -184,9 +182,8 @@ authenticates the Unix peer as a local OS actor, fixes the target to
 Runtime bindings, and dispatches durable Outbox work through the scheduler.
 Use `doctor` and `run`, not `serve`, for uncontained local ACP interoperability;
 those direct ACP commands are not governed by the durable Task Plane.
-The Task Plane has no checkpoint or ws-ckpt dependency. The existing
-`cosh-cli checkpoint` commands remain a separate system-operations path and do
-not add checkpoint capability to this Gateway profile.
+The Task Plane has no checkpoint or ws-ckpt dependency and does not claim a
+workspace recovery capability in this profile.
 
 `SIGINT` and `SIGTERM` trigger bounded scheduler and Runtime shutdown before the
 daemon exits. The daemon remains Unix-only and does not open a remote listener.
@@ -201,7 +198,6 @@ acceptance before treating a particular ACP installation as production-validated
 - [Connect an MCP server](../../docs/user-guide/en/user-entrypoint/cosh-ng/mcp.md)
 - [Interactive terminal](../../docs/user-guide/en/user-entrypoint/cosh-ng/shell/overview.md)
 - [Configuration](../../docs/user-guide/en/user-entrypoint/cosh-ng/configuration.md)
-- [Manage system operations](../../docs/user-guide/en/user-entrypoint/cosh-ng/cli/overview.md)
 - [Headless integration](../../docs/user-guide/en/user-entrypoint/cosh-ng/core/headless-mode.md)
 - [Developer getting started](../../docs/developer-guide/en/cosh-ng/getting-started.md)
 - [Architecture](../../docs/developer-guide/en/cosh-ng/architecture.md)
