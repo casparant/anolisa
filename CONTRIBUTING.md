@@ -27,7 +27,7 @@ scopes are used in commit subjects and PR titles.
 | cosh-ng | `src/cosh-ng/` | Linux full; macOS limited functionality | `cosh-ng` | `cosh-ng` | `cd src/cosh-ng`; `cargo build --workspace`, `cargo fmt --all -- --check`, then run the closest targeted test described in `src/cosh-ng/CONTRIBUTING.md` |
 | agent-sec-core | `src/agent-sec-core/` | Linux only | `sec-core` | `sec-core` | Python 3.11.6 and `uv`; `make build-all`, `make test` |
 | agentsight | `src/agentsight/` | Linux full eBPF; macOS `trace`/`serve` only | `sight` | `sight` | Linux uses `make build-all`; macOS uses `make build-mac`; Linux runs `make lint`, `make test` |
-| tokenless | `src/tokenless/` | Linux for full development; macOS x64/arm64 for shipped CLI binaries and npm adapters | `tokenless` | `tokenless` | `make build`, `make lint`, `make test` |
+| tokenless | `providers/tokenless/` | Linux for full development; macOS x64/arm64 for shipped CLI binaries and npm adapters | `tokenless` | `tokenless` | `make build`, `make lint`, `make test` |
 | agent-memory | `src/agent-memory/` | Linux only | `memory` | `memory` | `make build`, `make fmt-check`, `make lint`, `make test`; use `make smoke` for MCP changes |
 | os-skills | `src/os-skills/` | Assets are cross-platform; individual scripts declare limits | `skills` | `skill` | Static Markdown skill definitions and shell assets; `make build` confirms that no compilation step is required |
 | anolisa | `src/anolisa/` | Linux and macOS arm64 | n/a | `anolisa` | `cargo fmt --all --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --locked` |
@@ -133,7 +133,7 @@ The main options are:
 | `--all` | Include optional components `cosh-ng` and `sight`. |
 | `--component <name>` | Build or uninstall one supported component; repeat for multiple components. |
 
-Do not treat `build-all.sh --all` as a build of every `src/<component>/`
+Do not treat `build-all.sh --all` as a build of every source or Provider
 directory. Its scope is limited to the eight names printed by
 `./scripts/build-all.sh --help`.
 
@@ -215,7 +215,7 @@ warning and should be justified or replaced before review.
 | `sec-core` | `src/agent-sec-core/` |
 | `skill` | `src/os-skills/` |
 | `sight` | `src/agentsight/` |
-| `tokenless` | `src/tokenless/` |
+| `tokenless` | `providers/tokenless/` |
 | `ckpt` | `src/ws-ckpt/` |
 | `memory` | `src/agent-memory/` |
 | `anolisa` | `src/anolisa/` |
@@ -297,7 +297,7 @@ long usage and architecture material belongs in the canonical locations below.
 | CLI command or flag | Component `README.md` and the relevant `docs/user-guide/` page. |
 | Configuration option | Component `README.md` and the relevant `docs/user-guide/` page. |
 | Installation method | `docs/QUICKSTART*.md` and the component README. |
-| Architecture or protocol | `src/<component>/docs/design/`. |
+| Architecture or protocol | `src/<component>/docs/design/` or `providers/<provider>/docs/design/`. |
 | New component | Root README and `NOTICE` when applicable. |
 
 Daily feature and fix PRs update README and user-guide pages. Release version

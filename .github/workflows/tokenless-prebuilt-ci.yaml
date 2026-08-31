@@ -10,7 +10,7 @@ on:
       - '.github/workflows/tokenless-prebuilt-ci.yaml'
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
-      - 'src/tokenless/**'
+      - 'providers/tokenless/**'
   pull_request:
     branches: [main, 'release/**']
     paths:
@@ -20,7 +20,7 @@ on:
       - '.github/workflows/tokenless-prebuilt-ci.yaml'
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
-      - 'src/tokenless/**'
+      - 'providers/tokenless/**'
   workflow_dispatch:
 
 permissions:
@@ -59,4 +59,4 @@ jobs:
         run: python3 .github/actions/prebuilt-rust-common/test_plan_matrix.py
 
       - name: Run Tokenless raw package tests
-        run: src/tokenless/tests/test-package-raw.sh
+        run: providers/tokenless/tests/test-package-raw.sh

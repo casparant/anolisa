@@ -1457,7 +1457,7 @@ find_tokenless_adapter_dir() {
     # Source tree layout relative to this script
     local script_dir
     script_dir="$(cd "$(dirname "$0")" && pwd)"
-    candidates+=("$script_dir/../../../../tokenless/adapters/tokenless")
+    candidates+=("$script_dir/../../../../../providers/tokenless/adapters/tokenless")
 
     for candidate in "${candidates[@]}"; do
         [ -n "$candidate" ] || continue
@@ -1477,7 +1477,7 @@ install_tokenless_plugin() {
     local adapter_dir
     adapter_dir="$(find_tokenless_adapter_dir)" || {
         log_warn "tokenless adapter not found — skipping tokenless plugin installation."
-        log_info "Install tokenless first, then run: make -C src/tokenless hermes-install"
+        log_info "Install tokenless first, then run: make -C providers/tokenless hermes-install"
         return 0
     }
 

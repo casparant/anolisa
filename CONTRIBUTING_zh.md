@@ -21,7 +21,7 @@ ANOLISA 是一个 monorepo。下表列出十二个组件及其支持的开发平
 | cosh-ng | `src/cosh-ng/` | Linux 完整功能；macOS 功能受限 | `cosh-ng` | `cosh-ng` | `cd src/cosh-ng`; `cargo build --workspace`、`cargo fmt --all -- --check`，随后按 `src/cosh-ng/CONTRIBUTING_zh.md` 选择最接近改动的测试 |
 | agent-sec-core | `src/agent-sec-core/` | 仅 Linux | `sec-core` | `sec-core` | Python 3.11.6 和 `uv`; `make build-all`、`make test` |
 | agentsight | `src/agentsight/` | Linux 完整 eBPF；macOS 仅 `trace`/`serve` | `sight` | `sight` | Linux 使用 `make build-all`；macOS 使用 `make build-mac`；Linux 运行 `make lint`、`make test` |
-| tokenless | `src/tokenless/` | 完整开发在 Linux；发布的 CLI 二进制和 npm adapter 支持 macOS x64/arm64 | `tokenless` | `tokenless` | `make build`、`make lint`、`make test` |
+| tokenless | `providers/tokenless/` | 完整开发在 Linux；发布的 CLI 二进制和 npm adapter 支持 macOS x64/arm64 | `tokenless` | `tokenless` | `make build`、`make lint`、`make test` |
 | agent-memory | `src/agent-memory/` | 仅 Linux | `memory` | `memory` | `make build`、`make fmt-check`、`make lint`、`make test`；MCP 改动追加 `make smoke` |
 | os-skills | `src/os-skills/` | 资源跨平台；单个脚本自行声明限制 | `skills` | `skill` | 静态 Markdown skill 定义和 shell 资源；`make build` 用于确认没有编译步骤 |
 | anolisa | `src/anolisa/` | Linux 和 macOS arm64 | 不适用 | `anolisa` | `cargo fmt --all --check`、`cargo clippy --all-targets --locked -- -D warnings`、`cargo test --locked` |
@@ -111,7 +111,7 @@ Fork 贡献者可以使用其他分支名，分支检查只会给出非阻塞警
 | `--all` | 纳入可选组件 `cosh-ng` 和 `sight`。 |
 | `--component <name>` | 构建或卸载一个受支持的组件，可以重复指定。 |
 
-不要把 `build-all.sh --all` 理解成构建每个 `src/<component>/` 目录。它的范围只包括 `./scripts/build-all.sh --help` 打印的八个名称。
+不要把 `build-all.sh --all` 理解成构建每个源码或 Provider 目录。它的范围只包括 `./scripts/build-all.sh --help` 打印的八个名称。
 
 `sight` 选项使用 Linux eBPF 构建。macOS 应在组件目录运行 `make build-mac`。
 
@@ -172,7 +172,7 @@ scope 会产生警告，发起 review 前应说明理由或改用推荐值。
 | `sec-core` | `src/agent-sec-core/` |
 | `skill` | `src/os-skills/` |
 | `sight` | `src/agentsight/` |
-| `tokenless` | `src/tokenless/` |
+| `tokenless` | `providers/tokenless/` |
 | `ckpt` | `src/ws-ckpt/` |
 | `memory` | `src/agent-memory/` |
 | `anolisa` | `src/anolisa/` |
@@ -242,7 +242,7 @@ PR title 使用 `type(scope): description`。prelint workflow 会把标题、分
 | CLI 命令或 flag | 组件 `README.md` 和对应的 `docs/user-guide/` 页面。 |
 | 配置选项 | 组件 `README.md` 和对应的 `docs/user-guide/` 页面。 |
 | 安装方式 | `docs/QUICKSTART*.md` 和组件 README。 |
-| 架构或协议 | `src/<component>/docs/design/`。 |
+| 架构或协议 | `src/<component>/docs/design/` 或 `providers/<provider>/docs/design/`。 |
 | 新增组件 | 根 README，必要时更新 `NOTICE`。 |
 
 日常功能和修复 PR 更新 README 与 user-guide 页面。发布版本 bump PR 再把面向用户的变更汇总到 `CHANGELOG*.md`。

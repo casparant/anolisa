@@ -260,7 +260,7 @@ For detailed changelogs of individual components, see:
 - [os-skills](src/os-skills/CHANGELOG.md)
 
 **Token Saving**
-- [tokenless](src/tokenless/CHANGELOG.md)
+- [tokenless](providers/tokenless/CHANGELOG.md)
 
 **Runtime**
 - [agent-memory](src/agent-memory/CHANGELOG.md)

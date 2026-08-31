@@ -1698,7 +1698,7 @@ build_sight() {
 
 build_tokenless() {
     step "Building tokenless"
-    local dir="$PROJECT_ROOT/src/tokenless"
+    local dir="$PROJECT_ROOT/providers/tokenless"
     [[ -d "$dir" ]] || die "Directory not found: $dir"
     cd "$dir"
 
@@ -1729,6 +1729,12 @@ build_tokenless() {
         fi
         if [[ ! -d "$component_root/share/anolisa/extensions/tokenless" ]]; then
             warn "tokenless cosh extension staged empty"
+        fi
+        if [[ ! -f "$component_root/share/aw/providers/tokenless/provider.toml" ]]; then
+            warn "tokenless AW Provider manifest was not staged"
+        fi
+        if [[ ! -d "$component_root/share/aw/providers/tokenless/schemas" ]]; then
+            warn "tokenless AW Provider schemas were not staged"
         fi
         ok "tokenless and rtk built successfully"
     else
@@ -2458,7 +2464,7 @@ install_sight() {
 
 install_tokenless() {
     step "Installing tokenless"
-    local dir="$PROJECT_ROOT/src/tokenless"
+    local dir="$PROJECT_ROOT/providers/tokenless"
     run_component_make_install "tokenless" "$dir"
     if $DRY_RUN; then
         ok "tokenless install plan generated for ${INSTALL_BIN_DIR}/"
@@ -2610,7 +2616,7 @@ uninstall_sight() {
 
 uninstall_tokenless() {
     step "Uninstalling tokenless"
-    local dir="$PROJECT_ROOT/src/tokenless"
+    local dir="$PROJECT_ROOT/providers/tokenless"
     run_component_make_uninstall "tokenless" "$dir" || true
     if $DRY_RUN; then
         ok "tokenless and rtk uninstall plan generated"

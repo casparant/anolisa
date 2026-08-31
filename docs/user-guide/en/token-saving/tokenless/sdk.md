@@ -401,4 +401,4 @@ Validate the AgentScope layer with the commands in its
 - [CLI reference](cli-reference.md)
 - [Measuring savings](measuring-savings.md)
 - [Configuration and data privacy](configuration-and-privacy.md)
-- [Runtime design](../../../../../src/tokenless/docs/design/runtime-library.md)
+- [Runtime design](../../../../../providers/tokenless/docs/design/runtime-library.md)

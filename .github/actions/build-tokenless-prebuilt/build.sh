@@ -118,7 +118,16 @@ WORKTREE_READY=1
 git -C "$SOURCE_REPO" worktree lock --reason 'Tokenless prebuilt package build' \
     "$FIXED_WORKTREE"
 
-COMPONENT_ROOT="$FIXED_WORKTREE/src/tokenless"
+if [ -d "$FIXED_WORKTREE/providers/tokenless" ]; then
+    COMPONENT_REL="providers/tokenless"
+elif [ -d "$FIXED_WORKTREE/src/tokenless" ]; then
+    # Tags created before the Provider layout migration keep the historical
+    # component path. Release rebuilds must remain able to consume those tags.
+    COMPONENT_REL="src/tokenless"
+else
+    die "Tokenless source is missing from providers/tokenless and src/tokenless"
+fi
+COMPONENT_ROOT="$FIXED_WORKTREE/$COMPONENT_REL"
 (
     cd "$COMPONENT_ROOT"
     make -B stamp-adapter-templates stamp-python-packages
@@ -172,14 +181,14 @@ done
         -- "$COMMON_DIR/cross-profile.sh" "$PROFILE" build \
         --release \
         --locked \
-        --manifest-path src/tokenless/Cargo.toml
+        --manifest-path "$COMPONENT_REL/Cargo.toml"
     python3 "$COMMON_DIR/reproducible-build.py" \
         --source-root "$COMPONENT_ROOT" \
         --source-date-epoch "$SOURCE_DATE_EPOCH" \
         -- "$COMMON_DIR/cross-profile.sh" "$PROFILE" build \
         --release \
         --locked \
-        --manifest-path src/tokenless/third_party/rtk/Cargo.toml
+        --manifest-path "$COMPONENT_REL/third_party/rtk/Cargo.toml"
 )
 
 HOST_CARGO="$(command -v cargo)"

@@ -395,7 +395,7 @@ function enumCommands(source, enumName) {
 }
 
 const anolisaCommandsSource = await readFile(path.join(repoRoot, 'src/anolisa/crates/anolisa-cli/src/commands.rs'), 'utf8');
-const tokenlessCommandsSource = await readFile(path.join(repoRoot, 'src/tokenless/crates/tokenless-cli/src/main.rs'), 'utf8');
+const tokenlessCommandsSource = await readFile(path.join(repoRoot, 'providers/tokenless/crates/tokenless-cli/src/main.rs'), 'utf8');
 const cliReference = [
   '# ANOLISA CLI Reference',
   `# Generated from Clap definitions at ${sourceCommit}`,

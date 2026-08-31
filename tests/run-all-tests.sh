@@ -43,7 +43,7 @@ run_sight() {
 
 run_tokenless() {
     echo "==> Running tokenless tests"
-    cd "$ROOT_DIR/src/tokenless" || exit 1
+    cd "$ROOT_DIR/providers/tokenless" || exit 1
     if command -v make >/dev/null 2>&1; then
         make test
     elif command -v cargo >/dev/null 2>&1; then

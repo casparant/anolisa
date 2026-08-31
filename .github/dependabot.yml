@@ -67,7 +67,7 @@ updates:
 
   # tokenless (cargo)
   - package-ecosystem: "cargo"
-    directory: "/src/tokenless"
+    directory: "/providers/tokenless"
     schedule:
       interval: "weekly"
     target-branch: "main"

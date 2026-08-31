@@ -12,7 +12,7 @@ Tokenless 面向工具调用密集的 AI Agent。它的 CLI 可以精简 Schema 
 
 ```bash
 git clone https://github.com/alibaba/anolisa.git
-cd anolisa/src/tokenless
+cd anolisa/providers/tokenless
 cargo build --release --locked -p tokenless-cli
 ./target/release/tokenless --version
 ```

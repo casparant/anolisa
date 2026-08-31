@@ -17,7 +17,7 @@ on:
       - 'src/**/pyproject.toml'
       - 'src/anolisa/manifests/**'
       - 'src/anolisa/crates/anolisa-cli/src/commands.rs'
-      - 'src/tokenless/crates/tokenless-cli/src/main.rs'
+      - 'providers/tokenless/crates/tokenless-cli/src/main.rs'
   pull_request:
     branches: [main]
     paths:
@@ -34,7 +34,7 @@ on:
       - 'src/**/pyproject.toml'
       - 'src/anolisa/manifests/**'
       - 'src/anolisa/crates/anolisa-cli/src/commands.rs'
-      - 'src/tokenless/crates/tokenless-cli/src/main.rs'
+      - 'providers/tokenless/crates/tokenless-cli/src/main.rs'
   workflow_dispatch:
 
 permissions:

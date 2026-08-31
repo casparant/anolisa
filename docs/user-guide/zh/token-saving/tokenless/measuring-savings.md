@@ -135,15 +135,15 @@ anolisa adapter status tokenless
 ## 运行仓库参考负载
 
 源码树提供了确定性的 fixture，用于比较不同 Tokenless 版本的压缩行为。在 Linux 上，
-进入 ANOLISA 源码中的 `src/tokenless/benchmark/l1-compressor` 后运行：
+进入 ANOLISA 源码中的 `providers/tokenless/benchmark/l1-compressor` 后运行：
 
 ```bash
 cargo run --release --bin compression_rate -- --json
 ```
 
 报告使用仓库内置的
-`src/tokenless/benchmark/l1-compressor/fixtures/tool_response.json` 和
-`src/tokenless/benchmark/l1-compressor/fixtures/schema_search.json`，并应用当前检出源码的
+`providers/tokenless/benchmark/l1-compressor/fixtures/tool_response.json` 和
+`providers/tokenless/benchmark/l1-compressor/fixtures/schema_search.json`，并应用当前检出源码的
 默认压缩配置。Tokenless 0.7.11 的参考结果如下：
 
 | JSON 字段 | 独立测试阶段与输入 | 节省率 |
@@ -161,7 +161,7 @@ TOON 独立测试出现负数，表示编码后反而变大。Active 模式下�
 估算 Token，而不调用模型 Tokenizer。测试也不包含 Adapter 行为以及工具数据在完整
 会话中的占比。因此，这组结果只用于确认同一源码版本的行为是否相近；评估真实工作
 负载时，应使用有代表性的自有 Payload，并执行下文的 dry-run 双跑。详细口径见
-[benchmark 方法与限制](../../../../../src/tokenless/benchmark/l1-compressor/README.md#methodology)。
+[benchmark 方法与限制](../../../../../providers/tokenless/benchmark/l1-compressor/README.md#methodology)。
 
 ## 用 dry-run 做双跑对比
 

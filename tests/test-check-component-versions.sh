@@ -5,20 +5,32 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 CATALOG="src/anolisa/manifests/components/tokenless/component.toml"
-VERSION=$(grep '^version' src/tokenless/Cargo.toml | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+PROVIDER="providers/tokenless/provider/provider.toml"
+VERSION=$(grep '^version' providers/tokenless/Cargo.toml | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
 
 WORK_DIR=$(mktemp -d)
 SNAPSHOT="$WORK_DIR/catalog.snapshot"
 BACKUP="$WORK_DIR/catalog.backup"
 MISMATCH_LOG="$WORK_DIR/mismatch.log"
+PROVIDER_SNAPSHOT="$WORK_DIR/provider.snapshot"
 
 # On any exit, restore the catalog byte-for-byte from the snapshot taken
 # before the first mutation, and only then remove the temporary files.
 # `git checkout` is deliberately not used: it would silently discard an
 # unrelated uncommitted catalog edit, and it fails in a source tree without
 # Git (which would leave the drifted catalog in place).
-trap 'if [ -f "${SNAPSHOT:-}" ]; then cp "$SNAPSHOT" "$CATALOG"; fi; rm -rf "$WORK_DIR"' EXIT
+cleanup() {
+    if [ -f "${SNAPSHOT:-}" ]; then
+        cp "$SNAPSHOT" "$CATALOG"
+    fi
+    if [ -f "${PROVIDER_SNAPSHOT:-}" ]; then
+        cp "$PROVIDER_SNAPSHOT" "$PROVIDER"
+    fi
+    rm -rf "$WORK_DIR"
+}
+trap cleanup EXIT
 cp "$CATALOG" "$SNAPSHOT"
+cp "$PROVIDER" "$PROVIDER_SNAPSHOT"
 
 # Baseline: all metadata is currently synchronized.
 python3 scripts/check-component-versions.py
@@ -63,6 +75,23 @@ restore_from_backup() {
     fi
 }
 
+drift_provider_version() {
+    PROVIDER_PATH="$1" CARGO_VERSION="$2" python3 - << 'PYEOF'
+import os
+import pathlib
+import re
+
+path = pathlib.Path(os.environ["PROVIDER_PATH"])
+version = os.environ["CARGO_VERSION"]
+text = path.read_text()
+pattern = re.compile(r'^(provider_version = ")' + re.escape(version) + r'(")', re.M)
+new_text, count = pattern.subn(r"\g<1>99.99.99\g<2>", text, count=1)
+if count != 1:
+    raise SystemExit(f"ERROR: provider version line for {version!r} not found in {path}")
+path.write_text(new_text)
+PYEOF
+}
+
 # Case 1: a drifted catalog version is rejected and the fixture comes back
 # byte-for-byte from its backup.
 cp "$CATALOG" "$BACKUP"
@@ -83,7 +112,20 @@ if ! grep -qF 'local wip' "$CATALOG"; then
 fi
 cp "$SNAPSHOT" "$CATALOG"
 
-# Case 3: a version containing SemVer build metadata (+ is a regex quantifier
+# Case 3: the runtime Provider manifest is part of the same version contract.
+drift_provider_version "$PROVIDER" "$VERSION"
+if python3 scripts/check-component-versions.py > "$MISMATCH_LOG" 2>&1; then
+    echo "ERROR: version check accepted a drifted Tokenless Provider manifest" >&2
+    exit 1
+fi
+if ! grep -qF "$PROVIDER" "$MISMATCH_LOG"; then
+    echo "ERROR: Provider mismatch output did not mention $PROVIDER" >&2
+    cat "$MISMATCH_LOG" >&2
+    exit 1
+fi
+cp "$PROVIDER_SNAPSHOT" "$PROVIDER"
+
+# Case 4: a version containing SemVer build metadata (+ is a regex quantifier
 # when unescaped) is still substituted exactly once.
 BUILD_METADATA_FIXTURE="$WORK_DIR/catalog-build-metadata.toml"
 printf '[component]\nname = "tokenless"\nversion = "0.7.4+build.1"\n' > "$BUILD_METADATA_FIXTURE"
@@ -94,7 +136,7 @@ if ! grep -q '^version = "99.99.99"$' "$BUILD_METADATA_FIXTURE"; then
     exit 1
 fi
 
-# Case 4: byte-for-byte backup restoration also works outside any Git tree.
+# Case 5: byte-for-byte backup restoration also works outside any Git tree.
 NOGIT_DIR="$WORK_DIR/no-git"
 mkdir -p "$NOGIT_DIR"
 cp "$CATALOG" "$NOGIT_DIR/component.toml"

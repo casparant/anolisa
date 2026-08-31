@@ -389,4 +389,4 @@ make test-python-runtime
 - [CLI 参考](cli-reference.md)
 - [效果度量](measuring-savings.md)
 - [配置与数据隐私](configuration-and-privacy.md)
-- [Runtime 设计](../../../../../src/tokenless/docs/design/runtime-library_zh.md)
+- [Runtime 设计](../../../../../providers/tokenless/docs/design/runtime-library_zh.md)

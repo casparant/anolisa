@@ -60,6 +60,17 @@ for binding in expected_preview_bindings:
         raise SystemExit(f"preview workflow does not bind every artifact to the source tag: {binding}")
 
 build = Path(sys.argv[3]).read_text(encoding="utf-8")
+for source_layout_binding in (
+    'if [ -d "$FIXED_WORKTREE/providers/tokenless" ]; then',
+    'elif [ -d "$FIXED_WORKTREE/src/tokenless" ]; then',
+    'COMPONENT_ROOT="$FIXED_WORKTREE/$COMPONENT_REL"',
+    '--manifest-path "$COMPONENT_REL/Cargo.toml"',
+):
+    if source_layout_binding not in build:
+        raise SystemExit(
+            f"prebuilt build does not support both Tokenless source layouts: "
+            f"{source_layout_binding}"
+        )
 if 'bash "$ACTION_DIR/setup-rtk.sh" "$COMPONENT_ROOT"' not in build:
     raise SystemExit("prebuilt build does not use the shared immutable RTK setup")
 maturin = build.index('uvx --from "maturin==$MATURIN_VERSION" maturin build')
@@ -97,7 +108,8 @@ if "git clone --depth 1 --branch" in action:
 expected_source_root_bindings = (
     "tokenless-source-root:",
     "TOKENLESS_SOURCE_ROOT: ${{ inputs.tokenless-source-root }}",
-    'tokenless)     SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless" ;;',
+    'if [ -d "${TOKENLESS_SOURCE_ROOT}/providers/tokenless" ]; then',
+    'elif [ -d "${TOKENLESS_SOURCE_ROOT}/src/tokenless" ]; then',
 )
 for binding in expected_source_root_bindings:
     if binding not in action:
@@ -110,7 +122,19 @@ if ! git cat-file -e "${HISTORICAL_SOURCE_REF}^{commit}" 2>/dev/null; then
     git fetch --no-tags --depth=1 origin "$HISTORICAL_SOURCE_REF"
     HISTORICAL_SOURCE_REF="FETCH_HEAD"
 fi
-git archive "${HISTORICAL_SOURCE_REF}:src/tokenless" | tar -x -C "$HISTORICAL_BUILD"
+HISTORICAL_COMPONENT_PATH=""
+for candidate in providers/tokenless src/tokenless; do
+    if git cat-file -e "${HISTORICAL_SOURCE_REF}:${candidate}" 2>/dev/null; then
+        HISTORICAL_COMPONENT_PATH="$candidate"
+        break
+    fi
+done
+[ -n "$HISTORICAL_COMPONENT_PATH" ] || {
+    printf 'ERROR: historical Tokenless source path was not found\n' >&2
+    exit 1
+}
+git archive "${HISTORICAL_SOURCE_REF}:${HISTORICAL_COMPONENT_PATH}" |
+    tar -x -C "$HISTORICAL_BUILD"
 [ ! -f "$HISTORICAL_BUILD/scripts/setup-rtk.sh" ] || {
     printf 'ERROR: historical source fixture unexpectedly has setup-rtk.sh\n' >&2
     exit 1
@@ -124,7 +148,7 @@ PINNED_RTK_COMMIT="$(
 )"
 CURRENT_RTK_COMMIT="$(
     sed -n 's/^RTK_COMMIT="\([0-9a-f]\{40\}\)"$/\1/p' \
-        "$REPO_ROOT/src/tokenless/scripts/setup-rtk.sh"
+        "$REPO_ROOT/providers/tokenless/scripts/setup-rtk.sh"
 )"
 [ -n "$PINNED_RTK_COMMIT" ] || {
     printf 'ERROR: historical RTK setup has no pinned 40-character commit\n' >&2
@@ -226,7 +250,7 @@ RTK_DRIFT="$TEMPORARY/rtk-drift"
 install -d -m 0755 "$RTK_DRIFT"
 printf '[package]\nname = "rtk"\nversion = "0.0.0"\n' > "$RTK_DRIFT/Cargo.toml"
 printf '%040d\n' 0 > "$RTK_DRIFT/.anolisa-rtk-commit"
-if bash "$REPO_ROOT/src/tokenless/scripts/setup-rtk.sh" "$RTK_DRIFT" \
+if bash "$REPO_ROOT/providers/tokenless/scripts/setup-rtk.sh" "$RTK_DRIFT" \
     >"$TEMPORARY/rtk-drift.log" 2>&1; then
     printf 'ERROR: mismatched RTK revision marker was accepted\n' >&2
     exit 1
@@ -234,9 +258,9 @@ fi
 grep -Fq "does not match pinned commit $PINNED_RTK_COMMIT" \
     "$TEMPORARY/rtk-drift.log"
 
-OPENCLAW_ROOT="$REPO_ROOT/src/tokenless/adapters/tokenless/openclaw"
+OPENCLAW_ROOT="$REPO_ROOT/providers/tokenless/adapters/tokenless/openclaw"
 OPENCLAW_FIXTURE="$TEMPORARY/openclaw"
-TOKENLESS_VERSION="$(python3 - "$REPO_ROOT/src/tokenless/Cargo.toml" <<'PY'
+TOKENLESS_VERSION="$(python3 - "$REPO_ROOT/providers/tokenless/Cargo.toml" <<'PY'
 import sys
 import tomllib
 from pathlib import Path
@@ -319,6 +343,8 @@ fi
 }
 
 SOURCE_FIXTURE="$TEMPORARY/source-fixture"
+# Deliberately use the pre-migration layout. This proves that a historical tag
+# still reaches the selected commit through build.sh's source-root fallback.
 install -d -m 0755 "$SOURCE_FIXTURE/src/tokenless"
 git -C "$SOURCE_FIXTURE" init -q
 git -C "$SOURCE_FIXTURE" config user.name 'Tokenless CI Test'

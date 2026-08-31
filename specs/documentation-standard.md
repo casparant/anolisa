@@ -9,8 +9,8 @@ Agents enter this repository via `AGENTS.md` (auto-loaded by tooling). For **doc
 
 1. `AGENTS.md` — natural entry; contains redirect to this spec
 2. `specs/documentation-standard.md` — normative documentation rules (this file)
-3. `src/<component>/AGENTS.md` — scoped module rules (if working on that component)
-4. `src/<component>/README.md` — component context
+3. `src/<component>/AGENTS.md` or `providers/<provider>/AGENTS.md` — scoped rules
+4. `src/<component>/README.md` or `providers/<provider>/README.md` — local context
 
 **Source of truth hierarchy:**
 
@@ -125,7 +125,7 @@ docs/
 |-------------|----------|----------|
 | Full user-facing how-to / reference | `docs/user-guide/{en,zh}/` | — |
 | Developer architecture / IPC / hooks | `docs/developer-guide/{en,zh}/` | Component root |
-| Component design docs | `src/<component>/docs/` | `docs/` top level |
+| Component or Provider design docs | `src/<component>/docs/` or `providers/<provider>/docs/` | `docs/` top level |
 | Cross-component quick start | `docs/QUICKSTART.md` | README |
 | Build instructions | `docs/BUILDING.md` | README |
 
@@ -136,7 +136,8 @@ docs/
 Design documents live **only** in the component's own directory:
 
 ```
-src/<component>/docs/design/    ← component-specific design docs
+src/<component>/docs/design/       ← component-specific design docs
+providers/<provider>/docs/design/  ← Provider-specific design docs
 ```
 
 Design docs are **never** placed at:
@@ -235,7 +236,8 @@ AgentSight captures kernel-level events without modifying agent code...
 
 **Content boundaries:**
 
-- Only document components whose source code exists in `src/`. No code = no docs.
+- Only document components or Providers whose source code exists in `src/` or
+  `providers/`. No code = no docs.
 - Cloud-specific configuration (SLS endpoints, AK/SK auth, security groups) belongs to cloud vendor docs
 - Never document planned-but-unimplemented features as available
 

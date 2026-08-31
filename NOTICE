@@ -25,13 +25,13 @@ agentsight (src/agentsight/)
   Copyright eunomia-bpf contributors
   Licensed under the MIT License
 
-tokenless (src/tokenless/)
+tokenless (providers/tokenless/)
   Based on tokenless (https://github.com/open-compress/token-less)
   Copyright Token-less Contributors
   Licensed under the MIT License
 
 =========================================================================
-Rust Dependencies (src/tokenless/)
+Rust Dependencies (providers/tokenless/)
 =========================================================================
 
 The tokenless component includes the following Rust crate dependencies:
@@ -74,7 +74,7 @@ All dependencies are used in compliance with their original license terms.
 Third-Party Software
 =========================================================================
 
-rtk (src/tokenless/third_party/rtk/)
+rtk (providers/tokenless/third_party/rtk/)
   Git submodule from https://github.com/rtk-ai/rtk.git
   Copyright RTK Contributors
   Licensed under the Apache License, Version 2.0

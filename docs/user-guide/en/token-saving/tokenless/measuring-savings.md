@@ -136,15 +136,15 @@ Then see [No statistics appear after enabling the adapter](troubleshooting.md#no
 
 The source tree includes deterministic fixtures for comparing compressor
 behavior across Tokenless revisions. On Linux, run the following command from
-`src/tokenless/benchmark/l1-compressor` in an ANOLISA source checkout:
+`providers/tokenless/benchmark/l1-compressor` in an ANOLISA source checkout:
 
 ```bash
 cargo run --release --bin compression_rate -- --json
 ```
 
 The report uses the committed
-`src/tokenless/benchmark/l1-compressor/fixtures/tool_response.json` and
-`src/tokenless/benchmark/l1-compressor/fixtures/schema_search.json` with the
+`providers/tokenless/benchmark/l1-compressor/fixtures/tool_response.json` and
+`providers/tokenless/benchmark/l1-compressor/fixtures/schema_search.json` with the
 checked-out compressor defaults. Tokenless 0.7.11 produces this reference
 snapshot:
 
@@ -166,7 +166,7 @@ than a model tokenizer. It also excludes adapter behavior and the share of tool
 data in a complete session. Use the snapshot only to check that the same source
 revision behaves comparably; use your own representative payloads and the
 dry-run comparison below to evaluate an actual workload. See the
-[benchmark methodology and limitations](../../../../../src/tokenless/benchmark/l1-compressor/README.md#methodology)
+[benchmark methodology and limitations](../../../../../providers/tokenless/benchmark/l1-compressor/README.md#methodology)
 for details.
 
 ## Run a dry-run comparison

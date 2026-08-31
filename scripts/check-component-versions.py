@@ -28,21 +28,52 @@ TOML_CONTRACTS = (
     ("src/cosh-ng/Cargo.toml", "src/cosh-ng/.anolisa/component.toml"),
     ("src/cosh-ng/Cargo.toml", "src/cosh-ng/.anolisa/component.macos.toml"),
     ("src/skillfs/Cargo.toml", "src/skillfs/component.toml"),
-    ("src/tokenless/Cargo.toml", "src/anolisa/manifests/components/tokenless/component.toml"),
+    (
+        "providers/tokenless/Cargo.toml",
+        "src/anolisa/manifests/components/tokenless/component.toml",
+    ),
     ("src/ws-ckpt/src/Cargo.toml", "src/ws-ckpt/component.toml"),
     ("src/ws-ckpt/src/Cargo.toml", "src/anolisa/manifests/components/ws-ckpt/component.toml"),
 )
+TOML_FIELD_CONTRACTS = (
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/provider/provider.toml",
+        "provider_version",
+    ),
+)
 VERSION_TEMPLATES = (
     ("src/agent-memory/Cargo.toml", "src/agent-memory/.anolisa/component.toml.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/.anolisa/component.toml.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/manifest.json.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/openclaw/package.json.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/openclaw/openclaw.plugin.json.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/hermes/plugin.yaml.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/qoder/.qoder-plugin/plugin.json.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/claude-code/.claude-plugin/plugin.json.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/codex/.codex-plugin/plugin.json.in"),
-    ("src/tokenless/Cargo.toml", "src/tokenless/adapters/tokenless/qwencode/qwen-extension.json.in"),
+    ("providers/tokenless/Cargo.toml", "providers/tokenless/.anolisa/component.toml.in"),
+    ("providers/tokenless/Cargo.toml", "providers/tokenless/adapters/tokenless/manifest.json.in"),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/openclaw/package.json.in",
+    ),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/openclaw/openclaw.plugin.json.in",
+    ),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/hermes/plugin.yaml.in",
+    ),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/qoder/.qoder-plugin/plugin.json.in",
+    ),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/claude-code/.claude-plugin/plugin.json.in",
+    ),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/codex/.codex-plugin/plugin.json.in",
+    ),
+    (
+        "providers/tokenless/Cargo.toml",
+        "providers/tokenless/adapters/tokenless/qwencode/qwen-extension.json.in",
+    ),
 )
 AGENT_MEMORY_JSON = (
     "src/agent-memory/adapters/agent-memory/manifest.json",
@@ -52,7 +83,7 @@ AGENT_MEMORY_JSON = (
 )
 GENERATED_CONTRACTS = (
     "src/agent-memory/.anolisa/component.toml",
-    "src/tokenless/.anolisa/component.toml",
+    "providers/tokenless/.anolisa/component.toml",
 )
 
 
@@ -79,6 +110,25 @@ def read_toml_version(path: str) -> str:
     return match.group(1)
 
 
+def read_toml_string(path: str, field: str) -> str:
+    text = read_text(path)
+    if tomllib is not None:
+        try:
+            data = tomllib.loads(text)
+            value = data.get(field)
+            if isinstance(value, str):
+                return value
+        except tomllib.TOMLDecodeError:
+            pass
+    pattern = re.compile(
+        rf'^\s*{re.escape(field)}\s*=\s*"([^"]+)"\s*$', re.MULTILINE
+    )
+    match = pattern.search(text)
+    if not match:
+        raise ValueError(f"no {field} field in {path}")
+    return match.group(1)
+
+
 def read_json_version(path: str) -> str:
     version = json.loads(read_text(path)).get("version")
     if not isinstance(version, str):
@@ -95,6 +145,18 @@ def check_equal(errors: list[str], source: str, target: str) -> None:
     actual = read_version(target)
     if actual != expected:
         errors.append(f"{target}: expected {expected}, found {actual} (source: {source})")
+
+
+def check_toml_field_equal(
+    errors: list[str], source: str, target: str, target_field: str
+) -> None:
+    expected = read_version(source)
+    actual = read_toml_string(target, target_field)
+    if actual != expected:
+        errors.append(
+            f"{target}: expected {target_field}={expected}, found {actual} "
+            f"(source: {source})"
+        )
 
 
 def check_template(errors: list[str], source: str, template: str) -> None:
@@ -147,6 +209,8 @@ def main() -> int:
     try:
         for source, target in TOML_CONTRACTS:
             check_equal(errors, source, target)
+        for source, target, field in TOML_FIELD_CONTRACTS:
+            check_toml_field_equal(errors, source, target, field)
         for source, template in VERSION_TEMPLATES:
             check_template(errors, source, template)
 

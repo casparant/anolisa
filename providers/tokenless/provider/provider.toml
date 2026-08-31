@@ -1,0 +1,160 @@
+# AW Provider manifest for Tokenless context projection.
+# The canonical Capability Contract is separate from Tokenless's native
+# CompressionRequest/CompressionResponse protocol and connected by json-map/v1.
+
+api_version = "providers.agentic-os.sh/v1"
+provider_id = "tokenless"
+provider_version = "0.7.14"
+driver = "exec-json/v1"
+lifecycle = "one_shot"
+
+[executable]
+command = "tokenless"
+args = ["compress"]
+
+[executable.environment]
+TOKENLESS_COMPRESSION_ENABLED = "1"
+TOKENLESS_STATS_ENABLED = "0"
+TOKENLESS_SLS_ENABLED = "0"
+
+[limits]
+wall_time_ms = 2000
+input_bytes = 67108864
+output_bytes = 67108864
+
+[permissions]
+network = "none"
+inherit_environment = false
+filesystem_read = []
+filesystem_write = []
+
+[data]
+reads = ["model_visible_context"]
+writes = []
+sensitivity = "inherits_input"
+retention = "none"
+telemetry = "disabled"
+
+[[capabilities]]
+capability = "context.projection.prepare/v1"
+authority = "advise"
+scopes = ["agent_session", "turn", "tool_call"]
+input_contract = { schema = "context.projection.prepare.input/v1", resource = "schemas/context-projection-prepare-input-v1.schema.json", sha256 = "bdd09189791e34ce768e624bc19a5bf0d9569b8886b2a5f1c2408aeb8b8b5d9f" }
+output_contract = { schema = "context.projection.prepare.output/v1", resource = "schemas/context-projection-prepare-output-v1.schema.json", sha256 = "a295cf2b855899f9dfe5f1dda242d803af81852e6677526f79457c3214288028" }
+native_input = { resource = "schemas/tokenless-compression-request-v1.schema.json", sha256 = "c28fb59c0f3138b4af156fb275122367b4b5f49ec90796372484594a92fdb939" }
+native_output = { resource = "schemas/tokenless-compression-response-v1.schema.json", sha256 = "4dc910fe6d01671890c444c1117d0fa4a57d0e7153d63d27cdf07f9704465878" }
+
+[capabilities.codec]
+kind = "json-map/v1"
+
+[[capabilities.codec.request.fields]]
+target = "/protocol_version"
+source = { kind = "const", value = 1 }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/content"
+source = { kind = "input", pointer = "/artifact/content" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/agent_id"
+source = { kind = "scope", field = "environment_id" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/session_id"
+source = { kind = "scope", field = "agent_session_id" }
+on_missing = "omit"
+
+[[capabilities.codec.request.fields]]
+target = "/tool_use_id"
+source = { kind = "scope", field = "tool_use_id" }
+on_missing = "omit"
+
+[[capabilities.codec.request.fields]]
+target = "/tool_name"
+source = { kind = "input", pointer = "/artifact/tool_name" }
+on_missing = "omit"
+
+[[capabilities.codec.request.fields]]
+target = "/seam"
+source = { kind = "input", pointer = "/boundary" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/content_origin"
+source = { kind = "input", pointer = "/artifact/origin" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/capabilities/replace_output"
+source = { kind = "const", value = true }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/capabilities/publish_retrieve_tool"
+source = { kind = "const", value = false }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/capabilities/replace_with_text"
+source = { kind = "input", pointer = "/constraints/allow_text_reencoding" }
+on_missing = "reject"
+
+[capabilities.codec.response.disposition]
+source = "/disposition"
+on_unknown = "fail"
+
+[capabilities.codec.response.disposition.values]
+applied = "produced"
+dry_run = "bypassed"
+passthrough = "bypassed"
+no_savings = "bypassed"
+reversibility_unavailable = "bypassed"
+timeout = "failed"
+error = "failed"
+
+[[capabilities.codec.response.output_fields]]
+target = "/candidate/source_artifact_id"
+source = { kind = "input", pointer = "/artifact/id" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/candidate/source_digest"
+source = { kind = "input", pointer = "/artifact/digest" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/candidate/content"
+source = { kind = "response", pointer = "/output" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/candidate/media_type"
+source = { kind = "const", value = "text/plain" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/candidate/transform_chain"
+source = { kind = "response", pointer = "/compressor_chain" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/candidate/reversibility"
+source = { kind = "response", pointer = "/reversibility" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.meters]]
+meter_id = "context.source_tokens"
+unit = "tokens"
+measurement_kind = "estimate"
+value_pointer = "/before_tokens"
+method_pointer = "/tokenizer_id"
+
+[[capabilities.codec.response.meters]]
+meter_id = "context.prepared_tokens"
+unit = "tokens"
+measurement_kind = "estimate"
+value_pointer = "/after_tokens"
+method_pointer = "/tokenizer_id"

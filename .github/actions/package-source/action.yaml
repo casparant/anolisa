@@ -56,7 +56,17 @@ runs:
           cosh-ng)        SRC_DIR="src/cosh-ng" ;;
           agent-sec-core) SRC_DIR="src/agent-sec-core" ;;
           agentsight)     SRC_DIR="src/agentsight" ;;
-          tokenless)     SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless" ;;
+          tokenless)
+            if [ -d "${TOKENLESS_SOURCE_ROOT}/providers/tokenless" ]; then
+              SRC_DIR="${TOKENLESS_SOURCE_ROOT}/providers/tokenless"
+            elif [ -d "${TOKENLESS_SOURCE_ROOT}/src/tokenless" ]; then
+              # Preserve source archives for tags created before the Provider move.
+              SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless"
+            else
+              echo "ERROR: Tokenless source is missing from providers/tokenless and src/tokenless"
+              exit 1
+            fi
+            ;;
           os-skills)      SRC_DIR="src/os-skills" ;;
           ws-ckpt)        SRC_DIR="src/ws-ckpt" ;;
           agent-memory)   SRC_DIR="src/agent-memory" ;;

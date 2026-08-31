@@ -1191,7 +1191,18 @@ def find_tokenless_adapter_dir():
     ]
     # Also try relative to the script's own location (source tree layout)
     script_dir = Path(__file__).resolve().parent
-    source_candidate = script_dir / ".." / ".." / ".." / ".." / "tokenless" / "adapters" / "tokenless"
+    source_candidate = (
+        script_dir
+        / ".."
+        / ".."
+        / ".."
+        / ".."
+        / ".."
+        / "providers"
+        / "tokenless"
+        / "adapters"
+        / "tokenless"
+    )
     candidates.append(str(source_candidate))
 
     for candidate in candidates:
@@ -1215,7 +1226,7 @@ def install_tokenless_plugin(args):
     if adapter_dir is None:
         print("  tokenless adapter not found — skipping tokenless plugin installation.")
         print("  Install tokenless first, then run:")
-        print("    make -C src/tokenless openclaw-install")
+        print("    make -C providers/tokenless openclaw-install")
         return
 
     install_script = adapter_dir / "openclaw" / "scripts" / "install.sh"

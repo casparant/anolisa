@@ -24,7 +24,7 @@ or `rust-version` declared by the component you are changing.
 
 ## 2. Repository layout
 
-The `src/` tree currently contains these twelve components:
+The repository currently contains these twelve components:
 
 | Component | Directory | Platform and role |
 |-----------|-----------|-------------------|
@@ -32,7 +32,7 @@ The `src/` tree currently contains these twelve components:
 | cosh-ng | [`src/cosh-ng`](../src/cosh-ng/README.md) | Rust Agent OS CLI and shell; full Linux build, limited macOS source build |
 | agent-sec-core | [`src/agent-sec-core`](../src/agent-sec-core/README.md) | Rust sandbox plus Python security CLI; Linux |
 | agentsight | [`src/agentsight`](../src/agentsight/README.md) | Rust/eBPF observability; full tracing on Linux, `trace` and `serve` on macOS |
-| tokenless | [`src/tokenless`](../src/tokenless/README.md) | Rust token and command-output optimization; Linux source build, with cross-compiled npm artifacts for macOS |
+| tokenless | [`providers/tokenless`](../providers/tokenless/README.md) | Rust token and command-output optimization; Linux source build, with cross-compiled npm artifacts for macOS |
 | agent-memory (`memory`) | [`src/agent-memory`](../src/agent-memory/README.md) | Rust MCP memory server; Linux |
 | os-skills (`skills`) | [`src/os-skills`](../src/os-skills/README.md) | Static skill definitions and scripts; all platforms supported by each skill |
 | anolisa | [`src/anolisa`](../src/anolisa/README.md) | Rust component lifecycle CLI; Linux and macOS arm64 |
@@ -158,7 +158,7 @@ guide before changing component internals.
 | [os-skills](../src/os-skills/README.md) | `cd src/os-skills && make build` | No compilation target. Validate changed `SKILL.md` files and run changed scripts with their documented interpreter. |
 | [agent-sec-core](../src/agent-sec-core/README.md) | `cd src/agent-sec-core && make build-all` | `cd src/agent-sec-core && make test` runs Python, Rust sandbox, and OpenClaw plugin tests. Python uses uv with Python 3.11.6. |
 | [agentsight](../src/agentsight/README.md) | Linux: `cd src/agentsight && make build-all`; macOS local viewer: `cd src/agentsight && make build-mac` | Linux: `cd src/agentsight && make lint && make test`; macOS: run the tests relevant to the local viewer and trajectory collector. |
-| [tokenless](../src/tokenless/README.md) | `cd src/tokenless && make build` | `cd src/tokenless && make lint && make test` |
+| [tokenless](../providers/tokenless/README.md) | `cd providers/tokenless && make build` | `cd providers/tokenless && make lint && make test` |
 | [agent-memory](../src/agent-memory/README.md) | `cd src/agent-memory && make build` | `cd src/agent-memory && make fmt-check && make lint && make test`; `cd src/agent-memory && make smoke` covers the MCP stdio path. Linux only. |
 | [ws-ckpt](../src/ws-ckpt/README.md) | `cd src/ws-ckpt && make build` | `cd src/ws-ckpt && make test`; install and service checks require Linux system mode. |
 | [cosh-ng](../src/cosh-ng/README.md) | `cd src/cosh-ng && cargo build --workspace` | `cd src/cosh-ng && cargo fmt --all -- --check`, then select the closest targeted test from its [contribution guide](../src/cosh-ng/CONTRIBUTING.md). Full local gates are reserved for explicitly requested large or cross-cutting validation. |

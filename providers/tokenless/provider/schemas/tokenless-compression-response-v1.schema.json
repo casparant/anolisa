@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os.sh/schemas/providers/tokenless/compression-response/v1",
+  "title": "Tokenless CompressionResponse protocol v1",
+  "type": "object",
+  "required": [
+    "protocol_version",
+    "output",
+    "disposition",
+    "reversibility",
+    "before_tokens",
+    "after_tokens",
+    "tokenizer_id"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": 1
+    },
+    "output": {
+      "type": "string"
+    },
+    "disposition": {
+      "enum": [
+        "applied",
+        "dry_run",
+        "passthrough",
+        "no_savings",
+        "reversibility_unavailable",
+        "timeout",
+        "error"
+      ]
+    },
+    "content_type": {
+      "type": "string"
+    },
+    "compressor_chain": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reversibility": {
+      "enum": ["lossless", "retrievable", "unrecoverable"]
+    },
+    "before_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "after_tokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stash_keys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tokenizer_id": {
+      "type": "string"
+    },
+    "diagnostic": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": true
+}

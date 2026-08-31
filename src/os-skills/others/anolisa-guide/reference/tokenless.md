@@ -43,7 +43,7 @@ sudo yum install tokenless
 
 ```
 git clone --recursive https://github.com/alibaba/anolisa.git
-cd src/tokenless
+cd providers/tokenless
 make setup
 ```
 

@@ -12,7 +12,7 @@ This file provides context for AI coding assistants (Qoder, Claude, etc.) workin
 | **cosh-ng** | `src/cosh-ng/` | Rust | Linux (full); macOS (limited functionality) |
 | **agent-sec-core** | `src/agent-sec-core/` | Rust + Python | Linux only |
 | **agentsight** | `src/agentsight/` | Rust (eBPF) | Linux (full); macOS (trajectory/serve only) |
-| **tokenless** | `src/tokenless/` | Rust | Linux (full); macOS x64/arm64 (CLI binaries + adapters, via npm) |
+| **tokenless** | `providers/tokenless/` | Rust | Linux (full); macOS x64/arm64 (CLI binaries + adapters, via npm) |
 | **agent-memory** (`memory`) | `src/agent-memory/` | Rust | Linux only |
 | **os-skills** | `src/os-skills/` | Python / Shell | All |
 | **anolisa** | `src/anolisa/` | Rust | Linux + macOS (arm64) |
@@ -72,7 +72,7 @@ make build-mac
 cd src/os-skills   # Skill definitions are static assets, no compilation needed
 
 # tokenless (per-component)
-cd src/tokenless
+cd providers/tokenless
 make build       # tokenless + RTK + OpenClaw plugin
 make lint
 make test        # Rust + hooks + integration + adapters
@@ -286,7 +286,7 @@ When generating commits, detect the active tool and fill in the actual version. 
 | `src/agent-sec-core/` | `sec-core` |
 | `src/os-skills/` | `skill` |
 | `src/agentsight/` | `sight` |
-| `src/tokenless/` | `tokenless` |
+| `providers/tokenless/` | `tokenless` |
 | `src/ws-ckpt/` | `ckpt` |
 | `src/agent-memory/` | `memory` |
 | `src/anolisa/` | `anolisa` |

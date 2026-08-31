@@ -12,7 +12,7 @@ Source builds are intended for development and debugging. The project currently 
 
 ```bash
 git clone https://github.com/alibaba/anolisa.git
-cd anolisa/src/tokenless
+cd anolisa/providers/tokenless
 cargo build --release --locked -p tokenless-cli
 ./target/release/tokenless --version
 ```

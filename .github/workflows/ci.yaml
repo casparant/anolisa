@@ -131,7 +131,7 @@ jobs:
           if echo "$CHANGED" | grep -q "^src/agentsight/"; then
             AGENTSIGHT=true
           fi
-          if echo "$CHANGED" | grep -q "^src/tokenless/"; then
+          if echo "$CHANGED" | grep -q "^providers/tokenless/"; then
             TOKENLESS=true
           fi
           if echo "$CHANGED" | grep -q "^src/ws-ckpt/"; then
@@ -823,23 +823,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            src/tokenless
-            src/tokenless/benchmark/l1-compressor
-            src/tokenless/benchmark/l2-module
+            providers/tokenless
+            providers/tokenless/benchmark/l1-compressor
+            providers/tokenless/benchmark/l2-module
 
       - name: Check formatting
         run: |
-          cd src/tokenless
+          cd providers/tokenless
           cargo fmt --all -- --check
 
       - name: Lint
         run: |
-          cd src/tokenless
+          cd providers/tokenless
           cargo clippy --workspace -- -D warnings
 
       - name: Run tests
         run: |
-          cd src/tokenless
+          cd providers/tokenless
           cargo test --workspace -- --test-threads=1
 
       # The benchmark suite is split into two standalone workspaces (each with an
@@ -849,12 +849,12 @@ jobs:
       # fast. Criterion benches stay a manual/periodic task.
       - name: Check L1 benchmark suite formatting
         run: |
-          cd src/tokenless/benchmark/l1-compressor
+          cd providers/tokenless/benchmark/l1-compressor
           cargo fmt --all -- --check
 
       - name: Lint L1 benchmark suite
         run: |
-          cd src/tokenless/benchmark/l1-compressor
+          cd providers/tokenless/benchmark/l1-compressor
           cargo clippy --all-targets --locked -- -D warnings
 
       - name: Test L1 benchmark suite
@@ -863,17 +863,17 @@ jobs:
           # thread stack; give test threads 16 MiB.
           RUST_MIN_STACK: '16777216'
         run: |
-          cd src/tokenless/benchmark/l1-compressor
+          cd providers/tokenless/benchmark/l1-compressor
           cargo test --release --locked
 
       - name: Check L2 benchmark suite formatting
         run: |
-          cd src/tokenless/benchmark/l2-module
+          cd providers/tokenless/benchmark/l2-module
           cargo fmt --all -- --check
 
       - name: Lint L2 benchmark suite
         run: |
-          cd src/tokenless/benchmark/l2-module
+          cd providers/tokenless/benchmark/l2-module
           cargo clippy --all-targets --locked -- -D warnings
 
       - name: Test L2 benchmark suite
@@ -882,7 +882,7 @@ jobs:
           # thread stack; give test threads 16 MiB.
           RUST_MIN_STACK: '16777216'
         run: |
-          cd src/tokenless/benchmark/l2-module
+          cd providers/tokenless/benchmark/l2-module
           cargo test --release --locked
 
       - uses: actions/setup-python@v5
@@ -891,7 +891,7 @@ jobs:
 
       - name: Run Python integration tests
         run: |
-          make -C src/tokenless test-integration
+          make -C providers/tokenless test-integration
 
       - uses: astral-sh/setup-uv@v6
 
@@ -904,7 +904,7 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: '1.91.0'
         run: |
-          make -C src/tokenless \
+          make -C providers/tokenless \
             test-python-runtime test-agentscope-integration
 
       - uses: actions/setup-node@v4
@@ -919,12 +919,12 @@ jobs:
           RUSTUP_TOOLCHAIN: '1.91.0'
         run: |
           set -euo pipefail
-          make -C src/tokenless npm-package
+          make -C providers/tokenless npm-package
           # Install root + platform tarballs into a scratch project and verify
           # both binaries actually run. The root install omits registry
           # optional deps (unpublished during CI); the platform tarball
           # installed in step 1 satisfies the platform lookup instead.
-          DIST="$GITHUB_WORKSPACE/src/tokenless/npm/dist"
+          DIST="$GITHUB_WORKSPACE/providers/tokenless/npm/dist"
           SMOKE=$(mktemp -d)
           cd "$SMOKE"
           npm init -y >/dev/null

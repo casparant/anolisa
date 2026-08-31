@@ -20,7 +20,7 @@ cd anolisa
 
 ## 2. 仓库结构
 
-当前 `src/` 下包含 12 个组件。
+当前仓库包含 12 个组件。
 
 | 组件 | 目录 | 平台和职责 |
 |------|------|------------|
@@ -28,7 +28,7 @@ cd anolisa
 | cosh-ng | [`src/cosh-ng`](../src/cosh-ng/README_zh.md) | Rust Agent OS CLI 和 Shell，Linux 提供完整构建，macOS 提供受限源码构建 |
 | agent-sec-core | [`src/agent-sec-core`](../src/agent-sec-core/README_zh.md) | Rust sandbox 与 Python 安全 CLI，Linux |
 | agentsight | [`src/agentsight`](../src/agentsight/README_zh.md) | Rust/eBPF 可观测组件，Linux 提供完整 tracing，macOS 提供 `trace` 和 `serve` |
-| tokenless | [`src/tokenless`](../src/tokenless/README_zh.md) | Rust Token 与命令输出优化，源码构建面向 Linux，macOS 使用从 Linux 交叉编译的 npm 制品 |
+| tokenless | [`providers/tokenless`](../providers/tokenless/README_zh.md) | Rust Token 与命令输出优化，源码构建面向 Linux，macOS 使用从 Linux 交叉编译的 npm 制品 |
 | agent-memory（`memory`） | [`src/agent-memory`](../src/agent-memory/README_zh.md) | Rust MCP memory server，Linux |
 | os-skills（`skills`） | [`src/os-skills`](../src/os-skills/README_zh.md) | 静态 Skill 定义和脚本，具体平台取决于各 Skill 的声明 |
 | anolisa | [`src/anolisa`](../src/anolisa/README_zh.md) | Rust 组件生命周期 CLI，支持 Linux 和 macOS arm64 |
@@ -140,7 +140,7 @@ daemon，默认 user profile 不会创建 user service。
 | [os-skills](../src/os-skills/README_zh.md) | `cd src/os-skills && make build` | 没有编译目标。检查变更过的 `SKILL.md`，并按文件说明的解释器运行变更脚本。 |
 | [agent-sec-core](../src/agent-sec-core/README_zh.md) | `cd src/agent-sec-core && make build-all` | `cd src/agent-sec-core && make test` 会运行 Python、Rust sandbox 和 OpenClaw plugin 测试。Python 使用 uv 与 Python 3.11.6。 |
 | [agentsight](../src/agentsight/README_zh.md) | Linux 使用 `cd src/agentsight && make build-all`；macOS local viewer 使用 `cd src/agentsight && make build-mac` | Linux 使用 `cd src/agentsight && make lint && make test`；macOS 运行 local viewer 和 trajectory collector 相关测试。 |
-| [tokenless](../src/tokenless/README_zh.md) | `cd src/tokenless && make build` | `cd src/tokenless && make lint && make test` |
+| [tokenless](../providers/tokenless/README_zh.md) | `cd providers/tokenless && make build` | `cd providers/tokenless && make lint && make test` |
 | [agent-memory](../src/agent-memory/README_zh.md) | `cd src/agent-memory && make build` | `cd src/agent-memory && make fmt-check && make lint && make test`；`cd src/agent-memory && make smoke` 覆盖 MCP stdio 路径。仅 Linux。 |
 | [ws-ckpt](../src/ws-ckpt/README_zh.md) | `cd src/ws-ckpt && make build` | `cd src/ws-ckpt && make test`；安装和 service 检查需要 Linux system mode。 |
 | [cosh-ng](../src/cosh-ng/README_zh.md) | `cd src/cosh-ng && cargo build --workspace` | `cd src/cosh-ng && cargo fmt --all -- --check`，随后按[贡献指南](../src/cosh-ng/CONTRIBUTING_zh.md)选择最接近改动的测试。只有明确要求对大型或跨模块改动执行完整验证时，才运行全量本地门禁。 |
