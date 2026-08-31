@@ -105,7 +105,11 @@ define_id!(
     "ins",
     "Identifies one durable AW installation."
 );
-define_id!(ActorId, "act", "Identifies an authenticated actor.");
+define_id!(
+    ActorId,
+    "act",
+    "Identifies an actor assertion that an accepting trust boundary must authenticate."
+);
 define_id!(TaskId, "tsk", "Identifies one durable user intent.");
 define_id!(RunId, "run", "Identifies one attempt to execute a task.");
 define_id!(
@@ -193,6 +197,11 @@ define_id!(
 );
 define_id!(ToolUseId, "tol", "Identifies one observed Agent tool call.");
 define_id!(
+    ArtifactId,
+    "art",
+    "Identifies one immutable context artifact at the AW Core boundary."
+);
+define_id!(
     RuntimeMessageId,
     "rms",
     "Identifies one logical message emitted by an Agent runtime."
@@ -201,8 +210,8 @@ define_id!(
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentWorkId, AttemptId, CheckpointId, EnvironmentId, ExecutionContextId, ExecutionId,
-        ProviderBindingId, ProviderInvocationId, RunId, TurnId,
+        AgentWorkId, ArtifactId, AttemptId, CheckpointId, EnvironmentId, ExecutionContextId,
+        ExecutionId, ProviderBindingId, ProviderInvocationId, RunId, TurnId,
     };
 
     #[test]
@@ -252,5 +261,17 @@ mod tests {
         assert!(work_id.as_str().starts_with("wrk_"));
         assert!(attempt_id.as_str().starts_with("atm_"));
         assert!(RunId::parse(attempt_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn context_artifact_ids_have_their_own_domain() {
+        let artifact_id = ArtifactId::new();
+
+        assert!(artifact_id.as_str().starts_with("art_"));
+        assert_eq!(
+            ArtifactId::parse(artifact_id.as_str()).expect("a generated artifact ID is canonical"),
+            artifact_id
+        );
+        assert!(TurnId::parse(artifact_id.as_str()).is_err());
     }
 }
