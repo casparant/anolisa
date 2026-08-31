@@ -11,6 +11,7 @@ name = "cosh-core"
 path = "src/main.rs"
 
 [dependencies]
+aw-contracts = { path = "../../../aw/crates/aw-contracts" }
 clap.workspace = true
 atty = "0.2"
 cosh-types = { path = "../cosh-types" }

@@ -7,6 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::config::{HookDefinition, HooksConfig};
+use crate::execution_scope::ExecutionScopeCorrelation;
 use crate::provider::ToolDeclaration;
 
 // ─── Hook Event Names ────────────────────────────────────────────────
@@ -45,6 +46,9 @@ pub struct HookInput {
     pub session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
+    /// System-owned correlation for a Provider invocation at this hook boundary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_scope: Option<ExecutionScopeCorrelation>,
     pub cwd: String,
     pub hook_event_name: String,
     pub timestamp: String,
@@ -200,6 +204,19 @@ pub struct PostToolUseResult {
     /// still appended after the replacement.
     pub updated_tool_response: Option<String>,
     pub notifications: Vec<HookNotification>,
+}
+
+/// Optional COSH and AW correlation carried by a post-tool hook.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PostToolUseMetadata<'a> {
+    /// Skill selected by COSH when the tool invokes one.
+    pub skill_context: Option<&'a Value>,
+    /// Typed correlation values for the Provider-native tool call.
+    ///
+    /// They are not credentials and must not authorize work by themselves.
+    pub execution_scope: Option<&'a ExecutionScopeCorrelation>,
+    /// Whether the original tool result represents a failure.
+    pub tool_response_is_error: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -573,7 +590,7 @@ impl HookSystem {
         tool_name: &str,
         tool_input: &Value,
         tool_response: &str,
-        skill_context: Option<&Value>,
+        metadata: PostToolUseMetadata<'_>,
     ) -> PostToolUseResult {
         if !self.enabled {
             return PostToolUseResult {
@@ -604,11 +621,13 @@ impl HookSystem {
             "tool_name": tool_name,
             "tool_input": tool_input,
             "tool_response": Self::wrap_tool_response(tool_response),
+            "tool_response_is_error": metadata.tool_response_is_error,
         });
-        if let Some(ctx) = skill_context {
+        if let Some(ctx) = metadata.skill_context {
             event_data["skill_context"] = ctx.clone();
         }
-        let input = self.build_input(session_id, cwd, HookEventName::PostToolUse, event_data);
+        let mut input = self.build_input(session_id, cwd, HookEventName::PostToolUse, event_data);
+        input.execution_scope = metadata.execution_scope.cloned();
         let outputs = self.run_hooks(&defs, &input).await;
 
         self.aggregate_post_tool_use(outputs, &defs)
@@ -929,6 +948,7 @@ impl HookSystem {
         HookInput {
             session_id: session_id.to_string(),
             run_id: self.run_id.clone(),
+            execution_scope: None,
             cwd: cwd.to_string(),
             hook_event_name: event.as_str().to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -2462,6 +2482,7 @@ mod tests {
         assert_eq!(json["transcript_path"], "/work/.cosh-transcript.jsonl");
         assert_eq!(json["session_id"], "sess-1");
         assert_eq!(json["hook_event_name"], "PreToolUse");
+        assert!(json.get("execution_scope").is_none());
     }
 
     #[tokio::test]
@@ -2498,13 +2519,55 @@ mod tests {
                 "shell",
                 &serde_json::json!({"command": "ls"}),
                 "hello",
-                None,
+                PostToolUseMetadata::default(),
             )
             .await;
         // additional_context 里会包含传入的 cosh-ng 原名 shell 与 tool_use_id call-42
         let ctx = result.additional_context.unwrap();
         assert!(ctx.contains("shell"), "ctx={ctx}");
         assert!(ctx.contains("call-42"), "ctx={ctx}");
+    }
+
+    #[tokio::test]
+    async fn post_tool_use_keeps_native_tool_id_and_adds_execution_scope() {
+        let config = HooksConfig {
+            enabled: true,
+            post_tool_use: vec![HookDefinition {
+                command: r#"python3 -c 'import sys,json; d=json.load(sys.stdin); s=d["execution_scope"]; print(json.dumps({"hook_specific_output":{"additionalContext":"|".join([d["tool_use_id"],s["agent_session_id"],s["turn_id"],s["tool_use_id"],str(d["tool_response_is_error"]).lower()])}}))'"#.to_string(),
+                name: Some("scope-probe".to_string()),
+                timeout: Some(5000),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let sys = HookSystem::from_config(&config);
+        let scope = crate::execution_scope::ExecutionScopeContext::for_session(
+            "11111111-1111-4111-8111-111111111111",
+        )
+        .tool_call_scope("22222222-2222-4222-8222-222222222222", "provider-call-42");
+
+        let result = sys
+            .fire_post_tool_use(
+                "11111111-1111-4111-8111-111111111111",
+                "/tmp",
+                "provider-call-42",
+                "shell",
+                &serde_json::json!({"command": "ls"}),
+                "hello",
+                PostToolUseMetadata {
+                    execution_scope: Some(&scope),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        let context = result.additional_context.expect("scope probe output");
+        let fields: Vec<_> = context.split('|').collect();
+        assert_eq!(fields[0], "provider-call-42");
+        assert_eq!(fields[1], "ags_11111111-1111-4111-8111-111111111111");
+        assert_eq!(fields[2], "trn_22222222-2222-4222-8222-222222222222");
+        assert!(fields[3].starts_with("tol_"));
+        assert_eq!(fields[4], "false");
     }
 
     #[tokio::test]
@@ -2546,7 +2609,10 @@ mod tests {
                 "skill",
                 &serde_json::json!({"action": "invoke", "name": "demo"}),
                 "",
-                Some(&skill_ctx),
+                PostToolUseMetadata {
+                    skill_context: Some(&skill_ctx),
+                    ..Default::default()
+                },
             )
             .await;
         assert_eq!(
@@ -2800,7 +2866,7 @@ mod tests {
                 "shell",
                 &serde_json::json!({"command": "ls"}),
                 "original output here",
-                None,
+                PostToolUseMetadata::default(),
             )
             .await;
         assert_eq!(
@@ -2858,7 +2924,7 @@ mod tests {
                 "shell",
                 &serde_json::json!({"command": "ls"}),
                 "original",
-                None,
+                PostToolUseMetadata::default(),
             )
             .await;
         assert_eq!(
@@ -2899,7 +2965,7 @@ mod tests {
                 "shell",
                 &serde_json::json!({"command": "ls"}),
                 "original output",
-                None,
+                PostToolUseMetadata::default(),
             )
             .await;
         assert_eq!(
