@@ -48,7 +48,7 @@ def read_hermes_version(path: Path) -> str:
     return match.group(1)
 
 
-def verify_versions(root: Path, contract: Path) -> str:
+def verify_versions(root: Path, contract: Path, provider_root: Path) -> str:
     """Return the source version after checking packaged release metadata."""
     cargo_path = root / "Cargo.toml"
     try:
@@ -72,6 +72,22 @@ def verify_versions(root: Path, contract: Path) -> str:
     if contract_version != expected:
         raise SystemExit(
             f"ERROR: {contract} version {contract_version} does not match "
+            f"Cargo.toml version {expected}"
+        )
+
+    provider = provider_root / "provider.toml"
+    try:
+        provider_text = provider.read_text(encoding="utf-8")
+    except OSError as error:
+        raise SystemExit(
+            f"ERROR: cannot read Provider manifest {provider}: {error}"
+        ) from error
+    if match_field(provider_text, "provider_id", provider) != "tokenless":
+        raise SystemExit(f"ERROR: {provider} is not a tokenless Provider manifest")
+    provider_version = match_field(provider_text, "provider_version", provider)
+    if provider_version != expected:
+        raise SystemExit(
+            f"ERROR: {provider} version {provider_version} does not match "
             f"Cargo.toml version {expected}"
         )
 
@@ -99,17 +115,24 @@ def verify_versions(root: Path, contract: Path) -> str:
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse source and contract paths."""
+    """Parse source, component contract, and Provider package paths."""
     parser = argparse.ArgumentParser()
     parser.add_argument("source_root", type=Path)
     parser.add_argument("contract", type=Path)
+    parser.add_argument("provider_root", type=Path)
     return parser.parse_args()
 
 
 def main() -> int:
     """Print the verified release version for the packaging shell script."""
     args = parse_args()
-    print(verify_versions(args.source_root.resolve(), args.contract.resolve()))
+    print(
+        verify_versions(
+            args.source_root.resolve(),
+            args.contract.resolve(),
+            args.provider_root.resolve(),
+        )
+    )
     return 0
 
 

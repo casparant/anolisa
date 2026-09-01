@@ -56,7 +56,27 @@ runs:
           cosh-ng)        SRC_DIR="src/cosh-ng" ;;
           agent-sec-core) SRC_DIR="src/agent-sec-core" ;;
           agentsight)     SRC_DIR="src/agentsight" ;;
-          tokenless)     SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless" ;;
+          tokenless)
+            SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless"
+            if [ ! -d "${SRC_DIR}" ]; then
+              echo "ERROR: Tokenless source is missing from ${SRC_DIR}"
+              exit 1
+            fi
+
+            # Provider metadata must come from the same selected source tree.
+            # Historical tags without a Provider package remain buildable and
+            # are never combined with metadata from the checkout running CI.
+            TOKENLESS_PROVIDER_DIR="${TOKENLESS_SOURCE_ROOT}/providers/tokenless"
+            if [ -e "${TOKENLESS_PROVIDER_DIR}" ]; then
+              if [ ! -f "${TOKENLESS_PROVIDER_DIR}/provider.toml" ] || \
+                 [ ! -d "${TOKENLESS_PROVIDER_DIR}/schemas" ]; then
+                echo "ERROR: Tokenless Provider package is incomplete: ${TOKENLESS_PROVIDER_DIR}"
+                exit 1
+              fi
+            else
+              TOKENLESS_PROVIDER_DIR=""
+            fi
+            ;;
           os-skills)      SRC_DIR="src/os-skills" ;;
           ws-ckpt)        SRC_DIR="src/ws-ckpt" ;;
           agent-memory)   SRC_DIR="src/agent-memory" ;;
@@ -69,6 +89,7 @@ runs:
         esac
 
         echo "SRC_DIR=${SRC_DIR}" >> $GITHUB_ENV
+        echo "TOKENLESS_PROVIDER_DIR=${TOKENLESS_PROVIDER_DIR:-}" >> $GITHUB_ENV
         echo "ARCHIVE_NAME=${COMPONENT}-${VERSION}" >> $GITHUB_ENV
         echo "ARCHIVE_FILE=${COMPONENT}-${VERSION}${SUFFIX}.tar.gz" >> $GITHUB_ENV
 
@@ -152,6 +173,25 @@ runs:
             TRUSTED_KEYS_DIR="/tmp/build/${ARCHIVE_NAME}/agent-sec-cli/src/agent_sec_cli/asset_verify/trusted-keys"
             rm -f "${TRUSTED_KEYS_DIR}"/*.asc
             echo "$GPG_PUBLIC_KEY" > "${TRUSTED_KEYS_DIR}/agent-sec.asc"
+          fi
+        elif [ "${{ inputs.component }}" = "tokenless" ]; then
+          cp -r "${SRC_DIR}/." "/tmp/build/${ARCHIVE_NAME}/"
+
+          # The repository separates implementation source from declarative
+          # Provider metadata. Source artifacts stage only the runtime contract
+          # files into a self-contained archive-local provider/ directory.
+          if [ -n "${TOKENLESS_PROVIDER_DIR}" ]; then
+            PROVIDER_BUILD_DIR="/tmp/build/${ARCHIVE_NAME}/provider"
+            mkdir -p "${PROVIDER_BUILD_DIR}/schemas"
+            cp -p "${TOKENLESS_PROVIDER_DIR}/provider.toml" \
+              "${PROVIDER_BUILD_DIR}/provider.toml"
+            cp -p "${TOKENLESS_PROVIDER_DIR}/schemas/"*.json \
+              "${PROVIDER_BUILD_DIR}/schemas/"
+            if compgen -G "${TOKENLESS_PROVIDER_DIR}/fixtures/*.json" >/dev/null; then
+              mkdir -p "${PROVIDER_BUILD_DIR}/fixtures"
+              cp -p "${TOKENLESS_PROVIDER_DIR}/fixtures/"*.json \
+                "${PROVIDER_BUILD_DIR}/fixtures/"
+            fi
           fi
         else
           cp -r ${SRC_DIR}/. /tmp/build/${ARCHIVE_NAME}/

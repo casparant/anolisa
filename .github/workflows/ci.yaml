@@ -131,8 +131,11 @@ jobs:
           if echo "$CHANGED" | grep -q "^src/agentsight/"; then
             AGENTSIGHT=true
           fi
-          if echo "$CHANGED" | grep -q "^src/tokenless/"; then
+          if echo "$CHANGED" | grep -qE "^(src|providers)/tokenless/"; then
             TOKENLESS=true
+            # Provider packages are parsed and admitted by AW, so a metadata-
+            # only change must run the Host conformance suite as well.
+            AW=true
           fi
           if echo "$CHANGED" | grep -q "^src/ws-ckpt/"; then
             WS_CKPT=true

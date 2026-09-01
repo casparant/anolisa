@@ -287,6 +287,7 @@ When generating commits, detect the active tool and fill in the actual version. 
 | `src/os-skills/` | `skill` |
 | `src/agentsight/` | `sight` |
 | `src/tokenless/` | `tokenless` |
+| `providers/tokenless/` | `tokenless` |
 | `src/ws-ckpt/` | `ckpt` |
 | `src/agent-memory/` | `memory` |
 | `src/anolisa/` | `anolisa` |

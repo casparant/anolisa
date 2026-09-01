@@ -144,7 +144,8 @@
       "aliases": [],
       "issue_option": "tokenless",
       "path_prefixes": [
-        "src/tokenless/"
+        "src/tokenless/",
+        "providers/tokenless/"
       ],
       "label": "component:tokenless",
       "commit_scope": "tokenless",

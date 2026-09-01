@@ -1730,6 +1730,12 @@ build_tokenless() {
         if [[ ! -d "$component_root/share/anolisa/extensions/tokenless" ]]; then
             warn "tokenless cosh extension staged empty"
         fi
+        if [[ ! -f "$component_root/share/aw/providers/tokenless/provider.toml" ]]; then
+            warn "tokenless AW Provider manifest was not staged"
+        fi
+        if [[ ! -d "$component_root/share/aw/providers/tokenless/schemas" ]]; then
+            warn "tokenless AW Provider schemas were not staged"
+        fi
         ok "tokenless and rtk built successfully"
     else
         [[ -f "$bin" ]]     || warn "Expected artifact $bin not found"

@@ -60,6 +60,18 @@ for binding in expected_preview_bindings:
         raise SystemExit(f"preview workflow does not bind every artifact to the source tag: {binding}")
 
 build = Path(sys.argv[3]).read_text(encoding="utf-8")
+for source_layout_binding in (
+    'COMPONENT_REL="src/tokenless"',
+    'COMPONENT_ROOT="$FIXED_WORKTREE/$COMPONENT_REL"',
+    'TOKENLESS_PROVIDER_DIR="$FIXED_WORKTREE/providers/tokenless"',
+    '"$COMPONENT_ROOT" "$CONTRACT" "$TOKENLESS_PROVIDER_DIR"',
+    '--manifest-path "$COMPONENT_REL/Cargo.toml"',
+):
+    if source_layout_binding not in build:
+        raise SystemExit(
+            f"prebuilt build does not bind the selected Tokenless source tree: "
+            f"{source_layout_binding}"
+        )
 if 'bash "$ACTION_DIR/setup-rtk.sh" "$COMPONENT_ROOT"' not in build:
     raise SystemExit("prebuilt build does not use the shared immutable RTK setup")
 maturin = build.index('uvx --from "maturin==$MATURIN_VERSION" maturin build')
@@ -97,7 +109,11 @@ if "git clone --depth 1 --branch" in action:
 expected_source_root_bindings = (
     "tokenless-source-root:",
     "TOKENLESS_SOURCE_ROOT: ${{ inputs.tokenless-source-root }}",
-    'tokenless)     SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless" ;;',
+    'SRC_DIR="${TOKENLESS_SOURCE_ROOT}/src/tokenless"',
+    'TOKENLESS_PROVIDER_DIR="${TOKENLESS_SOURCE_ROOT}/providers/tokenless"',
+    'cp -p "${TOKENLESS_PROVIDER_DIR}/provider.toml"',
+    'cp -p "${TOKENLESS_PROVIDER_DIR}/schemas/"*.json',
+    'cp -p "${TOKENLESS_PROVIDER_DIR}/fixtures/"*.json',
 )
 for binding in expected_source_root_bindings:
     if binding not in action:
@@ -110,7 +126,14 @@ if ! git cat-file -e "${HISTORICAL_SOURCE_REF}^{commit}" 2>/dev/null; then
     git fetch --no-tags --depth=1 origin "$HISTORICAL_SOURCE_REF"
     HISTORICAL_SOURCE_REF="FETCH_HEAD"
 fi
-git archive "${HISTORICAL_SOURCE_REF}:src/tokenless" | tar -x -C "$HISTORICAL_BUILD"
+HISTORICAL_COMPONENT_PATH="src/tokenless"
+git cat-file -e "${HISTORICAL_SOURCE_REF}:${HISTORICAL_COMPONENT_PATH}" \
+    2>/dev/null || {
+    printf 'ERROR: historical Tokenless source path was not found\n' >&2
+    exit 1
+}
+git archive "${HISTORICAL_SOURCE_REF}:${HISTORICAL_COMPONENT_PATH}" |
+    tar -x -C "$HISTORICAL_BUILD"
 [ ! -f "$HISTORICAL_BUILD/scripts/setup-rtk.sh" ] || {
     printf 'ERROR: historical source fixture unexpectedly has setup-rtk.sh\n' >&2
     exit 1
@@ -319,16 +342,22 @@ fi
 }
 
 SOURCE_FIXTURE="$TEMPORARY/source-fixture"
+# The fixture proves that a tagged build selects source and Provider metadata
+# from that tag's detached worktree rather than from the caller's checkout.
 install -d -m 0755 "$SOURCE_FIXTURE/src/tokenless"
+install -d -m 0755 "$SOURCE_FIXTURE/providers/tokenless/schemas"
 git -C "$SOURCE_FIXTURE" init -q
 git -C "$SOURCE_FIXTURE" config user.name 'Tokenless CI Test'
 git -C "$SOURCE_FIXTURE" config user.email 'tokenless-ci@example.com'
 printf 'tag source\n' > "$SOURCE_FIXTURE/src/tokenless/source.txt"
-git -C "$SOURCE_FIXTURE" add src/tokenless/source.txt
+printf 'tag provider\n' > "$SOURCE_FIXTURE/providers/tokenless/provider.toml"
+printf '{}\n' > "$SOURCE_FIXTURE/providers/tokenless/schemas/test.json"
+git -C "$SOURCE_FIXTURE" add src/tokenless/source.txt providers/tokenless
 git -C "$SOURCE_FIXTURE" commit -q -m 'tag source'
 TAG_COMMIT="$(git -C "$SOURCE_FIXTURE" rev-parse HEAD)"
 git -C "$SOURCE_FIXTURE" tag tokenless/v1.2.3
 printf 'checkout source\n' > "$SOURCE_FIXTURE/src/tokenless/source.txt"
+printf 'checkout provider\n' > "$SOURCE_FIXTURE/providers/tokenless/provider.toml"
 git -C "$SOURCE_FIXTURE" commit -q -am 'checkout source'
 git -C "$SOURCE_FIXTURE" branch tokenless/v1.2.3
 
@@ -338,13 +367,22 @@ install -d -m 0755 "$FAKE_BIN"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
     'git rev-parse HEAD > "$SOURCE_SELECTION_RESULT"' \
-    'exit 73' > "$FAKE_BIN/make"
+    'exit 0' > "$FAKE_BIN/make"
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "%s\n" "${4:-}" > "$PROVIDER_PATH_SELECTION_RESULT"' \
+    'cat "${4:-}/provider.toml" > "$PROVIDER_SELECTION_RESULT"' \
+    'exit 73' > "$FAKE_BIN/python3"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 74' > "$FAKE_BIN/uvx"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 75' > "$FAKE_BIN/just"
-chmod 0755 "$FAKE_BIN/make" "$FAKE_BIN/uvx" "$FAKE_BIN/just"
+chmod 0755 "$FAKE_BIN/make" "$FAKE_BIN/python3" "$FAKE_BIN/uvx" "$FAKE_BIN/just"
 SOURCE_SELECTION_RESULT="$TEMPORARY/source-selection"
+PROVIDER_PATH_SELECTION_RESULT="$TEMPORARY/provider-path-selection"
+PROVIDER_SELECTION_RESULT="$TEMPORARY/provider-selection"
 if PATH="$FAKE_BIN:$PATH" \
     SOURCE_SELECTION_RESULT="$SOURCE_SELECTION_RESULT" \
+    PROVIDER_PATH_SELECTION_RESULT="$PROVIDER_PATH_SELECTION_RESULT" \
+    PROVIDER_SELECTION_RESULT="$PROVIDER_SELECTION_RESULT" \
     TOKENLESS_SOURCE_WORKTREE="$TEMPORARY/source-worktree/tokenless" \
     "$ACTION_DIR/build.sh" \
         --source-repo "$SOURCE_FIXTURE" \
@@ -365,6 +403,15 @@ fi
 }
 [ "$(cat "$SOURCE_SELECTION_RESULT")" = "$TAG_COMMIT" ] || {
     printf 'ERROR: tagged build used the checkout commit instead of the tag commit\n' >&2
+    exit 1
+}
+[ "$(cat "$PROVIDER_SELECTION_RESULT")" = "tag provider" ] || {
+    printf 'ERROR: tagged build mixed Provider metadata from another commit\n' >&2
+    exit 1
+}
+[ "$(cat "$PROVIDER_PATH_SELECTION_RESULT")" = \
+    "$TEMPORARY/source-worktree/tokenless/providers/tokenless" ] || {
+    printf 'ERROR: tagged build resolved Provider metadata outside its worktree\n' >&2
     exit 1
 }
 
