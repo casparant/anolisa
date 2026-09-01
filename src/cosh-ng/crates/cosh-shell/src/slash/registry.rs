@@ -189,7 +189,7 @@ pub fn slash_command_registry() -> &'static [SlashCommandSpec] {
             usage: "/audit status|trace current|export current <dir>",
             summary_id: MessageId::HelpSummaryAudit,
             group: None,
-            scope: "read-only",
+            scope: "audit",
             state: SlashCommandState::Contextual,
         },
         SlashCommandSpec {

@@ -1,7 +1,8 @@
-//! Types for workspace checkpoint operations (ws-ckpt daemon IPC).
+//! Frozen version 1 compatibility types for workspace checkpoint IPC.
 //!
-//! These types mirror the ws-ckpt daemon protocol exactly.
-//! The enum variant order is critical — bincode serializes enums by index.
+//! These types preserve the historical ws-ckpt prefix captured by the version
+//! 1 wire fixtures. They intentionally do not expose newer daemon extensions.
+//! The enum variant order is critical because bincode serializes by index.
 
 use serde::{Deserialize, Serialize};
 
@@ -9,11 +10,12 @@ use serde::{Deserialize, Serialize};
 pub const DEFAULT_SOCKET_PATH: &str = "/run/ws-ckpt/ws-ckpt.sock";
 
 // ===========================================================================
-// Wire protocol types (must match ws-ckpt-common exactly)
+// Frozen version 1 wire protocol types
 // ===========================================================================
 
-/// Request sent to ws-ckpt daemon over Unix socket (bincode wire format).
-/// CRITICAL: variant order must match ws-ckpt-common/src/lib.rs exactly.
+/// Version 1 request prefix sent over the ws-ckpt Unix socket.
+///
+/// Variant order is immutable because it is part of the bincode wire format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WsCkptRequest {
     Init {
@@ -88,8 +90,9 @@ pub enum PolicyFieldOp<T> {
     Set(T),
 }
 
-/// Response received from ws-ckpt daemon (bincode wire format).
-/// CRITICAL: variant order must match ws-ckpt-common/src/lib.rs exactly.
+/// Version 1 response prefix received over the ws-ckpt Unix socket.
+///
+/// Variant order is immutable because it is part of the bincode wire format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WsCkptResponse {
     InitOk {
@@ -155,8 +158,9 @@ pub enum WsCkptResponse {
     },
 }
 
-/// Error codes from ws-ckpt daemon.
-/// CRITICAL: variant order must match ws-ckpt-common/src/lib.rs exactly.
+/// Error codes retained by the version 1 ws-ckpt contract.
+///
+/// Variant order is immutable because it is part of the bincode wire format.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WsCkptErrorCode {
     WorkspaceNotFound,
@@ -175,7 +179,7 @@ pub enum WsCkptErrorCode {
 }
 
 // ===========================================================================
-// Auxiliary types (match ws-ckpt-common)
+// Auxiliary version 1 wire types
 // ===========================================================================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -392,7 +396,7 @@ pub struct GlobalPolicySnapshot {
 }
 
 // ===========================================================================
-// CLI output types (used for CoshResponse mapping)
+// Legacy command output types retained for downstream deserialization.
 // ===========================================================================
 
 /// Result of creating a checkpoint (CLI display layer).

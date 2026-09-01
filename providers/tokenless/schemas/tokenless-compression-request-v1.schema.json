@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-os.sh/schemas/providers/tokenless/compression-request/v1",
+  "title": "Tokenless CompressionRequest protocol v1",
+  "type": "object",
+  "required": ["protocol_version", "content", "agent_id", "seam"],
+  "properties": {
+    "protocol_version": {
+      "const": 1
+    },
+    "content": {
+      "type": "string"
+    },
+    "agent_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "tool_use_id": {
+      "type": "string"
+    },
+    "tool_name": {
+      "type": "string"
+    },
+    "seam": {
+      "enum": ["before_model", "pre_tool", "post_tool", "proxy"]
+    },
+    "content_origin": {
+      "enum": ["unspecified", "command_output", "file_content", "api_response"]
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "replace_output": {
+          "type": "boolean"
+        },
+        "publish_retrieve_tool": {
+          "type": "boolean"
+        },
+        "replace_with_text": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

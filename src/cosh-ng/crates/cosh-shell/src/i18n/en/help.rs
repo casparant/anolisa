@@ -95,7 +95,9 @@ pub(super) fn message(id: MessageId) -> Option<&'static str> {
         MessageId::SlashInfoAuditActivityBody => {
             "Activity output refs are available with Details actions."
         }
-        MessageId::SlashInfoAuditFooter => "Audit views are read-only; no shell command runs.",
+        MessageId::SlashInfoAuditFooter => {
+            "Queries run no shell command; export writes only the selected incident directory."
+        }
         MessageId::SlashInfoConfigTitle => "Config",
         MessageId::SlashInfoConfigLanguageLine => "language: {effective} source: {source}",
         MessageId::SlashInfoConfigLanguageEffectiveLine => {

@@ -12,7 +12,7 @@ cosh-ng 使用分层的确定性测试。先运行足以证明改动的最小测
 ```bash
 cargo test --locked -p cosh-types
 cargo test --locked -p cosh-platform
-cargo test --locked -p cosh-cli --test cli_integration
+cargo test --locked -p cosh-platform --test cosh_audit_cli
 cargo test --locked -p cosh-core --lib
 cargo test --locked -p cosh-shell --lib
 ```
@@ -21,7 +21,16 @@ cargo test --locked -p cosh-shell --lib
 
 ```bash
 cargo test --locked -p cosh-core session_recovery
+cargo test --locked -p cosh-platform --test cosh_audit_cli status_trace_and_export
 cargo test --locked -p cosh-shell --test logic slash_registry
+```
+
+`cosh_audit_cli` target 用于验证短生命周期的 internal `cosh-audit` utility。Shell
+projection 另有一条跨进程回归测试。
+
+```bash
+cargo test --locked -p cosh-shell --test raw_cli \
+  audit::raw_cli_audit_status_is_bounded_and_restores_prompt -- --exact
 ```
 
 ## Shell 集成测试分层

@@ -12,17 +12,17 @@ pub enum ErrorCode {
     Timeout = 5,
     UnsupportedDistro = 6,
     OutputTooLarge = 7,
-    // Pkg (1xx)
+    // Legacy package-operation codes (1xx); retained for wire compatibility.
     PkgNotFound = 100,
     PkgAlreadyInstalled = 101,
     PkgDependencyConflict = 102,
     PkgBackendError = 103,
-    // Svc (2xx)
+    // Legacy service-operation codes (2xx); retained for wire compatibility.
     SvcNotFound = 200,
     SvcAlreadyRunning = 201,
     SvcStartFailed = 202,
     SvcStopFailed = 203,
-    // Checkpoint (3xx)
+    // Legacy checkpoint-operation codes (3xx); retained for wire compatibility.
     CheckpointDaemonUnavailable = 300,
     CheckpointCreateFailed = 301,
     CheckpointRestoreFailed = 302,
@@ -95,10 +95,10 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip() {
-        let err = CoshError::new(ErrorCode::PkgNotFound, "package missing", "pkg")
-            .with_hint("try 'cosh pkg search nginx'")
+        let err = CoshError::new(ErrorCode::AuditUnavailable, "audit store missing", "audit")
+            .with_hint("check the configured audit state directory")
             .recoverable(true)
-            .with_details(serde_json::json!({"package": "nginx-extra"}));
+            .with_details(serde_json::json!({"source": "user"}));
 
         let json = serde_json::to_string(&err).unwrap();
         let decoded: CoshError = serde_json::from_str(&json).unwrap();
@@ -112,11 +112,11 @@ mod tests {
 
     #[test]
     fn test_display_output() {
-        let err = CoshError::new(ErrorCode::SvcStartFailed, "exit code 1", "svc");
+        let err = CoshError::new(ErrorCode::AuditPolicyError, "invalid policy", "audit");
         let s = format!("{}", err);
-        assert!(s.contains("svc"));
-        assert!(s.contains("202"));
-        assert!(s.contains("exit code 1"));
+        assert!(s.contains("audit"));
+        assert!(s.contains("401"));
+        assert!(s.contains("invalid policy"));
     }
 
     #[test]

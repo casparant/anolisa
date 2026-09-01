@@ -47,6 +47,11 @@ capability can be enabled independently.
 
 ## Components
 
+**AweftOS system boundary:** [the AW workspace](src/aw/) owns the shared
+Provider Contracts and headless capability host. The current PoC can discover,
+admit, and invoke tokenless as a versioned Provider. COSH and third-party Agent
+Environment launch paths are not wired to the Host yet.
+
 <table width="100%">
   <thead>
     <tr>
@@ -56,6 +61,9 @@ capability can be enabled independently.
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td colspan="3"><strong><a href="src/aw/">AweftOS</a></strong><br><sub>Provider Contracts and headless capability host (PoC)</sub></td>
+    </tr>
     <tr>
       <td><strong><a href="https://agentic-os.sh/docs/user-guide/user-entrypoint/cosh-ng/quickstart/">cosh-ng</a></strong><br><sub>Shell copilot</sub></td>
       <td><strong><a href="https://agentic-os.sh/docs/user-guide/token-saving/tokenless/quickstart/">Token-less</a></strong><br><sub>Tool-output compression</sub></td>

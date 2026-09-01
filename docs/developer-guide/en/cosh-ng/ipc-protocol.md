@@ -1,28 +1,20 @@
-# ws-ckpt and Session Management IPC Protocols
+# Compatibility and Session Management IPC Protocols
 
 [中文版](../../zh/cosh-ng/ipc-protocol.md)
 
-## Overview
+## Frozen ws-ckpt compatibility subset
 
-cosh-ng communicates with the ws-ckpt daemon via Unix Domain Socket to manage workspace snapshots.
-Communication uses a frame format of **bincode serialization + 4-byte little-endian length prefix**.
+`cosh-types` retains the pre-guarded-operation ws-ckpt wire subset so persisted
+fixtures and downstream decoders keep the same meaning during migration.
+cosh-ng installs neither a checkpoint command nor a runtime client. This frozen
+subset is not the current ws-ckpt V2 protocol: the daemon has appended guarded
+operation variants that are intentionally absent here. A future Aweft
+State/Recovery Provider must either adopt this subset or introduce an explicit
+version boundary.
 
-## Architecture
-
-```
-cosh-cli / cosh-core          ws-ckpt daemon
-     │                              │
-     │  Unix socket                 │
-     │  /run/ws-ckpt/ws-ckpt.sock   │
-     │─────────────────────────────→│
-     │  [4B LE len][bincode req]    │
-     │                              │
-     │←─────────────────────────────│
-     │  [4B LE len][bincode resp]   │
-```
-
-The client implementation is in `crates/cosh-platform/src/checkpoint.rs` (`CkptClient`),
-and type definitions are in `crates/cosh-types/src/checkpoint.rs`.
+The types in `crates/cosh-types/src/checkpoint.rs` retain the historical Unix
+Domain Socket payload shape: **bincode serialization with a 4-byte
+little-endian length prefix**.
 
 ## Frame Format
 
@@ -35,9 +27,10 @@ Each message consists of two parts:
 └──────────────────┴───────────────────────────────┘
 ```
 
-- Length prefix: little-endian unsigned 32-bit integer representing the byte count of the subsequent bincode payload
-- Maximum response limit: 64 MiB (prevents OOM)
-- Default timeout: 5000ms (configurable via `CkptClient::with_timeout()`)
+- Length prefix: little-endian unsigned 32-bit integer representing the byte count of the subsequent bincode payload.
+- `cosh-types` now owns types only. It has no active frame reader and therefore
+  does not define a response-size limit; a future client must define that
+  transport bound explicitly.
 
 ## Request Types (WsCkptRequest)
 
@@ -47,7 +40,7 @@ bincode serializes enums by variant index (first variant = index 0). **Variant o
 |-------|---------|-------------|
 | 0 | `Init { workspace }` | Initialize a workspace |
 | 1 | `Checkpoint { workspace, id, message, metadata, pin }` | Create a snapshot |
-| 2 | `Rollback { workspace, to }` | Rollback to a specified snapshot |
+| 2 | `Rollback { workspace, to, num_ancestors }` | Roll back to a snapshot or ancestor |
 | 3 | `Delete { workspace, snapshot, force }` | Delete a snapshot |
 | 4 | `List { workspace, format }` | List snapshots |
 | 5 | `Diff { workspace, from, to }` | Diff between two snapshots |
@@ -55,27 +48,37 @@ bincode serializes enums by variant index (first variant = index 0). **Variant o
 | 7 | `Cleanup { workspace, keep }` | Clean up old snapshots |
 | 8 | `Config` | Get daemon configuration |
 | 9 | `ReloadConfig` | Reload configuration |
-| 10 | `Recover { workspace }` | Recover a workspace |
-| 11 | `HealthAdvisory` | Health check |
+| 10 | `ReloadGlobalConfig` | Reload global configuration only |
+| 11 | `ReloadWorkspacePolicy { workspace }` | Reload one workspace policy |
+| 12 | `ConfigOverview` | Get global configuration and workspace override counts |
+| 13 | `Recover { workspace }` | Recover a workspace |
+| 14 | `HealthAdvisory` | Query aggregate health metrics |
+| 15 | `GetWorkspacePolicy { workspace }` | Read one workspace policy |
+| 16 | `ResetWorkspacePolicy { workspace }` | Remove one workspace policy override |
+| 17 | `PatchWorkspacePolicy { workspace, auto_cleanup, auto_cleanup_keep }` | Patch selected workspace policy fields |
+| 18 | `RollbackPreview { workspace, to, num_ancestors }` | Preview a rollback |
 
 ## Response Types (WsCkptResponse)
 
-| Variant | Corresponding Request | Key Fields |
-|---------|----------------------|------------|
-| `InitOk { ws_id }` | Init | Workspace ID |
-| `CheckpointOk { snapshot_id }` | Checkpoint | Snapshot ID |
-| `RollbackOk { from, to }` | Rollback | Rollback source and target |
-| `DeleteOk { target }` | Delete | Deleted snapshot identifier |
-| `Error { code, message }` | Any | Error code + human-readable description |
-| `ListOk { snapshots }` | List | `Vec<SnapshotEntry>` |
-| `DiffOk { changes }` | Diff | `Vec<DiffEntry>` |
-| `StatusOk { report }` | Status | `StatusReport` |
-| `CleanupOk { removed }` | Cleanup | List of removed snapshot IDs |
-| `ConfigOk { config }` | Config | `ConfigReport` |
-| `ReloadConfigOk` | ReloadConfig | No payload |
-| `CheckpointSkipped { reason }` | Checkpoint | Skip reason (e.g., no changes) |
-| `RecoverOk { workspace }` | Recover | Recovered workspace path |
-| `HealthAdvisoryOk { ... }` | HealthAdvisory | Over-limit workspace count, disk usage |
+| Index | Variant | Corresponding request or result |
+|---|---|---|
+| 0 | `InitOk { ws_id }` | Initialized workspace ID |
+| 1 | `CheckpointOk { snapshot_id }` | Created snapshot ID |
+| 2 | `RollbackOk { from, to }` | Rollback source and target |
+| 3 | `DeleteOk { target }` | Deleted snapshot identifier |
+| 4 | `Error { code, message }` | Typed failure for any request |
+| 5 | `ListOk { snapshots }` | `Vec<SnapshotEntry>` |
+| 6 | `DiffOk { changes }` | `Vec<DiffEntry>` |
+| 7 | `StatusOk { report }` | `StatusReport` |
+| 8 | `CleanupOk { removed }` | Removed snapshot IDs |
+| 9 | `ConfigOk { config }` | `ConfigReport` |
+| 10 | `ReloadConfigOk { config }` | Post-reload `ConfigReport` |
+| 11 | `CheckpointSkipped { reason }` | Checkpoint accepted without a new snapshot |
+| 12 | `RecoverOk { workspace }` | Recovered workspace path |
+| 13 | `HealthAdvisoryOk { over_limit_workspace_count, fs_total_bytes, fs_used_bytes }` | Aggregate health metrics |
+| 14 | `WorkspacePolicyOk { ws_id, effective, local, global }` | Workspace policy state |
+| 15 | `ConfigOverviewOk { config, ws_total, ws_with_override }` | Global configuration and override counts |
+| 16 | `RollbackPreviewOk { to, changes }` | Preview target and changes |
 
 ## Error Codes (WsCkptErrorCode)
 
@@ -92,39 +95,16 @@ bincode serializes enums by variant index (first variant = index 0). **Variant o
 | 8 | `SnapshotAlreadyExists` | Snapshot ID conflict |
 | 9 | `WriteLockConflict` | Write lock conflict |
 | 10 | `DiskSpaceInsufficient` | Insufficient disk space |
-
-## Client Usage
-
-```rust
-use cosh_platform::checkpoint::CkptClient;
-
-// Default path /run/ws-ckpt/ws-ckpt.sock
-let client = CkptClient::default_path();
-
-// Or specify path and timeout
-let client = CkptClient::with_timeout("/custom/path.sock", 10000);
-
-// Health check
-if !client.is_available() {
-    eprintln!("ws-ckpt daemon not running");
-}
-
-// Operation examples
-let result = client.create("/home/user/project", "snap-001", Some("initial"), None, false)?;
-let list = client.list(Some("/home/user/project"))?;
-let restored = client.restore("/home/user/project", "snap-001")?;
-```
+| 11 | `CwdOccupied` | Current working directory blocks the operation |
+| 12 | `CwdScanFailed` | Current working directory scan failed |
 
 ## Key Constraints
 
 | Constraint | Description |
 |------------|-------------|
 | Variant order is immutable | bincode serializes enums by index; reordering breaks the wire format |
-| New additions append only | New Request/Response variants can only be added at the end |
-| Types must stay in sync | Definitions in `cosh-types` must exactly match `ws-ckpt-common` |
-| Timeout handling | Client sets read/write timeouts to avoid blocking when daemon is unresponsive |
-| Length limit | Responses exceeding 64 MiB are treated as anomalous; connection is dropped immediately |
-| Socket path | Default `/run/ws-ckpt/ws-ckpt.sock`; overridable via environment variable or CLI argument |
+| Frozen scope is explicit | This subset ends at request index 18 and response index 16; it does not include current ws-ckpt V2 guarded-operation variants |
+| Future adoption is versioned | A State/Recovery Provider must preserve these indexes or introduce a new, explicit contract version |
 
 ## Test Verification
 
@@ -137,9 +117,11 @@ cargo test --locked -p cosh-types -- checkpoint
 # Variant index contract tests
 cargo test --locked -p cosh-types test_request_bincode_variant_index
 
-# CkptClient unit tests (no running daemon required)
-cargo test --locked -p cosh-platform -- checkpoint
 ```
+
+These tests prove the frozen local serialization shape. They do not exercise a
+live ws-ckpt daemon or claim compatibility with the daemon's current V2
+extensions.
 
 ## cosh-core Session Management JSON Protocol
 

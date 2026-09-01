@@ -11,7 +11,7 @@ use the task-based links below for the feature or command you need.
 - [Quick start](QUICKSTART.md) — install cosh-ng and run a first task.
 - [Model providers](core/providers.md) — configure authentication and select a provider.
 - [Configuration](configuration.md) — review files, settings, and precedence.
-- [Supported platforms](supported-distros.md) — check package and service backends.
+- [Supported platforms](supported-distros.md) — check host support and platform limitations.
 
 ## Work in the terminal
 
@@ -19,6 +19,7 @@ use the task-based links below for the feature or command you need.
 |---|---|
 | Use Shell commands and natural-language tasks together | [Interactive terminal](shell/overview.md) |
 | Choose when Agent tool calls require confirmation | [Tool approval](shell/approval.md) |
+| Inspect or export the current session's audit record | [Audit and incident export](shell/audit.md) |
 | Resume or compact a conversation | [Session recovery](shell/session-recovery.md) |
 | Learn slash commands and keyboard behavior | [Interactive behavior](shell/interactive-mode.md) |
 
@@ -30,21 +31,6 @@ use the task-based links below for the feature or command you need.
 | Connect tools from a local process or remote service | [Connect an MCP server](mcp.md) |
 | Bundle Skills, Hooks, settings, and tools | [Extensions](core/extensions.md) |
 | Run checks around Agent lifecycle events | [Hooks](core/hooks.md) |
-
-## Manage system operations
-
-Use read-only commands first. Add `--dry-run` to a supported package or service mutation before making a change; these operations usually need root privileges.
-
-| Goal | Read next |
-|---|---|
-| Find, install, or remove packages | [Package management](cli/package-management.md) |
-| Inspect or change systemd services | [Service management](cli/service-management.md) |
-| Use the existing `cosh-cli` workspace checkpoint commands | [Workspace checkpoints](cli/checkpoint.md) |
-| Check policy decisions and audit events | [Security audit](cli/audit.md) |
-
-The workspace checkpoint page describes the existing `cosh-cli` system-operations
-path. It is separate from the task-only Gateway profile; the packaged Gateway
-does not depend on `ws-ckpt` or expose checkpoint operations.
 
 ## Integrate and automate
 
@@ -135,7 +121,5 @@ remaining arguments unchanged.
   listens only on its local Unix socket. Repository Fake-Adapter coverage is
   automated; real Codex/Claude Adapter checks and manual Terminal acceptance
   remain separate installation-specific gates.
-- [Structured OS CLI](cli/overview.md) — command domains and safe automation patterns.
-- [Output format](output-format.md) — the `CoshResponse<T>` success and error envelope.
 - [Headless mode](core/headless-mode.md) — JSONL integration for other frontends.
 - [Agent tools](core/tools.md) — tool boundaries and approval behavior.

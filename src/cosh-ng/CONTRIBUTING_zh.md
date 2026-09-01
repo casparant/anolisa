@@ -26,7 +26,7 @@ cargo build --workspace
 cargo build --workspace --release
 
 # 单独构建某个二进制
-cargo build --bin cosh-cli
+cargo build --bin cosh-audit  # Internal single-purpose audit utility
 cargo build --bin cosh-core
 cargo build --bin cosh-shell
 ```
@@ -38,7 +38,7 @@ cargo build --bin cosh-shell
 ```bash
 # 普通代码改动，格式化并运行最接近的测试
 cargo fmt --all -- --check
-cargo test --locked -p cosh-platform test_detect  # 示例
+cargo test --locked -p cosh-platform --test cosh_audit_cli
 
 # 修改 public API 或 rustdoc 时
 cargo doc --workspace --no-deps
@@ -65,14 +65,17 @@ cosh-ng/
 ├── Cargo.toml              # workspace 配置
 ├── rust-toolchain.toml     # stable + rustfmt + clippy
 └── crates/
-    ├── cosh-types/         # 纯类型，零副作用
-    ├── cosh-platform/      # 平台抽象（发行版检测、后端路由）
-    ├── cosh-cli/           # CLI 入口
+    ├── cosh-types/         # 纯类型；包含保留的 ws-ckpt wire contract
+    ├── cosh-platform/      # 审计存储、internal utility 和进程支持
     ├── cosh-core/          # Agent 核心
     ├── cosh-shell/         # 交互终端
     ├── cosh-gateway-contracts/ # 无副作用的 Gateway contract
     └── cosh-gateway/       # Gateway control plane library 基础
 ```
+
+工作空间包含六个 crate、三个主要 runtime 进程和一个短生命周期的 internal
+`cosh-audit` utility。COSH 仅保留 ws-ckpt wire contract；checkpoint 执行将由未来的
+State/Recovery Provider 拥有，不属于 `cosh-platform`。
 
 ## 依赖管理
 

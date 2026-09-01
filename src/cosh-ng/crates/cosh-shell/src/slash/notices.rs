@@ -312,9 +312,9 @@ mod tests {
             "{output}"
         );
         assert!(
-            output.contains("审计视图是只读的；不会运行 shell 命令。"),
+            output.contains("查询不运行 shell 命令；导出只写入选定的事故目录。"),
             "{output}"
         );
-        assert!(!output.contains("Audit views are read-only"), "{output}");
+        assert!(!output.contains("Queries run no shell command"), "{output}");
     }
 }

@@ -26,7 +26,7 @@ cargo build --workspace
 cargo build --workspace --release
 
 # Build a specific binary
-cargo build --bin cosh-cli
+cargo build --bin cosh-audit  # Internal single-purpose audit utility
 cargo build --bin cosh-core
 cargo build --bin cosh-shell
 ```
@@ -38,7 +38,7 @@ Use checks proportional to the change:
 ```bash
 # Ordinary code changes: format and run the closest tests
 cargo fmt --all -- --check
-cargo test --locked -p cosh-platform test_detect  # example
+cargo test --locked -p cosh-platform --test cosh_audit_cli
 
 # Public API or rustdoc changes
 cargo doc --workspace --no-deps
@@ -68,14 +68,18 @@ cosh-ng/
 ├── Cargo.toml              # workspace configuration
 ├── rust-toolchain.toml     # stable + rustfmt + clippy
 └── crates/
-    ├── cosh-types/         # Pure types, zero side effects
-    ├── cosh-platform/      # Platform abstraction (distro detection, backend routing)
-    ├── cosh-cli/           # CLI entry
+    ├── cosh-types/         # Pure types; includes retained ws-ckpt wire contract
+    ├── cosh-platform/      # Audit store, internal utility, process support
     ├── cosh-core/          # Agent core
     ├── cosh-shell/         # Interactive terminal
     ├── cosh-gateway-contracts/ # Side-effect-free Gateway contracts
     └── cosh-gateway/       # Gateway control-plane library foundations
 ```
+
+The workspace has six crates, three main runtime processes, and one short-lived
+internal `cosh-audit` utility. COSH retains only the ws-ckpt wire contract; a
+future State/Recovery Provider will own checkpoint execution rather than
+`cosh-platform`.
 
 ## Dependency Management
 

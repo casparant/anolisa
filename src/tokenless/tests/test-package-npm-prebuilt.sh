@@ -121,6 +121,7 @@ check_selector aarch64-apple-darwin 'darwin-arm64'
 
 node "$ROOT/npm/scripts/package-npm.js" --all
 test ! -e "$ROOT/npm/dist/tokenless/adapters/tokenless/agentscope"
+test ! -e "$ROOT/npm/dist/tokenless/provider"
 
 for target in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
     package="$ROOT/npm/dist/tokenless-$target"

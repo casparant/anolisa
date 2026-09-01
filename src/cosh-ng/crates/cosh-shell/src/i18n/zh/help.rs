@@ -87,7 +87,9 @@ pub(super) fn message(id: MessageId) -> Option<&'static str> {
         MessageId::SlashInfoAuditTitle => "审计",
         MessageId::SlashInfoAuditApprovalsBody => "审批决策可通过 Details 操作查看。",
         MessageId::SlashInfoAuditActivityBody => "活动 output ref 可通过 Details 操作查看。",
-        MessageId::SlashInfoAuditFooter => "审计视图是只读的；不会运行 shell 命令。",
+        MessageId::SlashInfoAuditFooter => {
+            "查询不运行 shell 命令；导出只写入选定的事故目录。"
+        }
         MessageId::SlashInfoConfigTitle => "配置",
         MessageId::SlashInfoConfigLanguageLine => "语言: {effective} 来源: {source}",
         MessageId::SlashInfoConfigLanguageEffectiveLine => {

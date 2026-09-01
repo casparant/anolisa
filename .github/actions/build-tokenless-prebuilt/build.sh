@@ -118,16 +118,40 @@ WORKTREE_READY=1
 git -C "$SOURCE_REPO" worktree lock --reason 'Tokenless prebuilt package build' \
     "$FIXED_WORKTREE"
 
-COMPONENT_ROOT="$FIXED_WORKTREE/src/tokenless"
+COMPONENT_REL="src/tokenless"
+COMPONENT_ROOT="$FIXED_WORKTREE/$COMPONENT_REL"
+[ -d "$COMPONENT_ROOT" ] || die "Tokenless source is missing from $COMPONENT_REL"
+
+# Resolve Provider metadata exclusively from the selected commit. Tags that
+# predate the Provider contract intentionally build without one rather than
+# borrowing metadata from the caller's current checkout.
+TOKENLESS_PROVIDER_DIR="$FIXED_WORKTREE/providers/tokenless"
+if [ -e "$TOKENLESS_PROVIDER_DIR" ]; then
+    [ -f "$TOKENLESS_PROVIDER_DIR/provider.toml" ] || \
+        die "Tokenless Provider manifest is missing: $TOKENLESS_PROVIDER_DIR/provider.toml"
+    [ -d "$TOKENLESS_PROVIDER_DIR/schemas" ] || \
+        die "Tokenless Provider schemas are missing: $TOKENLESS_PROVIDER_DIR/schemas"
+else
+    TOKENLESS_PROVIDER_DIR=""
+fi
 (
     cd "$COMPONENT_ROOT"
     make -B stamp-adapter-templates stamp-python-packages
 )
 CONTRACT="$COMPONENT_ROOT/.anolisa/component.toml"
-SOURCE_VERSION="$(
-    python3 "$COMPONENT_ROOT/packaging/raw/verify-release.py" \
-        "$COMPONENT_ROOT" "$CONTRACT"
-)"
+if [ -n "$TOKENLESS_PROVIDER_DIR" ]; then
+    SOURCE_VERSION="$(
+        python3 "$COMPONENT_ROOT/packaging/raw/verify-release.py" \
+            "$COMPONENT_ROOT" "$CONTRACT" "$TOKENLESS_PROVIDER_DIR"
+    )"
+else
+    # Historical release scripts predate the Provider package and accept only
+    # the source and component-contract arguments.
+    SOURCE_VERSION="$(
+        python3 "$COMPONENT_ROOT/packaging/raw/verify-release.py" \
+            "$COMPONENT_ROOT" "$CONTRACT"
+    )"
+fi
 [ "$VERSION" = "$SOURCE_VERSION" ] || \
     die "requested version $VERSION does not match Tokenless $SOURCE_VERSION"
 (
@@ -172,14 +196,14 @@ done
         -- "$COMMON_DIR/cross-profile.sh" "$PROFILE" build \
         --release \
         --locked \
-        --manifest-path src/tokenless/Cargo.toml
+        --manifest-path "$COMPONENT_REL/Cargo.toml"
     python3 "$COMMON_DIR/reproducible-build.py" \
         --source-root "$COMPONENT_ROOT" \
         --source-date-epoch "$SOURCE_DATE_EPOCH" \
         -- "$COMMON_DIR/cross-profile.sh" "$PROFILE" build \
         --release \
         --locked \
-        --manifest-path src/tokenless/third_party/rtk/Cargo.toml
+        --manifest-path "$COMPONENT_REL/third_party/rtk/Cargo.toml"
 )
 
 HOST_CARGO="$(command -v cargo)"
@@ -251,6 +275,7 @@ for binary in tokenless rtk; do
     fi
 done
 
+TOKENLESS_PROVIDER_DIR="$TOKENLESS_PROVIDER_DIR" \
 TOKENLESS_SOURCE_DIR="$COMPONENT_ROOT" \
 RAW_CONTRACT="$CONTRACT" \
 BIN_DIR="$BIN_DIR" \

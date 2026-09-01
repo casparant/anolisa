@@ -37,18 +37,19 @@ Alibaba Cloud Linux 4 用户也可以直接安装 RPM。
 sudo yum install cosh-ng
 ```
 
-验证两个用户命令：
+验证公开入口已进入 `PATH`：
 
 ```bash
-cosh --version
-cosh-cli --version
+command -v cosh
 ```
 
-修改软件包和服务通常需要 root 权限；工作区快照命令还需要运行中的 `ws-ckpt` 守护进程。
+由 ANOLISA 管理安装时，可以用 `anolisa status cosh-ng` 查看已安装的组件版本。
+`cosh` launcher 会有意保留 Shell invocation 语义，因此 `cosh --version` 属于选中的
+bash 或 zsh。
 
 当前发布的 Linux raw 契约无法覆盖所有已路由的发行版，因此不作为推荐的
-Linux 安装路径。raw 包支持 macOS arm64，但依赖 Linux 的软件包和服务操作
-不可用。源码构建仅供贡献者使用，请参阅
+Linux 安装路径。raw 包支持 macOS arm64，但依赖 Linux 的能力不可用。
+源码构建仅供贡献者使用，请参阅
 [开发者入门指南](../../../../developer-guide/zh/cosh-ng/getting-started.md)。
 
 ## 2. 启动终端
@@ -87,11 +88,14 @@ Enhanced Assisted 中的常用起始命令如下。
 /auth
 /help
 /status
+/audit status
 /mode approval recommend
 /session list
 ```
 
-`/auth` 用于选择或更新模型提供商认证，`/help` 查看斜杠命令，`/status` 查看运行时和会话状态，`/mode approval recommend` 在每次 Agent 工具调用前请求确认，`/session list` 列出当前工作区可恢复的会话。
+`/auth` 用于选择或更新模型提供商认证，`/help` 查看公开斜杠命令，`/status`
+查看运行时和会话状态，`/audit status` 检查审计存储，`/mode approval recommend`
+在每次 Agent 工具调用前请求确认，`/session list` 列出当前工作区可恢复的会话。
 
 使用 `/session list --all` 可同时列出其他工作区创建的会话；恢复会话时，请先进入创建它的工作区。
 
@@ -111,10 +115,10 @@ Enhanced Assisted 中的常用起始命令如下。
 | 目标 | 继续阅读 |
 |---|---|
 | 控制审批和安全策略 | [工具审批](shell/approval.md) |
+| 查看或导出审计记录 | [审计与事故导出](shell/audit.md) |
 | 恢复或压缩会话 | [会话恢复](shell/session-recovery.md) |
 | 选择模型并完成认证 | [模型提供商](core/providers.md) |
 | 接入其他服务提供的工具 | [接入 MCP 服务](mcp.md) |
-| 自动处理软件包、服务、快照或审计工作 | [结构化 OS CLI](cli/overview.md) |
 | 集成其他前端 | [无界面模式](core/headless-mode.md) |
 
 [完整用户手册](README.md)按任务整理了其余内容。

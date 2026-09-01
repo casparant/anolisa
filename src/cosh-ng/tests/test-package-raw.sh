@@ -87,7 +87,7 @@ if os_name == "linux":
 else:
     cpu = {"aarch64": 0x0100000C}[arch]
     content = struct.pack("<IiiIIIII", 0xFEEDFACF, cpu, 0, 2, 0, 0, 0, 0)
-for name in ("cosh-cli", "cosh-core", "cosh-gateway", "cosh-shell"):
+for name in ("cosh-audit", "cosh-core", "cosh-gateway", "cosh-shell"):
     (pathlib.Path(destination) / name).write_bytes(content)
 digest = hashlib.sha256(content).hexdigest()
 metadata = [
@@ -99,7 +99,7 @@ metadata = [
 ]
 metadata.extend(
     f'{name} = "{digest}"'
-    for name in ("cosh-cli", "cosh-core", "cosh-gateway", "cosh-shell")
+    for name in ("cosh-audit", "cosh-core", "cosh-gateway", "cosh-shell")
 )
 (pathlib.Path(destination) / "cosh-ng-build.toml").write_text(
     "\n".join(metadata) + "\n",
@@ -107,7 +107,7 @@ metadata.extend(
 )
 PY
     chmod 0755 \
-        "$destination/cosh-cli" \
+        "$destination/cosh-audit" \
         "$destination/cosh-core" \
         "$destination/cosh-gateway" \
         "$destination/cosh-shell"
@@ -153,16 +153,16 @@ if run_pack macos x64 "$LINUX_X64" "$TMP/unsupported-macos-x64" 2>/dev/null; the
     exit 1
 fi
 python3 "$ROOT/packaging/raw/verify-binaries.py" \
-    --os linux --arch aarch64 "$LINUX_ARM64/cosh-cli" >/dev/null
+    --os linux --arch aarch64 "$LINUX_ARM64/cosh-shell" >/dev/null
 python3 "$ROOT/packaging/raw/verify-binaries.py" \
-    --os macos --arch aarch64 "$MACOS_ARM64/cosh-cli" >/dev/null
+    --os macos --arch aarch64 "$MACOS_ARM64/cosh-shell" >/dev/null
 if python3 "$ROOT/packaging/raw/verify-binaries.py" \
-    --os linux --arch aarch64 "$LINUX_X64/cosh-cli" >/dev/null 2>&1; then
+    --os linux --arch aarch64 "$LINUX_X64/cosh-shell" >/dev/null 2>&1; then
     echo "ERROR: mislabeled x86_64 binary unexpectedly passed as aarch64" >&2
     exit 1
 fi
 if python3 "$ROOT/packaging/raw/verify-binaries.py" \
-    --os macos --arch aarch64 "$LINUX_ARM64/cosh-cli" >/dev/null 2>&1; then
+    --os macos --arch aarch64 "$LINUX_ARM64/cosh-shell" >/dev/null 2>&1; then
     echo "ERROR: ELF binary unexpectedly passed as Mach-O" >&2
     exit 1
 fi
@@ -175,7 +175,7 @@ if python3 "$ROOT/packaging/raw/verify-binaries.py" \
     --arch aarch64 \
     --metadata "$EXTRA_BUILD" \
     --component-version "$VERSION" \
-    "$LINUX_ARM64/cosh-cli" \
+    "$LINUX_ARM64/cosh-audit" \
     "$LINUX_ARM64/cosh-core" \
     "$LINUX_ARM64/cosh-gateway" \
     "$LINUX_ARM64/cosh-shell" >/dev/null 2>&1; then
@@ -210,7 +210,7 @@ test_native_without_metadata() {
     install -p -m 0644 "$ROOT/README.md" "$native_source/README.md"
     install -p -m 0644 "$ROOT/packaging/systemd/cosh-gateway@.service.in" \
         "$native_source/packaging/systemd/cosh-gateway@.service.in"
-    for binary in cosh-cli cosh-core cosh-gateway cosh-shell; do
+    for binary in cosh-audit cosh-core cosh-gateway cosh-shell; do
         install -p -m 0755 "$python_bin" "$native_bins/$binary"
     done
 
@@ -286,7 +286,8 @@ EXTRACTED="$TMP/extracted"
 install -d -m 0755 "$EXTRACTED"
 tar --same-permissions -xzf "$OUT_ONE/$X64_ARTIFACT" -C "$EXTRACTED"
 cmp "$LINUX_CONTRACT" "$EXTRACTED/.anolisa/component.toml"
-cmp "$LINUX_X64/cosh-cli" "$EXTRACTED/bin/cosh-cli"
+test ! -e "$EXTRACTED/bin/cosh-cli"
+cmp "$LINUX_X64/cosh-audit" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-audit"
 cmp "$LINUX_X64/cosh-core" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-core"
 cmp "$LINUX_X64/cosh-gateway" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-gateway"
 cmp "$LINUX_X64/cosh-shell" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-shell"
@@ -314,6 +315,7 @@ file_mode() {
     stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
 }
 test "$(file_mode "$EXTRACTED/bin/cosh")" = 755
+test "$(file_mode "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-audit")" = 755
 test "$(file_mode "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-gateway")" = 755
 test "$(file_mode "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-shell")" = 755
 test "$(file_mode "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in")" = 644

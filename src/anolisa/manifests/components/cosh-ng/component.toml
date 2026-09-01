@@ -41,12 +41,6 @@ target = "{datadir}/components/cosh-ng/component.toml"
 mode = "0644"
 
 [[component.layout.files]]
-source = "bin/cosh-cli"
-target = "{bindir}/cosh-cli"
-mode = "0755"
-type = "executable"
-
-[[component.layout.files]]
 source = "bin/cosh"
 target = "{bindir}/cosh"
 mode = "0755"
@@ -55,6 +49,12 @@ type = "executable"
 [[component.layout.files]]
 source = "bin/cosh-switch"
 target = "{bindir}/cosh-switch"
+mode = "0755"
+type = "executable"
+
+[[component.layout.files]]
+source = "libexec/anolisa/cosh-ng/cosh-audit"
+target = "{libexecdir}/cosh-ng/cosh-audit"
 mode = "0755"
 type = "executable"
 
@@ -106,5 +106,5 @@ strict = false
 
 [component.health_check]
 type = "binary_version"
-binary = "{bindir}/cosh-cli"
+binary = "{libexecdir}/cosh-ng/cosh-shell"
 timeout_secs = 5

@@ -10,6 +10,12 @@ failure diagnostics are independent and remain active where the host supports ad
 > package layout and post-publication workflow; its platform rows are build
 > targets, not a list of packages that users can install today.
 
+> **AW Provider Host integration:** npm remains a binary-and-Agent-adapter delivery
+> channel. It does not install the declarative package from
+> `providers/tokenless/` into `/usr/share/aw/providers/tokenless`. Use the raw,
+> RPM, or `make install` distribution when Tokenless must be discoverable by an
+> AW Provider Host.
+
 ## Install after publication
 
 ```bash
