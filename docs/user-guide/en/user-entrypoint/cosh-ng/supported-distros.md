@@ -2,33 +2,24 @@
 
 [中文版](../../../zh/user-entrypoint/cosh-ng/supported-distros.md)
 
-cosh-ng can run the interactive terminal on Linux and macOS. Package and service commands use the host's native management tools.
+cosh-ng runs its interactive terminal on Linux and macOS. Linux provides the
+complete runtime environment; macOS supports the interactive experience with
+the limitations stated below.
 
-| Platform | Interactive shell | Package commands | Service commands |
-|---|---|---|---|
-| Linux | Bash or zsh | dnf, apt, or zypper | systemd |
-| macOS | Bash or zsh | Homebrew | Not available |
+| Platform | Interactive shell | Support level |
+|---|---|---|
+| Linux | Bash or zsh | Full cosh-ng functionality |
+| macOS arm64 | Bash or zsh | Limited functionality; Linux-only capabilities are unavailable |
 
 ## Linux distributions
 
-These `/etc/os-release` IDs have built-in routing:
+Alibaba Cloud Linux 4 has the recommended RPM installation path. Other Linux
+distributions can build cosh-ng from source, but the published raw package is
+not currently a portable contract across every distribution. See the
+[quick start](QUICKSTART.md) for the supported installation paths.
 
-| ID | Package manager |
-|---|---|
-| `alinux`, `centos`, `fedora` | dnf |
-| `ubuntu`, `debian` | apt |
-| `opensuse-leap`, `opensuse-tumbleweed`, `sles` | zypper |
+## Before installation
 
-An unlisted distribution can use a package family when its `ID_LIKE` contains one of these values:
-
-| `ID_LIKE` family | Package manager |
-|---|---|
-| `alinux`, `centos`, `fedora`, `rhel` | dnf |
-| `debian`, `ubuntu` | apt |
-| `opensuse`, `suse` | zypper |
-
-Family routing means the package backend is compatible; it is not certification of every derivative or release. An unknown package family returns a structured `UnsupportedDistro` error.
-
-## Before changing the host
-
-Run `anolisa env` before installation. On the target host, use read-only `cosh-cli` commands and the action's `--dry-run` option to verify routing before package or service mutations. Service commands require Linux with systemd; macOS users can use package commands through Homebrew but not `cosh-cli svc`.
+Run `anolisa env` on the target host to inspect the detected platform and
+available backends. After installation, verify the installed component with
+`cosh-shell --version` before starting `cosh` in a workspace.

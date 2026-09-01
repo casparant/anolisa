@@ -54,7 +54,8 @@
 | `/skills [list\|detail\|enable\|disable]` | 管理Skills。 |
 | `/mcp [list\|connect\|inspect\|refresh\|disconnect\|login\|logout]` | 管理MCP服务器。 |
 
-`/details`、`/audit`和`/send-to-shell`等命令只有在当前卡片或任务提供所需上下文时才会出现。`/mcp login`需要按MCP指南说明在Shell中完成OAuth流程。
+`/details` 和 `/send-to-shell` 等命令只有在当前卡片或任务提供所需上下文时才会出现。
+`/mcp login` 需要按 MCP 指南说明在 Shell 中完成 OAuth 流程。
 
 ## 编辑一次性 Agent 请求
 

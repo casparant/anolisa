@@ -527,7 +527,11 @@ fn run_command(command: Commands) -> Result<(), (String, i32)> {
             let config = TokenlessConfig::load();
             let database_paths = DatabasePathResolver::default();
             let compression_on = config.is_compression_enabled();
-            let stash = if !compression_on {
+            // A Provider prepare call that cannot publish a retrieval tool is
+            // deliberately stateless: do not even open SQLite, because doing
+            // so would turn a pure Advise operation into a hidden side effect.
+            let stash_enabled = request.capabilities.publish_retrieve_tool;
+            let stash = if !compression_on || !stash_enabled {
                 None
             } else {
                 open_stash_store_with(&database_paths, stash_db.as_deref())
@@ -536,7 +540,7 @@ fn run_command(command: Commands) -> Result<(), (String, i32)> {
                 &request,
                 &EntryOptions {
                     compression_enabled: compression_on,
-                    stash_enabled: true,
+                    stash_enabled,
                 },
                 stash.as_ref(),
             );

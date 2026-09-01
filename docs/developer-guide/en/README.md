@@ -12,8 +12,6 @@ Use this guide when you need to understand, extend, test, or contribute to ANOLI
 
 - [Getting started](./cosh-ng/getting-started.md)
 - [Architecture](./cosh-ng/architecture.md)
-- [Adding commands](./cosh-ng/adding-commands.md)
-- [Adding distributions](./cosh-ng/adding-distros.md)
 - [IPC protocol](./cosh-ng/ipc-protocol.md)
 - [Security heuristics](./cosh-ng/security-heuristics.md)
 - [Testing](./cosh-ng/testing.md)

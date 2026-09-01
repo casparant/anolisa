@@ -154,14 +154,6 @@ pub(super) fn render_info<W: Write>(
 ) -> std::io::Result<()> {
     let i18n = state.i18n();
     let (title, body, footer) = match command {
-        SlashInfoCommand::Audit => (
-            i18n.t(MessageId::SlashInfoAuditTitle).to_string(),
-            vec![
-                i18n.t(MessageId::SlashInfoAuditApprovalsBody).to_string(),
-                i18n.t(MessageId::SlashInfoAuditActivityBody).to_string(),
-            ],
-            i18n.t(MessageId::SlashInfoAuditFooter).to_string(),
-        ),
         SlashInfoCommand::Config => (
             i18n.t(MessageId::SlashInfoConfigTitle).to_string(),
             render_config_body(state),
@@ -296,25 +288,5 @@ mod tests {
         );
         assert!(!output.contains("debug activity:"), "{output}");
         assert!(!output.contains("render fallback:"), "{output}");
-    }
-
-    #[test]
-    fn slash_info_audit_uses_zh_catalog_text() {
-        let state = zh_state();
-        let mut output = Vec::new();
-
-        render_info(SlashInfoCommand::Audit, &state, &mut output).expect("render audit info");
-
-        let output = String::from_utf8(output).expect("utf8 output");
-        assert!(output.contains("审计"), "{output}");
-        assert!(
-            output.contains("审批决策可通过 Details 操作查看。"),
-            "{output}"
-        );
-        assert!(
-            output.contains("审计视图是只读的；不会运行 shell 命令。"),
-            "{output}"
-        );
-        assert!(!output.contains("Audit views are read-only"), "{output}");
     }
 }

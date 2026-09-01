@@ -19,21 +19,21 @@ rustup show
 cargo build --workspace
 ```
 
-Do not install packages, change services, or run mutating `cosh-cli` commands on
-the development host. Use unit tests, mocks, `--dry-run`, or an explicitly
-isolated environment.
+Do not let tests mutate packages, services, or other host state. Use unit tests,
+mocks, or an explicitly isolated environment.
 
 ## 2. Understand the runtime boundary
 
-There are five crates but three user-facing processes:
+There are six crates and three installed processes:
 
 | Area | Start reading | Boundary |
 |---|---|---|
-| Structured OS operations | `crates/cosh-cli/src/main.rs` | Clap to `cosh-platform` to JSON envelope |
 | Agent runtime | `crates/cosh-core/src/main.rs` | JSONL/registry input to provider, tools, and session state |
 | Interactive terminal | `crates/cosh-shell/src/main.rs` | terminal input, PTY events, cards, and a child cosh-core process |
-| Shared platform code | `crates/cosh-platform/src/lib.rs` | distro, package, service, audit, checkpoint adapters |
-| Wire and output types | `crates/cosh-types/src/lib.rs` | side-effect-free contracts |
+| Local Task gateway | `crates/cosh-gateway/src/main.rs` | local Task API, durable state, and ACP adapter entrypoints |
+| Shared platform code | `crates/cosh-platform/src/lib.rs` | audit persistence and process-group support |
+| Shared types | `crates/cosh-types/src/lib.rs` | side-effect-free audit, error, and compatibility types |
+| Gateway contracts | `crates/cosh-gateway-contracts/src/lib.rs` | side-effect-free Task, Runtime, capability, identity, and error contracts |
 
 `cosh-shell` does not link to the other workspace crates. It launches
 `cosh-core` and communicates over the versioned JSONL/control protocol. That
@@ -66,10 +66,9 @@ crates/cosh-shell/scripts/check-layout.sh
 ## 4. Use the narrowest feedback loop
 
 ```bash
-# Shared types/platform/CLI
+# Shared types and platform support
 cargo test --locked -p cosh-types
 cargo test --locked -p cosh-platform
-cargo test --locked -p cosh-cli --test cli_integration
 
 # Core
 cargo test --locked -p cosh-core --lib
@@ -108,8 +107,9 @@ See [Testing](testing.md) for target selection and optional gate profiles.
 
 ## 6. Keep contracts explicit
 
-- Every `cosh-cli` result uses `CoshResponse<T>` and a stable exit status.
-- Never reorder ws-ckpt protocol enum variants without coordinating the daemon.
+- Never reorder the retained ws-ckpt protocol enum variants without coordinating
+  the daemon; their indexes remain a compatibility contract even though COSH no
+  longer exposes a checkpoint command.
 - A cosh-core protocol change must update protocol types, both producer and
   consumer, fixtures, and protocol tests together.
 - Security allow rules must tokenize first, reject shell metacharacters, and
@@ -121,8 +121,6 @@ See [Testing](testing.md) for target selection and optional gate profiles.
 ## Where to go next
 
 - [Testing strategy](testing.md)
-- [Adding a CLI command](adding-commands.md)
-- [Adding a distribution](adding-distros.md)
 - [IPC protocols](ipc-protocol.md)
 - [Security heuristics](security-heuristics.md)
 - [Component contribution rules](../../../../src/cosh-ng/CONTRIBUTING.md)

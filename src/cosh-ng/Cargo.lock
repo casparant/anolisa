@@ -390,6 +390,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "aw-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -663,27 +673,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
-name = "cosh-cli"
-version = "0.22.2"
-dependencies = [
- "chrono",
- "clap",
- "cosh-platform",
- "cosh-types",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "cosh-core"
 version = "0.22.2"
 dependencies = [
  "aes-gcm",
  "async-trait",
  "atty",
+ "aw-contracts",
  "chrono",
  "clap",
  "cosh-platform",
@@ -744,18 +740,17 @@ dependencies = [
 name = "cosh-gateway-contracts"
 version = "0.22.2"
 dependencies = [
+ "aw-contracts",
  "serde",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
- "uuid",
 ]
 
 [[package]]
 name = "cosh-platform"
 version = "0.22.2"
 dependencies = [
- "bincode",
  "chrono",
  "cosh-types",
  "nix 0.29.0",

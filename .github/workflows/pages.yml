@@ -18,6 +18,7 @@ on:
       - 'src/anolisa/manifests/**'
       - 'src/anolisa/crates/anolisa-cli/src/commands.rs'
       - 'src/tokenless/crates/tokenless-cli/src/main.rs'
+      - 'providers/tokenless/**'
   pull_request:
     branches: [main]
     paths:
@@ -35,6 +36,7 @@ on:
       - 'src/anolisa/manifests/**'
       - 'src/anolisa/crates/anolisa-cli/src/commands.rs'
       - 'src/tokenless/crates/tokenless-cli/src/main.rs'
+      - 'providers/tokenless/**'
   workflow_dispatch:
 
 permissions:

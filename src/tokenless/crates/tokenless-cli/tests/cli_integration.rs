@@ -1865,6 +1865,50 @@ fn compress_applies_and_reports_the_protocol_response() {
 }
 
 #[test]
+fn compress_without_retrieval_capability_creates_no_stash_database() {
+    let fixture = match TempDataDir::new() {
+        Some(fixture) => fixture,
+        None => return,
+    };
+    let content = debug_laden_content();
+    let request = serde_json::json!({
+        "protocol_version": 1,
+        "content": content,
+        "agent_id": "aw-provider",
+        "session_id": "stateless-prepare",
+        "tool_name": "WebFetch",
+        "seam": "post_tool",
+        "content_origin": "api_response",
+        "capabilities": {
+            "replace_output": true,
+            "publish_retrieve_tool": false,
+            "replace_with_text": false,
+        },
+    })
+    .to_string();
+
+    let output = spawn_with_stdin(
+        fixture
+            .command()
+            .env("TOKENLESS_COMPRESSION_ENABLED", "1")
+            .env("TOKENLESS_STATS_ENABLED", "0")
+            .env("TOKENLESS_SLS_ENABLED", "0"),
+        &["compress"],
+        &request,
+    );
+
+    assert!(
+        output.status.success(),
+        "compress failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !fixture.data_dir.join("stash.db").exists(),
+        "stateless Provider prepare must not create stash.db"
+    );
+}
+
+#[test]
 fn compress_dry_run_emits_the_original_and_measures() {
     let fixture = match TempDataDir::new() {
         Some(fixture) => fixture,

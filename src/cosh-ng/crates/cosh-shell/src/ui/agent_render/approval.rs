@@ -846,7 +846,7 @@ pub(super) fn audit_ref_rows(audit_ref: Option<&str>, content_width: usize) -> V
     wrapped_preview_rows(&text, content_width, max_rows)
 }
 
-/// Field name is a stable technical identifier shared with `/audit`; never localize it.
+/// Field name is a stable technical identifier shared with persisted audit records; never localize it.
 pub(super) fn audit_ref_line(audit_ref: &str) -> String {
     format!("audit_ref: {audit_ref}")
 }

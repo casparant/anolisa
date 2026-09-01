@@ -55,7 +55,9 @@ sessions, or use the environment variable for one launch.
 | `/skills [list\|detail\|enable\|disable]` | Manage Skills. |
 | `/mcp [list\|connect\|inspect\|refresh\|disconnect\|login\|logout]` | Manage MCP servers. |
 
-Commands such as `/details`, `/audit`, and `/send-to-shell` appear only when the current card or run provides their required context. `/mcp login` requires the shell-based OAuth flow described by the MCP guide.
+Commands such as `/details` and `/send-to-shell` appear only when the current
+card or run provides their required context. `/mcp login` requires the
+shell-based OAuth flow described by the MCP guide.
 
 ## Compose a one-shot Agent request
 

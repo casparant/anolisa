@@ -12,7 +12,6 @@ cosh-ng 使用分层的确定性测试。先运行足以证明改动的最小测
 ```bash
 cargo test --locked -p cosh-types
 cargo test --locked -p cosh-platform
-cargo test --locked -p cosh-cli --test cli_integration
 cargo test --locked -p cosh-core --lib
 cargo test --locked -p cosh-shell --lib
 ```

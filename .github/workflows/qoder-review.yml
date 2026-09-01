@@ -833,7 +833,7 @@ jobs:
               [[ "$component" == "general" ]] && component="docs"
             fi
             if grep -qE '^src/anolisa/' "$files_file"; then [[ "$component" == "general" ]] && component="anolisa"; fi
-            if grep -qE '^src/tokenless/' "$files_file"; then [[ "$component" == "general" ]] && component="tokenless"; fi
+            if grep -qE '^(src|providers)/tokenless/' "$files_file"; then [[ "$component" == "general" ]] && component="tokenless"; fi
             if grep -qE '^src/agent-sec-core/' "$files_file"; then [[ "$component" == "general" ]] && component="agent-sec-core"; fi
             if grep -qE '^src/agentsight/' "$files_file"; then [[ "$component" == "general" ]] && component="agentsight"; fi
             if grep -qE '^src/agent-memory/' "$files_file"; then [[ "$component" == "general" ]] && component="agent-memory"; fi

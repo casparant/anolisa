@@ -6,6 +6,9 @@
 
 ## [未发布]
 
+### 移除
+- **BREAKING**：移除独立的 `cosh-cli` 二进制及其 `pkg`、`svc`、`checkpoint`、`audit` 命令域，同时移除 Shell 中的 contextual `/audit` 命令。COSH 不再暴露缺少统一原语的系统命令封装集合；`cosh-core` 与 `cosh-shell` 的审计记录能力保持不变。
+
 ## [0.22.2] — 2026-08-28
 
 ### 修复

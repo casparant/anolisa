@@ -6,11 +6,10 @@
 //!
 //! # Durability
 //! Each write does an `O_APPEND` write followed by `fsync(2)`. The design
-//! document calls for batched fsync (every 8 entries / 1 second) for the
-//! long-lived TUI; we currently fsync per write because cosh-cli is the
-//! dominant call site (one entry per process invocation), and the per-call
-//! overhead is dwarfed by command latency. Switch to batching only if a
-//! profiling pass identifies it as a hot path.
+//! document calls for batched fsync (every 8 entries / 1 second). This legacy
+//! writer retains per-write durability so removing the retired command surface
+//! does not also change its persistence contract. Revisit batching only as a
+//! separate, measured migration.
 
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};

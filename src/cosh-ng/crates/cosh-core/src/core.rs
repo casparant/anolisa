@@ -18,8 +18,11 @@ use crate::compaction::{CompactionRuntime, ModelCapability};
 use crate::config;
 use crate::config::{ApprovalMode, CoreConfig};
 use crate::context::ContextBuilder;
+use crate::execution_scope::ExecutionScopeContext;
 use crate::extension::{GenerationController, RuntimeGeneration, RuntimeSnapshot};
-use crate::hook::{HookDecision, HookNotification, HookSystem, PreToolUseResult};
+use crate::hook::{
+    HookDecision, HookNotification, HookSystem, PostToolUseMetadata, PreToolUseResult,
+};
 use crate::loop_detect::LoopDetector;
 use crate::metrics::TurnMetrics;
 use crate::protocol::{
@@ -64,6 +67,7 @@ pub struct CoshCore {
     pub provider: Box<dyn ContentGenerator>,
     pub tools: Arc<ToolRegistry>,
     pub session_id: String,
+    execution_scope_context: ExecutionScopeContext,
     pub messages: Vec<Message>,
     /// Compaction runtime state: the active projection over the transcript
     /// prefix and the provider usage accounting that prices it.
@@ -1069,6 +1073,10 @@ impl CoshCore {
                     continue;
                 }
 
+                let execution_scope = self
+                    .execution_scope_context
+                    .tool_call_scope(&turn_id, &tc.id);
+
                 // A transport failure seen on a `&self` path can only surface
                 // through the session flag, so it becomes fatal here: the rest
                 // of the batch must be skipped, not executed against a peer the
@@ -1510,7 +1518,11 @@ impl CoshCore {
                         &tc.name,
                         &params_for_post_hook,
                         &result.output,
-                        skill_context.as_ref(),
+                        PostToolUseMetadata {
+                            skill_context: skill_context.as_ref(),
+                            execution_scope: Some(&execution_scope),
+                            tool_response_is_error: result.is_error,
+                        },
                     )
                     .await;
                 self.emit_hook_notifications(writer, &post_hook.notifications, Some(&tc.id));

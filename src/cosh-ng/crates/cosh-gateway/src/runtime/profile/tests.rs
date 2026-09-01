@@ -2,11 +2,14 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::{Duration, Instant};
-
 use tempfile::TempDir;
 
+#[cfg(target_os = "linux")]
+use std::thread;
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
+
+#[cfg(target_os = "linux")]
 use crate::runtime::{ProcessExit, RuntimeSupervisor};
 
 use super::{
@@ -41,6 +44,7 @@ fn marker_executable(directory: &Path, name: &str, marker: &Path, value: &str) -
     path
 }
 
+#[cfg(target_os = "linux")]
 fn wait_for_terminal(supervisor: &mut RuntimeSupervisor) -> ProcessExit {
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {

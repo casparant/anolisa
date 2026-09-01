@@ -30,7 +30,9 @@ When you approve a `shell` tool, cosh runs the command in the foreground bash or
 
 If an approved command waits for password input, a pager, or plain terminal input, cosh can show a hint and interrupt it after 120 seconds by default. Set `shell.input_wait_timeout_secs = 0` to disable this timeout. Fullscreen TUIs and pipeline reads are exempt.
 
-Approval decisions are kept in the runtime journal. When audit logging is enabled, a redacted copy is also available in the audit timeline; see the [audit guide](../cli/audit.md).
+Approval decisions are kept in the runtime journal. When audit logging is
+enabled, the system also retains a redacted copy for observability and incident
+analysis.
 
 ## Configuration
 

@@ -1,8 +1,6 @@
 //! Focused supervisor lifecycle and cleanup tests.
 
-use std::fs;
 use std::io;
-use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -13,12 +11,18 @@ use tempfile::tempdir;
 use super::*;
 
 #[cfg(target_os = "linux")]
+use std::fs;
+#[cfg(target_os = "linux")]
+use std::path::Path;
+
+#[cfg(target_os = "linux")]
 fn linked_shell(directory: &Path, name: &str) -> std::path::PathBuf {
     let path = directory.join(name);
     std::os::unix::fs::symlink("/bin/sh", &path).unwrap();
     path
 }
 
+#[cfg(target_os = "linux")]
 fn wait_for_terminal(supervisor: &mut RuntimeSupervisor) -> ProcessTerminal {
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {

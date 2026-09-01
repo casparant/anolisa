@@ -5,8 +5,8 @@
 cosh-ng 是一个以现有 Shell 为基础的 AI 原生终端。`cosh` 默认使用 Enhanced
 Assisted 模式，保留隐式自然语言路由、Skills、审批卡片和可恢复 Agent 对话。
 如果要求 bash 或 zsh 独占会话，不加载 Cosh Hook、不观察也不提供洞察，可以
-在启动时选择 Native 集成。自动化或其他 Agent 集成仍可使用结构化 JSON 和
-JSONL 接口。
+在启动时选择 Native 集成。自动化或其他 Agent 集成仍可使用版本化 JSONL 与
+本地 Task API。
 
 ## 为什么使用 cosh-ng
 
@@ -16,7 +16,6 @@ JSONL 接口。
 | 自动化散落在脚本中 | 用 Skills 封装可复用工作流 |
 | AI 上下文绑定在单个聊天窗口 | 按工作空间恢复 Agent 对话 |
 | AI 操作难以检查 | 通过审批卡片和审计记录检查工具调用 |
-| 不同发行版使用不同系统命令 | 用 `cosh-cli` 获得稳定、结构化的系统操作 |
 
 交互程序、管道、重定向、任务控制、bash/zsh 配置和 `Ctrl+C` 都会在前台终端中
 照常工作。
@@ -59,9 +58,8 @@ export PATH="$HOME/.local/bin:$PATH"
 sudo yum install cosh-ng
 ```
 
-当前发布的 Linux raw 契约无法覆盖所有已路由的发行版，因此不作为推荐的
-Linux 安装路径。raw 包支持 macOS arm64，但依赖 Linux 的软件包和服务操作
-不可用。源码构建仅供贡献者使用，请参阅
+当前发布的 Linux raw 契约无法覆盖所有目标环境，因此不作为推荐的 Linux 安装路径。
+raw 包也支持 macOS arm64。源码构建仅供贡献者使用，请参阅
 [开发者入门指南](../../docs/developer-guide/zh/cosh-ng/getting-started.md)。
 
 ## 30 秒开始使用
@@ -166,8 +164,7 @@ Direct `serve` 没有 package unit 的 live `--systemd-unit` proof 时会 fail c
 canonical workspace，持久化 Runtime binding，并由 scheduler 投递 durable Outbox work。
 本地非托管 ACP interoperability 应使用 `doctor` 与 `run`，不能使用 `serve`；这两个 direct
 ACP command 不受 durable Task Plane 治理。
-Task Plane 不依赖 checkpoint 或 ws-ckpt。现有的 `cosh-cli checkpoint` 命令仍是独立的
-system-operations 路径，不会为这个 Gateway profile 增加 checkpoint capability。
+Task Plane 不依赖 checkpoint 或 ws-ckpt，这个 profile 也不宣称提供工作空间恢复能力。
 
 `SIGINT` 与 `SIGTERM` 会在 Daemon 退出前触发有界的 scheduler 与 Runtime shutdown。Daemon
 仍然只监听 Unix socket，不开放 remote listener。
@@ -181,7 +178,6 @@ system-operations 路径，不会为这个 Gateway profile 增加 checkpoint cap
 - [接入 MCP server](../../docs/user-guide/zh/user-entrypoint/cosh-ng/mcp.md)
 - [交互式终端](../../docs/user-guide/zh/user-entrypoint/cosh-ng/shell/overview.md)
 - [配置](../../docs/user-guide/zh/user-entrypoint/cosh-ng/configuration.md)
-- [管理系统操作](../../docs/user-guide/zh/user-entrypoint/cosh-ng/cli/overview.md)
 - [Headless 集成](../../docs/user-guide/zh/user-entrypoint/cosh-ng/core/headless-mode.md)
 - [开发者入门](../../docs/developer-guide/zh/cosh-ng/getting-started.md)
 - [架构](../../docs/developer-guide/zh/cosh-ng/architecture.md)

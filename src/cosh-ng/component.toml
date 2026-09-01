@@ -25,4 +25,4 @@ runtime = ["openssl-libs"]
 [[health_checks]]
 name = "launcher"
 kind = "command"
-command = "{bindir}/cosh-cli --version"
+command = "{libexecdir}/cosh-ng/cosh-shell --version"
