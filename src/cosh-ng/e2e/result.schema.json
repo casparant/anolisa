@@ -1,6 +1,6 @@
 {
   "$schema":"https://json-schema.org/draft/2020-12/schema",
-  "$id":"https://anolisa.dev/cosh-ng/e2e-result.schema.json",
+  "$id":"https://agentic-os.sh/cosh-ng/e2e-result.schema.json",
   "title":"cosh-ng stage E2E result",
   "type":"object",
   "additionalProperties":false,
