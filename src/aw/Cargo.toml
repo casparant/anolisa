@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "crates/aw-cosh-hook",
+    "crates/aw-core",
     "crates/aw-contracts",
     "crates/aw-provider-host",
 ]
