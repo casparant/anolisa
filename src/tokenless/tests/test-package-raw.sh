@@ -9,10 +9,12 @@ trap 'rm -rf "$TMP"' EXIT
 SOURCE="$TMP/tokenless"
 ADAPTERS="$SOURCE/adapters/tokenless"
 CONTRACT="$SOURCE/.anolisa/component.toml"
+PROVIDER="$SOURCE/provider"
 VERSION="9.8.7"
 
 mkdir -p \
     "$SOURCE/.anolisa" \
+    "$PROVIDER/schemas" \
     "$ADAPTERS/common/hooks" \
     "$ADAPTERS/common/commands" \
     "$ADAPTERS/openclaw/dist" \
@@ -36,6 +38,15 @@ cat > "$CONTRACT" <<EOF
 name = "tokenless"
 version = "$VERSION"
 EOF
+cat > "$PROVIDER/provider.toml" <<EOF
+api_version = "providers.agentic-os.sh/v1"
+provider_id = "tokenless"
+provider_version = "$VERSION"
+EOF
+printf '{"$id":"input"}\n' \
+    > "$PROVIDER/schemas/context-projection-prepare-input-v1.schema.json"
+printf '{"$id":"output"}\n' \
+    > "$PROVIDER/schemas/context-projection-prepare-output-v1.schema.json"
 
 write_json_version() {
     mkdir -p "$(dirname "$1")"
@@ -122,6 +133,7 @@ run_pack() {
     local output="$4"
 
     TOKENLESS_SOURCE_DIR="$SOURCE" \
+    TOKENLESS_PROVIDER_DIR="$PROVIDER" \
     RAW_CONTRACT="$CONTRACT" \
     BIN_DIR="$bins" \
     TARGET_OS="$os" \
@@ -130,6 +142,29 @@ run_pack() {
     SOURCE_DATE_EPOCH=1700000000 \
         "$ROOT/packaging/raw/package.sh" package >/dev/null
 }
+
+cp "$PROVIDER/provider.toml" "$TMP/provider.toml"
+python3 - "$PROVIDER/provider.toml" <<'PY'
+import pathlib
+import sys
+
+
+path = pathlib.Path(sys.argv[1])
+path.write_text(
+    path.read_text(encoding="utf-8").replace(
+        'provider_version = "9.8.7"', 'provider_version = "0.0.0"'
+    ),
+    encoding="utf-8",
+)
+PY
+if run_pack linux x86_64 "$LINUX_X64" "$TMP/provider-version-drift" \
+    >"$TMP/provider-version-drift.log" 2>&1; then
+    echo "ERROR: raw packaging accepted a drifted Provider version" >&2
+    exit 1
+fi
+grep -Fq 'provider.toml version 0.0.0 does not match Cargo.toml version 9.8.7' \
+    "$TMP/provider-version-drift.log"
+mv "$TMP/provider.toml" "$PROVIDER/provider.toml"
 
 OUT_ONE="$TMP/out-one"
 OUT_TWO="$TMP/out-two"
@@ -153,11 +188,17 @@ if run_pack linux aarch64 "$LINUX_X64" "$TMP/mislabeled" 2>/dev/null; then
 fi
 
 EXTRACTED="$TMP/extracted"
+EXTRACTED_PROVIDER="$EXTRACTED/share/aw/providers/tokenless"
 mkdir -p "$EXTRACTED"
 tar -xzf "$OUT_ONE/$LINUX_ARTIFACT" -C "$EXTRACTED"
 cmp "$CONTRACT" "$EXTRACTED/.anolisa/component.toml"
 cmp "$LINUX_X64/tokenless" "$EXTRACTED/bin/tokenless"
 cmp "$LINUX_X64/rtk" "$EXTRACTED/libexec/anolisa/tokenless/rtk"
+cmp "$PROVIDER/provider.toml" "$EXTRACTED_PROVIDER/provider.toml"
+cmp "$PROVIDER/schemas/context-projection-prepare-input-v1.schema.json" \
+    "$EXTRACTED_PROVIDER/schemas/context-projection-prepare-input-v1.schema.json"
+cmp "$PROVIDER/schemas/context-projection-prepare-output-v1.schema.json" \
+    "$EXTRACTED_PROVIDER/schemas/context-projection-prepare-output-v1.schema.json"
 
 for relative in \
     adapters/claude-code/hooks/run-hook.sh \
@@ -186,9 +227,25 @@ test -z "$(find "$EXTRACTED" \( \
 test "$(stat -c '%a' "$EXTRACTED/bin/tokenless")" = 755
 test "$(stat -c '%a' "$EXTRACTED/adapters/manifest.json")" = 644
 test "$(stat -c '%a' "$EXTRACTED/adapters/common/hooks/run-hook.sh")" = 755
+test "$(stat -c '%a' "$EXTRACTED_PROVIDER/provider.toml")" = 644
+
+MAKE_ROOT="$TMP/make-install"
+WORKSPACE_PROVIDER="$(cd "$ROOT/../.." && pwd)/providers/tokenless"
+make -s -C "$ROOT" install-provider \
+    DESTDIR="$MAKE_ROOT" INSTALL_PROFILE=system PREFIX=/usr \
+    PROVIDER_SRC_DIR="$WORKSPACE_PROVIDER"
+cmp "$WORKSPACE_PROVIDER/provider.toml" \
+    "$MAKE_ROOT/usr/share/aw/providers/tokenless/provider.toml"
+for schema in "$WORKSPACE_PROVIDER"/schemas/*.schema.json; do
+    cmp "$schema" \
+        "$MAKE_ROOT/usr/share/aw/providers/tokenless/schemas/$(basename "$schema")"
+done
+make -s -C "$ROOT" uninstall-provider \
+    DESTDIR="$MAKE_ROOT" INSTALL_PROFILE=system PREFIX=/usr
+test ! -e "$MAKE_ROOT/usr/share/aw/providers/tokenless"
 
 grep -Fq 'source = "bin/tokenless"' "$ROOT/.anolisa/component.toml.in"
 grep -Fq 'source = "extensions/tokenless"' "$ROOT/.anolisa/component.toml.in"
-test "$(grep -o '@VERSION@' "$ROOT/.anolisa/component.toml.in" | wc -l)" = 1
+test "$(grep -o '@VERSION@' "$ROOT/.anolisa/component.toml.in" | wc -l)" -eq 1
 
 echo "tokenless component-owned raw package tests passed"

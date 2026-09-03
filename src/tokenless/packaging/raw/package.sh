@@ -79,6 +79,7 @@ materialize_hook() {
 stage_payload() {
     local stage="$1"
     local adapters="$SOURCE_ROOT/adapters/tokenless"
+    local provider="$PROVIDER_ROOT"
     local relative
 
     if [ -e "$stage" ] && [ -n "$(find "$stage" -mindepth 1 -print -quit)" ]; then
@@ -106,6 +107,9 @@ stage_payload() {
         common/tokenless-env-fix.sh; do
         require_file "$adapters/$relative"
     done
+    require_file "$provider/provider.toml"
+    require_file "$provider/schemas/context-projection-prepare-input-v1.schema.json"
+    require_file "$provider/schemas/context-projection-prepare-output-v1.schema.json"
 
     install -d -m 0755 \
         "$stage/.anolisa" \
@@ -113,7 +117,8 @@ stage_payload() {
         "$stage/libexec/anolisa/tokenless" \
         "$stage/adapters" \
         "$stage/extensions/tokenless/hooks" \
-        "$stage/extensions/tokenless/commands"
+        "$stage/extensions/tokenless/commands" \
+        "$stage/share/aw/providers/tokenless/schemas"
     install -p -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
     install -p -m 0755 "$BIN_DIR/tokenless" "$stage/bin/tokenless"
     install -p -m 0755 "$BIN_DIR/rtk" \
@@ -137,6 +142,10 @@ stage_payload() {
         "$stage/extensions/tokenless/"
     cp -a "$adapters/common/hooks"/. "$stage/extensions/tokenless/hooks"/
     cp -a "$adapters/common/commands"/. "$stage/extensions/tokenless/commands"/
+    install -p -m 0644 "$provider/provider.toml" \
+        "$stage/share/aw/providers/tokenless/"
+    install -p -m 0644 "$provider/schemas"/*.schema.json \
+        "$stage/share/aw/providers/tokenless/schemas/"
 
     # Match the installed adapter payload and exclude build-only inputs.
     rm -rf "$stage/adapters/openclaw/node_modules"
@@ -148,6 +157,14 @@ stage_payload() {
         \( -name '*.in' -o -name '.gitignore' \) -delete
     normalize_modes "$stage"
 
+    [ -f "$stage/share/aw/providers/tokenless/provider.toml" ] || \
+        die "raw payload is missing the AW Provider manifest"
+    [ "$(find "$stage/share/aw/providers/tokenless/schemas" -maxdepth 1 \
+        -type f -name '*.schema.json' | wc -l)" -eq \
+      "$(find "$provider/schemas" -maxdepth 1 -type f \
+        -name '*.schema.json' | wc -l)" ] || \
+        die "raw payload is missing one or more AW Provider schemas"
+
     if [ -n "$(find "$stage" -type l -print -quit)" ]; then
         die "raw payload contains a symbolic link"
     fi
@@ -158,7 +175,7 @@ resolve_epoch() {
         printf '%s\n' "$SOURCE_DATE_EPOCH"
         return
     fi
-    git -C "$SOURCE_ROOT" log -1 --format=%ct -- . 2>/dev/null || \
+    git -C "$SOURCE_ROOT" log -1 --format=%ct HEAD 2>/dev/null || \
         die "SOURCE_DATE_EPOCH is unset and the source commit time is unavailable"
 }
 
@@ -169,6 +186,13 @@ COMMAND="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SOURCE_ROOT="${TOKENLESS_SOURCE_DIR:-$DEFAULT_ROOT}"
+if [ -n "${TOKENLESS_PROVIDER_DIR:-}" ]; then
+    PROVIDER_ROOT="$TOKENLESS_PROVIDER_DIR"
+elif [ -f "$SOURCE_ROOT/../../providers/tokenless/provider.toml" ]; then
+    PROVIDER_ROOT="$SOURCE_ROOT/../../providers/tokenless"
+else
+    PROVIDER_ROOT="$SOURCE_ROOT/provider"
+fi
 BIN_DIR="${BIN_DIR:-}"
 CONTRACT="${RAW_CONTRACT:-$SOURCE_ROOT/.anolisa/component.toml}"
 TARGET_OS="$(normalize_os "${TARGET_OS:-$(detect_os)}")"
@@ -181,7 +205,8 @@ for binary in tokenless rtk; do
 done
 require_file "$CONTRACT"
 
-VERSION="$(python3 "$SCRIPT_DIR/verify-release.py" "$SOURCE_ROOT" "$CONTRACT")"
+VERSION="$(python3 "$SCRIPT_DIR/verify-release.py" \
+    "$SOURCE_ROOT" "$CONTRACT" "$PROVIDER_ROOT")"
 python3 "$SCRIPT_DIR/verify-binaries.py" \
     --os "$TARGET_OS" \
     --arch "$TARGET_ARCH" \
