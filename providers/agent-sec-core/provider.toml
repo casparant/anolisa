@@ -1,0 +1,289 @@
+# AW Provider manifest for agent-sec-core security inspection.
+#
+# One Package, one executable, three Capabilities. The AW v1 manifest declares a
+# single top-level [executable], so every Capability shares one command line and
+# the requested operation is injected into the native request by each codec.
+#
+# The native protocol is agent-sec-core's own; the canonical Capability
+# Contracts are separate and connected by json-map/v1.
+
+api_version = "providers.agentic-os.sh/v1"
+provider_id = "agent-sec-core"
+provider_version = "0.11.0"
+driver = "exec-json/v1"
+lifecycle = "one_shot"
+
+[executable]
+command = "agent-sec-cli"
+args = ["aw-provider"]
+
+# The provider path deliberately bypasses the security middleware lifecycle, so
+# it writes no SecurityEvent and no telemetry. These variables keep that true
+# even if a future default changes, and they are asserted by a disk-snapshot
+# end-to-end test rather than trusted.
+[executable.environment]
+AGENT_SEC_TELEMETRY_ENABLED = "0"
+PYTHONDONTWRITEBYTECODE = "1"
+
+# Measured cold start on the reference host is well under a second, but this is
+# a Python process that parses its rule set on every call. The effective limit
+# is the smallest of this value, the Core invocation budget, and the remaining
+# deadline, so Core must raise its own ceiling to reach this one.
+[limits]
+wall_time_ms = 5000
+input_bytes = 67108864
+output_bytes = 1048576
+
+[permissions]
+network = "none"
+inherit_environment = false
+filesystem_read = []
+filesystem_write = []
+
+[data]
+reads = ["model_visible_context"]
+writes = []
+sensitivity = "inherits_input"
+retention = "none"
+telemetry = "disabled"
+
+# ---------------------------------------------------------------------------
+# security.content.inspect/v1 — Observe: secrets and personal data in content
+# ---------------------------------------------------------------------------
+
+[[capabilities]]
+capability = "security.content.inspect/v1"
+authority = "observe"
+scopes = ["agent_session", "turn", "tool_call"]
+input_contract = { schema = "security.content.inspect.input/v1", resource = "schemas/security-content-inspect-input-v1.schema.json", sha256 = "4d1c7d2b3c58d29af35c6dce10d36a2774d12ec7d2d7928e262cf978c2babeb3" }
+output_contract = { schema = "security.content.inspect.output/v1", resource = "schemas/security-content-inspect-output-v1.schema.json", sha256 = "15d47c6c1c9b43928d9613485bf8dee398622e2b1b7f0ab96a5ad7d5342d55ef" }
+native_input = { resource = "schemas/agent-sec-aw-provider-request-v1.schema.json", sha256 = "5c1c54e7e63966ca79236410fa2d3982769640429c62d57004091b1b9ce2b07b" }
+native_output = { resource = "schemas/agent-sec-aw-provider-response-v1.schema.json", sha256 = "a708fc35208d6c92232415be87ad292066f757c994a6e54167e75247ab617459" }
+
+[capabilities.codec]
+kind = "json-map/v1"
+
+[[capabilities.codec.request.fields]]
+target = "/protocol_version"
+source = { kind = "const", value = 1 }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/operation"
+source = { kind = "const", value = "content_inspect" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/content"
+source = { kind = "input", pointer = "/artifact/content" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/source"
+source = { kind = "const", value = "tool_output" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/include_low_confidence"
+source = { kind = "input", pointer = "/constraints/include_low_confidence" }
+on_missing = "reject"
+
+[capabilities.codec.response.disposition]
+source = "/disposition"
+on_unknown = "fail"
+
+[capabilities.codec.response.disposition.values]
+completed = "produced"
+skipped = "bypassed"
+error = "failed"
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/verdict"
+source = { kind = "response", pointer = "/verdict" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/findings"
+source = { kind = "response", pointer = "/findings" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/scanned_bytes"
+source = { kind = "response", pointer = "/scanned_bytes" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/truncated"
+source = { kind = "response", pointer = "/truncated" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.meters]]
+meter_id = "security.findings_total"
+unit = "findings"
+measurement_kind = "observed"
+value_pointer = "/findings_total"
+
+[[capabilities.codec.response.meters]]
+meter_id = "security.scanned_bytes"
+unit = "bytes"
+measurement_kind = "observed"
+value_pointer = "/scanned_bytes"
+
+# ---------------------------------------------------------------------------
+# security.code.inspect/v1 — Observe: dangerous constructs in code content
+# ---------------------------------------------------------------------------
+
+[[capabilities]]
+capability = "security.code.inspect/v1"
+authority = "observe"
+scopes = ["agent_session", "turn", "tool_call"]
+input_contract = { schema = "security.code.inspect.input/v1", resource = "schemas/security-code-inspect-input-v1.schema.json", sha256 = "856b0626c2f2523cc78db468daae2dae5df685707950e6dd4f5123d4e616236f" }
+output_contract = { schema = "security.code.inspect.output/v1", resource = "schemas/security-code-inspect-output-v1.schema.json", sha256 = "735eae6cb55642b2f956214edccf7a09d0931ab93c6be1bcaaaaac0ceed276b0" }
+native_input = { resource = "schemas/agent-sec-aw-provider-request-v1.schema.json", sha256 = "5c1c54e7e63966ca79236410fa2d3982769640429c62d57004091b1b9ce2b07b" }
+native_output = { resource = "schemas/agent-sec-aw-provider-response-v1.schema.json", sha256 = "a708fc35208d6c92232415be87ad292066f757c994a6e54167e75247ab617459" }
+
+[capabilities.codec]
+kind = "json-map/v1"
+
+[[capabilities.codec.request.fields]]
+target = "/protocol_version"
+source = { kind = "const", value = 1 }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/operation"
+source = { kind = "const", value = "code_inspect" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/content"
+source = { kind = "input", pointer = "/artifact/content" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/language"
+source = { kind = "input", pointer = "/constraints/language" }
+on_missing = "reject"
+
+[capabilities.codec.response.disposition]
+source = "/disposition"
+on_unknown = "fail"
+
+[capabilities.codec.response.disposition.values]
+completed = "produced"
+skipped = "bypassed"
+error = "failed"
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/verdict"
+source = { kind = "response", pointer = "/verdict" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/findings"
+source = { kind = "response", pointer = "/findings" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/scanned_bytes"
+source = { kind = "response", pointer = "/scanned_bytes" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/truncated"
+source = { kind = "response", pointer = "/truncated" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/inspection/language_detected"
+source = { kind = "response", pointer = "/language_detected" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.meters]]
+meter_id = "security.findings_total"
+unit = "findings"
+measurement_kind = "observed"
+value_pointer = "/findings_total"
+
+[[capabilities.codec.response.meters]]
+meter_id = "security.scanned_bytes"
+unit = "bytes"
+measurement_kind = "observed"
+value_pointer = "/scanned_bytes"
+
+# ---------------------------------------------------------------------------
+# security.command.inspect/v1 — Mediate: gate verdict for a pending Tool Call
+# ---------------------------------------------------------------------------
+
+[[capabilities]]
+capability = "security.command.inspect/v1"
+authority = "mediate"
+scopes = ["turn", "tool_call"]
+input_contract = { schema = "security.command.inspect.input/v1", resource = "schemas/security-command-inspect-input-v1.schema.json", sha256 = "77777d6a3168724747c8070735690d391c7492ad0255f4d4520188763b298219" }
+output_contract = { schema = "security.command.inspect.output/v1", resource = "schemas/security-command-inspect-output-v1.schema.json", sha256 = "2b6564e583294b3777ae1ec48baa6744a4f169ae010757bb9568674dfabc3d11" }
+native_input = { resource = "schemas/agent-sec-aw-provider-request-v1.schema.json", sha256 = "5c1c54e7e63966ca79236410fa2d3982769640429c62d57004091b1b9ce2b07b" }
+native_output = { resource = "schemas/agent-sec-aw-provider-response-v1.schema.json", sha256 = "a708fc35208d6c92232415be87ad292066f757c994a6e54167e75247ab617459" }
+
+[capabilities.codec]
+kind = "json-map/v1"
+
+[[capabilities.codec.request.fields]]
+target = "/protocol_version"
+source = { kind = "const", value = 1 }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/operation"
+source = { kind = "const", value = "command_inspect" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/content"
+source = { kind = "input", pointer = "/command/content" }
+on_missing = "reject"
+
+[[capabilities.codec.request.fields]]
+target = "/language"
+source = { kind = "input", pointer = "/command/language" }
+on_missing = "reject"
+
+[capabilities.codec.response.disposition]
+source = "/disposition"
+on_unknown = "fail"
+
+[capabilities.codec.response.disposition.values]
+completed = "produced"
+skipped = "bypassed"
+error = "failed"
+
+[[capabilities.codec.response.output_fields]]
+target = "/decision/verdict"
+source = { kind = "response", pointer = "/verdict" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/decision/reasons"
+source = { kind = "response", pointer = "/reasons" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/decision/findings"
+source = { kind = "response", pointer = "/findings" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.output_fields]]
+target = "/decision/scanned_bytes"
+source = { kind = "response", pointer = "/scanned_bytes" }
+when_disposition = ["produced"]
+
+[[capabilities.codec.response.meters]]
+meter_id = "security.findings_total"
+unit = "findings"
+measurement_kind = "observed"
+value_pointer = "/findings_total"
+
+[[capabilities.codec.response.meters]]
+meter_id = "security.scanned_bytes"
+unit = "bytes"
+measurement_kind = "observed"
+value_pointer = "/scanned_bytes"

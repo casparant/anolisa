@@ -1,0 +1,20 @@
+[package]
+name = "aw-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aw-contracts = { path = "../aw-contracts" }
+aw-provider-host = { path = "../aw-provider-host" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+aw-ledger = { path = "../aw-ledger" }
+tempfile.workspace = true

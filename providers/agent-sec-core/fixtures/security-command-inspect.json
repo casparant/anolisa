@@ -1,0 +1,9 @@
+{
+  "command": {
+    "content": "rm -rf / --no-preserve-root",
+    "digest": "cf2a070fa8c07caa97e4624abefa271d37bb935a042c1460fca0afe13b2fe808",
+    "language": "bash",
+    "tool_name": "shell"
+  },
+  "boundary": "pre_tool"
+}

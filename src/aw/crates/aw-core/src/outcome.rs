@@ -1,0 +1,235 @@
+//! Core results for one Agent Environment event.
+//!
+//! Every fact is paired with the receipt that produced it, so a later Ledger
+//! writer never has to re-associate a Provider outcome with its invocation.
+
+use aw_contracts::common::Digest;
+use aw_contracts::context::ContextProjectionCandidate;
+use aw_contracts::error::ContractError;
+use aw_contracts::ids::ArtifactId;
+use aw_contracts::ledger::{
+    LedgerInvocationRef, LedgerObservation, LedgerObservationGap, LedgerProjectionOutcome,
+    PostToolUsePlanBody, PreToolUseGateBody,
+};
+use aw_contracts::provider::{ProviderReceipt, VersionedSchema};
+use aw_contracts::security::{
+    GateDegradation, ObservationGapReason, SecurityDetectedLanguage, SecurityFinding,
+    SecurityFindingSeverity, SecurityInspectionVerdict, SecurityRuleId, ToolCallGate,
+};
+use serde::Serialize;
+
+/// Advise candidate paired with the receipt for the invocation that produced it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PreparedProjection {
+    /// Provider proposal available for a later Core adoption decision.
+    ///
+    /// A bypassed, denied, failed, or uncertain invocation carries no candidate
+    /// even when the implementation returned transient output.
+    pub candidate: Option<ContextProjectionCandidate>,
+    /// Content-free terminal Provider facts safe for persistence and display.
+    pub receipt: ProviderReceipt,
+}
+
+/// One accepted Observe result, normalized across inspection Capabilities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CapabilityObservation {
+    /// Capability that produced these facts.
+    pub capability: VersionedSchema,
+    /// Highest-level conclusion the implementation reported.
+    pub verdict: SecurityInspectionVerdict,
+    /// Per-rule counts. A finding never carries the value it matched.
+    pub findings: Vec<SecurityFinding>,
+    /// Bytes the implementation reported inspecting.
+    pub scanned_bytes: u64,
+    /// Whether the implementation stopped before the whole artifact.
+    pub truncated: bool,
+    /// Language a code inspection reported analysing, when it classified one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language_detected: Option<SecurityDetectedLanguage>,
+    /// Content-free receipt for the invocation that produced these facts.
+    pub receipt: ProviderReceipt,
+}
+
+impl CapabilityObservation {
+    /// Returns the most severe severity across the findings, if any.
+    #[must_use]
+    pub fn peak_severity(&self) -> Option<SecurityFindingSeverity> {
+        self.findings.iter().map(|finding| finding.severity).max()
+    }
+
+    /// Returns the total number of matches attributed to all findings.
+    #[must_use]
+    pub fn matched_total(&self) -> u64 {
+        self.findings
+            .iter()
+            .map(|finding| u64::from(finding.count))
+            .sum()
+    }
+}
+
+/// One planned Observe Capability that produced no usable fact.
+///
+/// A gap is a recorded fact in its own right. Core reports why an observation is
+/// absent instead of collapsing every cause into a silent success.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ObservationGap {
+    /// Capability Core planned but could not complete.
+    pub capability: VersionedSchema,
+    /// Why the observation is absent.
+    pub reason: ObservationGapReason,
+    /// Bounded safe failure, when the invocation reached a settled receipt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ContractError>,
+    /// Receipt when Core accepted an invocation that then settled unusable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<ProviderReceipt>,
+}
+
+/// Core result for one observed tool result.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ToolResultOutcome {
+    /// Core identity allocated to the immutable source artifact.
+    pub source_artifact_id: ArtifactId,
+    /// SHA-256 of the original tool-result content.
+    pub source_digest: Digest,
+    /// Result of the single Advise context-projection step.
+    pub projection: PreparedProjection,
+    /// Content-free Observe facts in deterministic plan order.
+    pub observations: Vec<CapabilityObservation>,
+    /// Planned Observe Capabilities that produced no fact, and why.
+    pub observation_gaps: Vec<ObservationGap>,
+}
+
+impl ToolResultOutcome {
+    /// Returns every accepted receipt in deterministic plan order.
+    ///
+    /// Observe receipts precede the Advise receipt because Core invokes the
+    /// steps in that order. A gap that never reached an accepted invocation
+    /// contributes no receipt.
+    #[must_use]
+    pub fn receipts(&self) -> Vec<&ProviderReceipt> {
+        self.observations
+            .iter()
+            .map(|observation| &observation.receipt)
+            .chain(
+                self.observation_gaps
+                    .iter()
+                    .filter_map(|gap| gap.receipt.as_ref()),
+            )
+            .chain(std::iter::once(&self.projection.receipt))
+            .collect()
+    }
+
+    /// Returns the most severe severity observed across all inspections.
+    #[must_use]
+    pub fn peak_severity(&self) -> Option<SecurityFindingSeverity> {
+        self.observations
+            .iter()
+            .filter_map(CapabilityObservation::peak_severity)
+            .max()
+    }
+
+    /// Returns the total number of matches observed across all inspections.
+    #[must_use]
+    pub fn matched_total(&self) -> u64 {
+        self.observations
+            .iter()
+            .map(CapabilityObservation::matched_total)
+            .sum()
+    }
+
+    /// Projects this outcome into the content-free Ledger record body.
+    ///
+    /// The Advise candidate is reduced to its shape metadata. A candidate
+    /// carries the model-visible representation itself, so copying it into a
+    /// Ledger record would defeat content-freedom; the invocation's
+    /// `output_digest` is what lets a reader prove which candidate was meant.
+    #[must_use]
+    pub fn ledger_body(&self) -> PostToolUsePlanBody {
+        PostToolUsePlanBody {
+            source_artifact_id: self.source_artifact_id.clone(),
+            source_digest: self.source_digest.clone(),
+            observations: self
+                .observations
+                .iter()
+                .map(|observation| LedgerObservation {
+                    capability: observation.capability.clone(),
+                    verdict: observation.verdict,
+                    findings: observation.findings.clone(),
+                    scanned_bytes: observation.scanned_bytes,
+                    truncated: observation.truncated,
+                    language_detected: observation.language_detected,
+                    invocation: LedgerInvocationRef::from_receipt(&observation.receipt),
+                })
+                .collect(),
+            observation_gaps: self
+                .observation_gaps
+                .iter()
+                .map(|gap| LedgerObservationGap {
+                    capability: gap.capability.clone(),
+                    reason: gap.reason,
+                    invocation: gap.receipt.as_ref().map(LedgerInvocationRef::from_receipt),
+                })
+                .collect(),
+            projection: LedgerProjectionOutcome {
+                candidate_offered: self.projection.candidate.is_some(),
+                media_type: self
+                    .projection
+                    .candidate
+                    .as_ref()
+                    .map(|candidate| candidate.media_type.clone()),
+                transform_chain: self
+                    .projection
+                    .candidate
+                    .as_ref()
+                    .map(|candidate| candidate.transform_chain.clone())
+                    .unwrap_or_default(),
+                reversibility: self
+                    .projection
+                    .candidate
+                    .as_ref()
+                    .map(|candidate| candidate.reversibility),
+                invocation: LedgerInvocationRef::from_receipt(&self.projection.receipt),
+            },
+        }
+    }
+}
+
+/// Core gate result for one pending Tool Call.
+///
+/// [`ToolCallGate::NotMediated`] is not an approval. It states that no governed
+/// verdict exists, so an Agent Environment must apply its own default rather
+/// than read the absence of an opinion as permission.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ToolCallDecision {
+    /// Gate outcome the Agent Environment must honour.
+    pub gate: ToolCallGate,
+    /// Rationale codes safe for operator presentation.
+    ///
+    /// Codes only. The command text never appears here, so a gate notice cannot
+    /// echo the argument it refused.
+    pub reasons: Vec<SecurityRuleId>,
+    /// Content-free receipt when Core accepted a mediation invocation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<ProviderReceipt>,
+    /// Why the gate resolved without an implementation verdict.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub degradation: Option<GateDegradation>,
+}
+
+impl ToolCallDecision {
+    /// Projects this decision into the content-free Ledger record body.
+    ///
+    /// Recording a refusal is the point of this record, so the rationale codes
+    /// travel with it. They are [`SecurityRuleId`] values, whose character set
+    /// cannot carry the command text that triggered the gate.
+    #[must_use]
+    pub fn ledger_body(&self) -> PreToolUseGateBody {
+        PreToolUseGateBody {
+            gate: self.gate,
+            reasons: self.reasons.clone(),
+            degradation: self.degradation,
+            invocation: self.receipt.as_ref().map(LedgerInvocationRef::from_receipt),
+        }
+    }
+}

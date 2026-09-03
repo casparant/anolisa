@@ -17,9 +17,12 @@ BINDIR ?= $(PREFIX)/bin
 LIBEXECDIR ?= $(PREFIX)/libexec/anolisa/tokenless
 DATADIR ?= $(PREFIX)/share
 SHARE_DIR ?= $(DATADIR)/anolisa/adapters/tokenless
+PROVIDER_DIR ?= $(DATADIR)/aw/providers/tokenless
 BIN_DIR ?= $(BINDIR)
 LIB_DIR ?= $(LIBEXECDIR)
 ADAPTER_SRC_DIR := adapters/tokenless
+WORKSPACE_PROVIDER_SRC_DIR := $(abspath $(CURDIR)/../../providers/tokenless)
+PROVIDER_SRC_DIR ?= $(if $(wildcard $(WORKSPACE_PROVIDER_SRC_DIR)/provider.toml),$(WORKSPACE_PROVIDER_SRC_DIR),$(CURDIR)/provider)
 OPENCLAW_PLUGIN_SRC_DIR := $(ADAPTER_SRC_DIR)/openclaw
 DSH_PLUGIN_SRC_DIR := $(ADAPTER_SRC_DIR)/dsh
 ADAPTER_TEMPLATES := \
@@ -53,6 +56,7 @@ PYPROJECT_BUILD ?= uvx --from 'build>=1,<2' pyproject-build
         install uninstall test lint clean package-raw stage-raw \
         test-raw-package test-npm-package test-toon-cleanup \
         install-binaries install-helpers install-adapter-resources install-cosh-extension \
+        install-provider uninstall-provider \
         adapter-install adapter-uninstall adapter-scan \
         cosh-extension-install cosh-extension-uninstall \
         openclaw-install openclaw-uninstall \
@@ -161,7 +165,8 @@ build-dsh-plugin: stamp-adapter-templates
 	@cd $(DSH_PLUGIN_SRC_DIR) && node --input-type=module -e "import('./dist/index.js').then((plugin) => { if (typeof plugin.apply !== 'function' || plugin.name !== 'anolisa-tokenless') process.exit(1) })"
 
 # Install binaries + adapter resources per FHS spec.
-install: build install-binaries install-helpers install-adapter-resources install-cosh-extension
+install: build install-binaries install-helpers install-adapter-resources \
+         install-cosh-extension install-provider
 
 install-binaries:
 	@echo "==> Installing tokenless to $(DESTDIR)$(BINDIR)..."
@@ -220,12 +225,31 @@ install-cosh-extension:
 	install -p -m 0644 $(ADAPTER_SRC_DIR)/common/cosh-extension.json $(DESTDIR)$(COSH_EXTENSION_DIR)/
 	find $(DESTDIR)$(COSH_EXTENSION_DIR) -type f \( -name '*.py' -o -name '*.sh' \) -exec chmod 0755 {} +
 
-uninstall:
+install-provider:
+	@echo "==> Installing AW Provider contract to $(DESTDIR)$(PROVIDER_DIR)..."
+	@test -f $(PROVIDER_SRC_DIR)/provider.toml \
+	    || { echo "ERROR: $(PROVIDER_SRC_DIR)/provider.toml is missing"; exit 1; }
+	@test -n "$$(find $(PROVIDER_SRC_DIR)/schemas -maxdepth 1 -type f \
+	    -name '*.schema.json' -print -quit)" \
+	    || { echo "ERROR: $(PROVIDER_SRC_DIR)/schemas has no JSON Schema"; exit 1; }
+	install -d -m 0755 $(DESTDIR)$(PROVIDER_DIR)/schemas
+	install -p -m 0644 $(PROVIDER_SRC_DIR)/provider.toml $(DESTDIR)$(PROVIDER_DIR)/
+	install -p -m 0644 $(PROVIDER_SRC_DIR)/schemas/*.schema.json $(DESTDIR)$(PROVIDER_DIR)/schemas/
+	@test -f $(DESTDIR)$(PROVIDER_DIR)/provider.toml
+	@test "$$(find $(DESTDIR)$(PROVIDER_DIR)/schemas -maxdepth 1 -type f \
+	    -name '*.schema.json' | wc -l)" \
+	    -eq "$$(find $(PROVIDER_SRC_DIR)/schemas -maxdepth 1 -type f \
+	    -name '*.schema.json' | wc -l)"
+
+uninstall: uninstall-provider
 	rm -f $(DESTDIR)$(BINDIR)/tokenless
 	rm -f $(DESTDIR)$(LIBEXECDIR)/rtk
 	$(clean-stale-toon)
 	rm -rf $(DESTDIR)$(SHARE_DIR)
 	rm -rf $(DESTDIR)$(COSH_EXTENSION_DIR)
+
+uninstall-provider:
+	rm -rf $(DESTDIR)$(PROVIDER_DIR)
 
 # Run tests
 test: test-tokenless test-hooks test-integration test-hook-parity \
@@ -260,6 +284,7 @@ test-integration:
 	python3 tests/test_rewrite_hook.py
 	python3 tests/test_cosh_extension_matcher.py
 	python3 tests/test_resolve_agent_id.py
+	python3 tests/test_provider_manifest.py
 
 # Golden parity for the unified-entry hooks (roadmap §5.6): replays the
 # tests/contract corpus through the current hooks against the real debug
@@ -324,12 +349,12 @@ test-agentscope-integration: python-wheel agentscope-wheel
 package-raw:
 	@$(MAKE) -B stamp-adapter-templates
 	@$(MAKE) build-openclaw-plugin build-dsh-plugin
-	@./packaging/raw/package.sh package
+	@TOKENLESS_PROVIDER_DIR="$(PROVIDER_SRC_DIR)" ./packaging/raw/package.sh package
 
 stage-raw:
 	@$(MAKE) -B stamp-adapter-templates
 	@$(MAKE) build-openclaw-plugin build-dsh-plugin
-	@./packaging/raw/package.sh stage
+	@TOKENLESS_PROVIDER_DIR="$(PROVIDER_SRC_DIR)" ./packaging/raw/package.sh stage
 
 test-raw-package:
 	@bash tests/test-package-raw.sh

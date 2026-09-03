@@ -114,6 +114,7 @@ mkdir -p %{buildroot}%{_datadir}/anolisa/adapters/tokenless/codex/scripts
 mkdir -p %{buildroot}%{_datadir}/anolisa/adapters/tokenless/opencode/scripts
 mkdir -p %{buildroot}%{_datadir}/anolisa/adapters/tokenless/qwencode/hooks
 mkdir -p %{buildroot}%{_datadir}/anolisa/adapters/tokenless/qwencode/scripts
+mkdir -p %{buildroot}%{_datadir}/aw/providers/tokenless/schemas
 mkdir -p %{buildroot}%{_docdir}/tokenless
 
 # Install binaries — tokenless (user-facing) to /usr/bin, helpers to /usr/libexec/anolisa/tokenless
@@ -136,6 +137,12 @@ install -m 0644 adapters/tokenless/manifest.json %{buildroot}%{_datadir}/anolisa
 # model: %{_datadir}/anolisa/components/<component>/component.toml.
 install -d -m 0755 %{buildroot}%{_datadir}/anolisa/components/tokenless
 install -m 0644 .anolisa/component.toml %{buildroot}%{_datadir}/anolisa/components/tokenless/
+# Install the AW Provider Host discovery contract. This is intentionally separate
+# from the ANOLISA component contract above: it describes runtime capabilities,
+# not package lifecycle metadata.
+install -m 0644 provider/provider.toml %{buildroot}%{_datadir}/aw/providers/tokenless/
+install -m 0644 provider/schemas/*.schema.json \
+    %{buildroot}%{_datadir}/aw/providers/tokenless/schemas/
 install -m 0644 adapters/tokenless/common/tool-ready-spec.json %{buildroot}%{_datadir}/anolisa/adapters/tokenless/common/
 install -m 0755 adapters/tokenless/common/tokenless-env-fix.sh %{buildroot}%{_datadir}/anolisa/adapters/tokenless/common/
 install -m 0644 adapters/tokenless/common/cosh-extension.json %{buildroot}%{_datadir}/anolisa/adapters/tokenless/common/
@@ -234,6 +241,10 @@ install -m 0644 adapters/tokenless/common/commands/tokenless-stats.toml %{buildr
 %doc %{_docdir}/tokenless/LICENSE
 %doc %{_docdir}/tokenless/response-compression.md
 %dir %{_datadir}/anolisa
+%dir %{_datadir}/aw
+%dir %{_datadir}/aw/providers
+%dir %{_datadir}/aw/providers/tokenless
+%dir %{_datadir}/aw/providers/tokenless/schemas
 %dir %{_datadir}/anolisa/components
 %dir %{_datadir}/anolisa/components/tokenless
 %dir %{_datadir}/anolisa/adapters
@@ -268,6 +279,8 @@ install -m 0644 adapters/tokenless/common/commands/tokenless-stats.toml %{buildr
 %dir %{_datadir}/anolisa/adapters/tokenless/qwencode/scripts
 %attr(0644,root,root) %{_datadir}/anolisa/adapters/tokenless/manifest.json
 %attr(0644,root,root) %{_datadir}/anolisa/components/tokenless/component.toml
+%attr(0644,root,root) %{_datadir}/aw/providers/tokenless/provider.toml
+%attr(0644,root,root) %{_datadir}/aw/providers/tokenless/schemas/*.schema.json
 %attr(0644,root,root) %{_datadir}/anolisa/adapters/tokenless/common/tool-ready-spec.json
 %attr(0644,root,root) %{_datadir}/anolisa/adapters/tokenless/common/cosh-extension.json
 %attr(0755,root,root) %{_datadir}/anolisa/adapters/tokenless/common/tokenless-env-fix.sh

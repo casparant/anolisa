@@ -117,6 +117,14 @@
             ]
         },
         {
+            "label": "component:aw",
+            "maintainers": [
+                {
+                    "github": "casparant"
+                }
+            ]
+        },
+        {
             "label": "component:blaze",
             "maintainers": [
                 {

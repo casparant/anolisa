@@ -1,0 +1,342 @@
+//! Strongly typed identities allocated by AW.
+
+use std::{fmt, str::FromStr};
+
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use thiserror::Error;
+use uuid::Uuid;
+
+/// Failure returned when an internal identifier is not canonical for its type.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum IdError {
+    /// The expected type prefix is absent or belongs to another ID type.
+    #[error("identifier prefix must be `{expected}`")]
+    WrongPrefix {
+        /// Prefix required by the requested ID type.
+        expected: &'static str,
+    },
+    /// The identifier body is not a canonical lowercase hyphenated UUID.
+    #[error("identifier body must be a canonical lowercase hyphenated UUID")]
+    InvalidUuid,
+}
+
+macro_rules! define_id {
+    ($name:ident, $prefix:literal, $doc:literal) => {
+        #[doc = $doc]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub struct $name(String);
+
+        impl $name {
+            /// Prefix used in the stable text representation.
+            pub const PREFIX: &'static str = $prefix;
+
+            /// Allocates a new identifier using the workspace UUID generator.
+            #[must_use]
+            pub fn new() -> Self {
+                Self(format!("{}_{}", Self::PREFIX, Uuid::new_v4().hyphenated()))
+            }
+
+            /// Parses and validates a canonical identifier of this exact type.
+            pub fn parse(value: impl AsRef<str>) -> Result<Self, IdError> {
+                let value = value.as_ref();
+                let expected_prefix = format!("{}_", Self::PREFIX);
+                let body = value
+                    .strip_prefix(&expected_prefix)
+                    .ok_or(IdError::WrongPrefix {
+                        expected: Self::PREFIX,
+                    })?;
+                let uuid = Uuid::parse_str(body).map_err(|_| IdError::InvalidUuid)?;
+                if uuid.hyphenated().to_string() != body {
+                    return Err(IdError::InvalidUuid);
+                }
+                Ok(Self(value.to_owned()))
+            }
+
+            /// Returns the canonical prefixed representation.
+            #[must_use]
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(self.as_str())
+            }
+        }
+
+        impl FromStr for $name {
+            type Err = IdError;
+
+            fn from_str(value: &str) -> Result<Self, Self::Err> {
+                Self::parse(value)
+            }
+        }
+
+        impl Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let value = String::deserialize(deserializer)?;
+                Self::parse(value).map_err(de::Error::custom)
+            }
+        }
+    };
+}
+
+define_id!(
+    InstallationId,
+    "ins",
+    "Identifies one durable AW installation."
+);
+define_id!(
+    ActorId,
+    "act",
+    "Identifies an actor assertion that an accepting trust boundary must authenticate."
+);
+define_id!(TaskId, "tsk", "Identifies one durable user intent.");
+define_id!(RunId, "run", "Identifies one attempt to execute a task.");
+define_id!(
+    AgentWorkId,
+    "wrk",
+    "Identifies one durable Agent Work object at the public Core boundary."
+);
+define_id!(
+    AttemptId,
+    "atm",
+    "Identifies one attempt to satisfy an Agent Work object."
+);
+define_id!(
+    TurnId,
+    "trn",
+    "Identifies one prompt turn within an Agent session."
+);
+define_id!(
+    AgentSessionId,
+    "ags",
+    "Identifies one system-owned logical Agent session."
+);
+define_id!(
+    ShellSessionId,
+    "shs",
+    "Identifies one Agent Environment Shell session."
+);
+define_id!(
+    RuntimeInstanceId,
+    "rti",
+    "Identifies one supervised runtime process instance."
+);
+define_id!(
+    RuntimeBindingId,
+    "rtb",
+    "Identifies a fenced binding between a run and runtime session."
+);
+define_id!(
+    ApprovalId,
+    "apr",
+    "Identifies one durable approval request."
+);
+define_id!(PermitId, "prm", "Identifies one capability permit.");
+define_id!(
+    ExecutionId,
+    "exe",
+    "Identifies one attempted governed side effect."
+);
+define_id!(
+    CheckpointId,
+    "ckp",
+    "Identifies one workspace checkpoint allocated by the capability broker."
+);
+define_id!(DeliveryId, "dlv", "Identifies one presentation delivery.");
+define_id!(
+    MessageId,
+    "msg",
+    "Identifies one command or event envelope."
+);
+define_id!(RequestId, "req", "Identifies one capability request.");
+define_id!(
+    EnvironmentId,
+    "env",
+    "Identifies one registered Agent Environment."
+);
+define_id!(
+    ExecutionContextId,
+    "ctx",
+    "Identifies one governed Agent execution context."
+);
+define_id!(
+    ProviderBindingId,
+    "pbd",
+    "Identifies one scoped binding between Core and a Provider."
+);
+define_id!(
+    ProviderInvocationId,
+    "pvi",
+    "Identifies one idempotent Provider capability invocation."
+);
+define_id!(
+    InputRequestId,
+    "inp",
+    "Identifies one durable-eligible Runtime input request."
+);
+define_id!(ToolUseId, "tol", "Identifies one observed Agent tool call.");
+define_id!(
+    ArtifactId,
+    "art",
+    "Identifies one immutable context artifact at the AW Core boundary."
+);
+define_id!(
+    RuntimeMessageId,
+    "rms",
+    "Identifies one logical message emitted by an Agent runtime."
+);
+define_id!(
+    LedgerEventId,
+    "evt",
+    "Identifies one append-only record in the AW Ledger."
+);
+define_id!(
+    LedgerProjectionId,
+    "prj",
+    "Identifies one Capability projection snapshot attached to a Ledger event."
+);
+define_id!(
+    LedgerEvidenceId,
+    "evd",
+    "Identifies one Observe evidence bundle attached to a Ledger event."
+);
+define_id!(
+    LedgerCredentialId,
+    "cdl",
+    "Identifies one Mediate gate credential attached to a Ledger event."
+);
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AgentWorkId, ArtifactId, AttemptId, CheckpointId, EnvironmentId, ExecutionContextId,
+        ExecutionId, ProviderBindingId, ProviderInvocationId, RunId, TurnId,
+    };
+
+    #[test]
+    fn turn_ids_are_canonical_and_distinct_from_runs() {
+        let turn_id = TurnId::new();
+
+        assert!(turn_id.as_str().starts_with("trn_"));
+        assert_eq!(
+            TurnId::parse(turn_id.as_str()).expect("a generated turn ID is canonical"),
+            turn_id
+        );
+        assert!(RunId::parse(turn_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn checkpoint_ids_are_canonical_and_distinct_from_executions() {
+        let checkpoint_id = CheckpointId::new();
+
+        assert!(checkpoint_id.as_str().starts_with("ckp_"));
+        assert_eq!(
+            CheckpointId::parse(checkpoint_id.as_str())
+                .expect("a generated checkpoint ID is canonical"),
+            checkpoint_id
+        );
+        assert!(ExecutionId::parse(checkpoint_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn provider_ids_preserve_domain_boundaries() {
+        let environment_id = EnvironmentId::new();
+        let context_id = ExecutionContextId::new();
+        let binding_id = ProviderBindingId::new();
+        let invocation_id = ProviderInvocationId::new();
+
+        assert!(environment_id.as_str().starts_with("env_"));
+        assert!(context_id.as_str().starts_with("ctx_"));
+        assert!(binding_id.as_str().starts_with("pbd_"));
+        assert!(invocation_id.as_str().starts_with("pvi_"));
+        assert!(ProviderInvocationId::parse(binding_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn public_work_ids_do_not_reuse_gateway_task_wire_names() {
+        let work_id = AgentWorkId::new();
+        let attempt_id = AttemptId::new();
+
+        assert!(work_id.as_str().starts_with("wrk_"));
+        assert!(attempt_id.as_str().starts_with("atm_"));
+        assert!(RunId::parse(attempt_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn context_artifact_ids_have_their_own_domain() {
+        let artifact_id = ArtifactId::new();
+
+        assert!(artifact_id.as_str().starts_with("art_"));
+        assert_eq!(
+            ArtifactId::parse(artifact_id.as_str()).expect("a generated artifact ID is canonical"),
+            artifact_id
+        );
+        assert!(TurnId::parse(artifact_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn ledger_ids_use_four_distinct_prefixes() {
+        use super::{
+            DeliveryId, LedgerCredentialId, LedgerEventId, LedgerEvidenceId, LedgerProjectionId,
+        };
+
+        let event = LedgerEventId::new();
+        let projection = LedgerProjectionId::new();
+        let evidence = LedgerEvidenceId::new();
+        let credential = LedgerCredentialId::new();
+        let delivery = DeliveryId::new();
+
+        assert!(event.as_str().starts_with("evt_"));
+        assert!(projection.as_str().starts_with("prj_"));
+        assert!(evidence.as_str().starts_with("evd_"));
+        assert!(credential.as_str().starts_with("cdl_"));
+
+        assert_eq!(
+            LedgerEventId::parse(event.as_str()).expect("a generated event ID is canonical"),
+            event
+        );
+        assert_eq!(
+            LedgerProjectionId::parse(projection.as_str())
+                .expect("a generated projection ID is canonical"),
+            projection
+        );
+        assert_eq!(
+            LedgerEvidenceId::parse(evidence.as_str())
+                .expect("a generated evidence ID is canonical"),
+            evidence
+        );
+        assert_eq!(
+            LedgerCredentialId::parse(credential.as_str())
+                .expect("a generated credential ID is canonical"),
+            credential
+        );
+
+        // `cdl_` must not be accepted as a delivery, and vice versa.
+        assert!(DeliveryId::parse(credential.as_str()).is_err());
+        assert!(LedgerCredentialId::parse(delivery.as_str()).is_err());
+        // Cross-type rejection within the Ledger domain.
+        assert!(LedgerEvidenceId::parse(credential.as_str()).is_err());
+        assert!(LedgerCredentialId::parse(evidence.as_str()).is_err());
+    }
+}

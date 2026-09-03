@@ -11,6 +11,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/tokenless/**'
+      - 'providers/tokenless/**'
   pull_request:
     branches: [main, 'release/**']
     paths:
@@ -21,6 +22,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/tokenless/**'
+      - 'providers/tokenless/**'
   workflow_dispatch:
 
 permissions:
