@@ -1,7 +1,9 @@
 #![cfg(unix)]
 
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
+// The parent tests module is itself loaded through a path attribute, so
+// directory inference does not apply to its children.
+#[path = "tests/providers.rs"]
+mod providers;
 
 use aw_contracts::common::{BoundedName, BoundedOpaque, TargetRef};
 use aw_contracts::context::{ContextArtifactOrigin, ToolResultSubmission};
@@ -9,15 +11,21 @@ use aw_contracts::ids::{
     ActorId, AgentSessionId, AgentWorkId, AttemptId, EnvironmentId, ExecutionContextId, ToolUseId,
     TurnId,
 };
+use aw_contracts::provider::ProviderDisposition;
+use aw_contracts::security::{
+    GateDegradation, ObservationGapReason, PendingToolCallSubmission, SecurityCodeLanguage,
+    SecurityRuleId,
+};
 use aw_provider_host::{ProviderAdmissionOptions, ProviderCatalog, ProviderManifestSource};
 use serde_json::json;
 
 use super::{
     context_artifact_id, context_projection_input, sha256_digest, CapabilityPreferences, Core,
-    CoreConfig, CoreError, SessionContextSpec,
+    CoreConfig, CoreError, MediationFailurePolicy, SessionContextSpec, ToolCallGate,
 };
 use crate::execute::capability_idempotency_key;
 use crate::plan::PlanBoundary;
+use providers::{write_provider, FixtureKind};
 
 /// Core-side invocation ceiling used by every plan test.
 ///
@@ -27,16 +35,9 @@ use crate::plan::PlanBoundary;
 /// report `provider_timeout` instead of the routing under test.
 const FIXTURE_WALL_TIME_MS: u64 = 30_000;
 
-const INPUT_SCHEMA: &str =
-    include_str!("../../aw-contracts/schemas/context-projection-prepare-input-v1.schema.json");
-const OUTPUT_SCHEMA: &str =
-    include_str!("../../aw-contracts/schemas/context-projection-prepare-output-v1.schema.json");
-const EMPTY_SCHEMA_SHA256: &str =
-    "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
-
 #[test]
 fn execution_context_allocates_once_or_preserves_a_propagated_identity() {
-    let (_packages, core) = core_fixture(&["projection-a"]);
+    let (_packages, core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
     let propagated = ExecutionContextId::new();
     let resumed = core
         .establish_execution_context(context_spec(Some(propagated.clone())))
@@ -51,7 +52,7 @@ fn execution_context_allocates_once_or_preserves_a_propagated_identity() {
 
 #[test]
 fn attempt_scope_requires_work() {
-    let (_packages, core) = core_fixture(&["projection-a"]);
+    let (_packages, core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
     let mut spec = context_spec(None);
     spec.attempt_id = Some(AttemptId::new());
 
@@ -64,7 +65,7 @@ fn attempt_scope_requires_work() {
 #[test]
 fn default_core_refuses_content_provider_without_enforced_controls() {
     let root = tempfile::tempdir().expect("fixture root is created");
-    write_provider(root.path(), "projection-a");
+    write_provider(root.path(), "projection-a", FixtureKind::Projection);
     let catalog = ProviderCatalog::discover(
         ProviderManifestSource::Directory(root.path().to_path_buf()),
         &ProviderAdmissionOptions::default(),
@@ -119,7 +120,7 @@ fn canonical_tool_input_contains_the_source_artifact_and_post_tool_boundary() {
 
 #[test]
 fn tool_result_route_populates_exact_scope_and_returns_content_free_receipt() {
-    let (_packages, mut core) = core_fixture(&["projection-a"]);
+    let (_packages, mut core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
     let work_id = AgentWorkId::new();
     let attempt_id = AttemptId::new();
     let propagated = ExecutionContextId::new();
@@ -166,7 +167,10 @@ fn tool_result_route_populates_exact_scope_and_returns_content_free_receipt() {
 
 #[test]
 fn ambiguous_routes_require_an_explicit_provider_preference() {
-    let (_packages, mut core) = core_fixture(&["projection-a", "projection-b"]);
+    let (_packages, mut core) = core_fixture(&[
+        ("projection-a", FixtureKind::Projection),
+        ("projection-b", FixtureKind::Projection),
+    ]);
     let context = core
         .establish_execution_context(context_spec(None))
         .expect("session scope is valid");
@@ -268,7 +272,7 @@ fn capability_keys_do_not_collide_across_capabilities() {
 
 #[test]
 fn a_preference_for_an_unplanned_capability_is_rejected() {
-    let (_packages, mut core) = core_fixture(&["projection-a"]);
+    let (_packages, mut core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
     let context = core
         .establish_execution_context(context_spec(None))
         .expect("session scope is valid");
@@ -315,7 +319,7 @@ fn one_observed_tool_result_has_a_stable_artifact_identity() {
 
 #[test]
 fn repeated_preparation_reuses_the_observed_artifact() {
-    let (_packages, mut core) = core_fixture(&["projection-a"]);
+    let (_packages, mut core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
     let context = core
         .establish_execution_context(context_spec(None))
         .expect("session scope is valid");
@@ -349,10 +353,392 @@ fn repeated_preparation_reuses_the_observed_artifact() {
     );
 }
 
-fn core_fixture(provider_ids: &[&str]) -> (tempfile::TempDir, Core) {
+#[test]
+fn observe_steps_reach_every_distinct_provider() {
+    let (_packages, mut core) = core_fixture(&[
+        ("projection-a", FixtureKind::Projection),
+        ("scanner-a", FixtureKind::ContentInspect),
+        ("scanner-b", FixtureKind::ContentInspect),
+        ("code-a", FixtureKind::CodeInspect),
+    ]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let outcome = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission("source"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a fan-out plan does not require a unique Observe implementation");
+
+    assert_eq!(
+        outcome.observations.len(),
+        3,
+        "both content scanners and the code scanner report facts"
+    );
+    assert!(outcome.observation_gaps.is_empty());
+    assert_eq!(
+        outcome.receipts().len(),
+        4,
+        "three Observe receipts plus one Advise receipt"
+    );
+    assert!(outcome.projection.candidate.is_some());
+
+    let providers: Vec<_> = outcome
+        .observations
+        .iter()
+        .map(|observation| observation.receipt.provider_id.as_str().to_owned())
+        .collect();
+    assert!(providers.contains(&"scanner-a".to_owned()));
+    assert!(providers.contains(&"scanner-b".to_owned()));
+    assert!(providers.contains(&"code-a".to_owned()));
+}
+
+#[test]
+fn an_advise_candidate_survives_a_failed_observation() {
+    let (_packages, mut core) = core_fixture(&[
+        ("projection-a", FixtureKind::Projection),
+        ("scanner-a", FixtureKind::ContentInspectFailing),
+    ]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let outcome = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission("source"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("an Observe failure must not fail the plan");
+
+    assert!(
+        outcome.projection.candidate.is_some(),
+        "an Observe Capability cannot decide whether the Advise result stands"
+    );
+    let reasons: Vec<_> = outcome
+        .observation_gaps
+        .iter()
+        .map(|gap| gap.reason)
+        .collect();
+    assert!(reasons.contains(&ObservationGapReason::NotProduced));
+    assert!(reasons.contains(&ObservationGapReason::NoImplementation));
+}
+
+#[test]
+fn an_absent_observe_capability_is_a_gap_not_an_error() {
+    let (_packages, mut core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let outcome = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission("source"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a missing Observe implementation is a recorded fact, not a failure");
+
+    assert!(outcome.observations.is_empty());
+    assert_eq!(outcome.observation_gaps.len(), 2);
+    assert!(outcome
+        .observation_gaps
+        .iter()
+        .all(|gap| gap.reason == ObservationGapReason::NoImplementation));
+    assert!(outcome
+        .observation_gaps
+        .iter()
+        .all(|gap| gap.receipt.is_none()));
+}
+
+#[test]
+fn an_observation_carrying_a_matched_value_is_rejected() {
+    let (_packages, mut core) = core_fixture(&[
+        ("projection-a", FixtureKind::Projection),
+        ("scanner-a", FixtureKind::ContentInspectLeaking),
+    ]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let outcome = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission("source"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a rejected observation degrades its own step only");
+
+    assert!(outcome.observations.is_empty());
+    assert!(outcome
+        .observation_gaps
+        .iter()
+        .any(|gap| gap.reason == ObservationGapReason::InvalidOutput));
+    assert!(outcome.projection.candidate.is_some());
+
+    let encoded = serde_json::to_string(&outcome).expect("outcome serializes");
+    assert!(
+        !encoded.contains("LTAI5tFixtureLeakedSecret"),
+        "a rejected finding must not leak its matched value into the outcome"
+    );
+}
+
+#[test]
+fn advise_routing_fails_before_any_observation_is_collected() {
+    let (_packages, mut core) = core_fixture(&[
+        ("projection-a", FixtureKind::Projection),
+        ("projection-b", FixtureKind::Projection),
+        ("scanner-a", FixtureKind::ContentInspect),
+    ]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let error = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission("source"),
+            &CapabilityPreferences::default(),
+        )
+        .expect_err("an ambiguous Advise route rejects the whole plan");
+
+    assert!(matches!(error, CoreError::AmbiguousCapabilityRoute { .. }));
+}
+
+#[test]
+fn observation_facts_never_carry_the_source_content() {
+    let (_packages, mut core) = core_fixture(&[
+        ("projection-a", FixtureKind::Projection),
+        ("scanner-a", FixtureKind::ContentInspect),
+        ("code-a", FixtureKind::CodeInspect),
+    ]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+    let marker = "MARKER-e1f2a3b4-source-only";
+
+    let outcome = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission(marker),
+            &CapabilityPreferences::default(),
+        )
+        .expect("the plan runs");
+
+    let observations =
+        serde_json::to_string(&outcome.observations).expect("observations serialize");
+    let gaps = serde_json::to_string(&outcome.observation_gaps).expect("gaps serialize");
+    assert!(!observations.contains(marker));
+    assert!(!gaps.contains(marker));
+    assert!(!serde_json::to_string(&outcome.projection.receipt)
+        .expect("receipt serializes")
+        .contains(marker));
+}
+
+#[test]
+fn a_deny_verdict_becomes_a_block_gate() {
+    let (_packages, mut core) = core_fixture(&[("gate-a", FixtureKind::CommandInspectDeny)]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let decision = core
+        .mediate_tool_call(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            pending_call("rm -rf / --no-preserve-root"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a mediated route resolves a gate");
+
+    assert_eq!(decision.gate, ToolCallGate::Block);
+    assert_eq!(decision.degradation, None);
+    assert_eq!(
+        decision
+            .reasons
+            .iter()
+            .map(SecurityRuleId::as_str)
+            .collect::<Vec<_>>(),
+        vec!["fixture.recursive_delete"]
+    );
+    let receipt = decision.receipt.expect("a mediated gate carries a receipt");
+    assert_eq!(receipt.provider_id.as_str(), "gate-a");
+    assert_eq!(receipt.disposition, ProviderDisposition::Produced);
+}
+
+#[test]
+fn an_allow_verdict_carries_no_reason_codes() {
+    let (_packages, mut core) = core_fixture(&[("gate-a", FixtureKind::CommandInspectAllow)]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let decision = core
+        .mediate_tool_call(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            pending_call("ls -la"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a mediated route resolves a gate");
+
+    assert_eq!(decision.gate, ToolCallGate::Allow);
+    assert!(decision.reasons.is_empty());
+    assert_eq!(decision.degradation, None);
+}
+
+#[test]
+fn an_absent_mediate_implementation_is_not_mediated() {
+    let (_packages, mut core) = core_fixture(&[("projection-a", FixtureKind::Projection)]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+
+    let decision = core
+        .mediate_tool_call(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            pending_call("ls -la"),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a missing Mediate implementation is a recorded fact, not a failure");
+
+    assert_eq!(
+        decision.gate,
+        ToolCallGate::NotMediated,
+        "an absent Capability holds no opinion, so Core must not present one"
+    );
+    assert_eq!(
+        decision.degradation,
+        Some(GateDegradation::NoImplementation)
+    );
+    assert!(decision.receipt.is_none());
+}
+
+#[test]
+fn a_failed_mediation_takes_the_configured_default() {
+    for (policy, expected) in [
+        (MediationFailurePolicy::Ask, ToolCallGate::Ask),
+        (MediationFailurePolicy::Block, ToolCallGate::Block),
+    ] {
+        let root = tempfile::tempdir().expect("fixture root is created");
+        write_provider(root.path(), "gate-a", FixtureKind::CommandInspectFailing);
+        let catalog = ProviderCatalog::discover(
+            ProviderManifestSource::Directory(root.path().to_path_buf()),
+            &ProviderAdmissionOptions::default(),
+        )
+        .expect("fixture Provider is admitted");
+        let mut core = Core::with_config(
+            catalog,
+            CoreConfig {
+                allow_unenforced_providers: true,
+                mediation_failure: policy,
+                provider_wall_time_ms: FIXTURE_WALL_TIME_MS,
+                ..CoreConfig::default()
+            },
+        )
+        .expect("fixture Core configuration is valid");
+        let context = core
+            .establish_execution_context(context_spec(None))
+            .expect("session scope is valid");
+
+        let decision = core
+            .mediate_tool_call(
+                &context,
+                TurnId::new(),
+                ToolUseId::new(),
+                pending_call("ls -la"),
+                &CapabilityPreferences::default(),
+            )
+            .expect("a Provider failure resolves the gate instead of failing the call");
+
+        assert_eq!(
+            decision.gate, expected,
+            "a broken scanner must never resolve to an approval"
+        );
+        assert_eq!(decision.degradation, Some(GateDegradation::NotProduced));
+        assert!(decision.receipt.is_some());
+    }
+}
+
+#[test]
+fn a_gate_decision_never_carries_the_command_text() {
+    let (_packages, mut core) = core_fixture(&[("gate-a", FixtureKind::CommandInspectDeny)]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+    let marker = "MARKER-9c8d7e6f-command-only";
+
+    let decision = core
+        .mediate_tool_call(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            pending_call(&format!("rm -rf {marker}")),
+            &CapabilityPreferences::default(),
+        )
+        .expect("a mediated route resolves a gate");
+
+    let encoded = serde_json::to_string(&decision).expect("decision serializes");
+    assert!(
+        !encoded.contains(marker),
+        "a gate notice must be renderable to an operator without echoing the command"
+    );
+}
+
+#[test]
+fn the_two_boundaries_do_not_share_a_replay_key() {
+    let tool_use_id = ToolUseId::new();
+    let input_digest = sha256_digest(b"one canonical input").expect("SHA-256 is canonical");
+    let capability = aw_contracts::security::security_command_inspect_capability()
+        .expect("compiled-in Capability is canonical");
+
+    let gate_key = capability_idempotency_key(
+        PlanBoundary::PreToolUse,
+        &capability,
+        tool_use_id.as_str(),
+        &input_digest,
+    )
+    .expect("derived replay key is bounded");
+    let result_key = capability_idempotency_key(
+        PlanBoundary::PostToolUse,
+        &capability,
+        tool_use_id.as_str(),
+        &input_digest,
+    )
+    .expect("derived replay key is bounded");
+
+    assert_ne!(gate_key, result_key);
+    assert!(gate_key.as_str().starts_with("tool-call:tol_"));
+    assert!(
+        gate_key.as_str().len() <= aw_contracts::common::MAX_IDEMPOTENCY_KEY_BYTES,
+        "replay key must fit the bounded contract: {} bytes",
+        gate_key.as_str().len()
+    );
+}
+
+fn core_fixture(packages: &[(&str, FixtureKind)]) -> (tempfile::TempDir, Core) {
     let root = tempfile::tempdir().expect("fixture root is created");
-    for provider_id in provider_ids {
-        write_provider(root.path(), provider_id);
+    for (provider_id, kind) in packages {
+        write_provider(root.path(), provider_id, *kind);
     }
     let catalog = ProviderCatalog::discover(
         ProviderManifestSource::Directory(root.path().to_path_buf()),
@@ -370,111 +756,6 @@ fn core_fixture(provider_ids: &[&str]) -> (tempfile::TempDir, Core) {
             },
         )
         .expect("fixture Core configuration is valid"),
-    )
-}
-
-fn write_provider(root: &std::path::Path, provider_id: &str) {
-    let package = root.join(provider_id);
-    fs::create_dir(&package).expect("Provider package directory is created");
-    fs::write(package.join("input.schema.json"), INPUT_SCHEMA).expect("input schema is written");
-    fs::write(package.join("output.schema.json"), OUTPUT_SCHEMA).expect("output schema is written");
-    fs::write(package.join("native.schema.json"), "{}").expect("native schema is written");
-    let executable = package.join("fake-provider.sh");
-    fs::write(
-        &executable,
-        "#!/bin/sh\nprintf '%s' '{\"disposition\":\"applied\",\"output\":\"projected output\"}'\n",
-    )
-    .expect("fixture executable is written");
-    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
-        .expect("fixture executable is made executable");
-    fs::write(package.join("provider.toml"), manifest(provider_id))
-        .expect("fixture manifest is written");
-}
-
-fn manifest(provider_id: &str) -> String {
-    format!(
-        r#"api_version = "providers.agentic-os.sh/v1"
-provider_id = "{provider_id}"
-provider_version = "1.0.0"
-driver = "exec-json/v1"
-lifecycle = "one_shot"
-
-[executable]
-command = "./fake-provider.sh"
-args = []
-
-[limits]
-wall_time_ms = 30000
-input_bytes = 1048576
-output_bytes = 1048576
-
-[permissions]
-network = "none"
-inherit_environment = false
-filesystem_read = []
-filesystem_write = []
-
-[data]
-reads = ["model_visible_context"]
-writes = []
-sensitivity = "inherits_input"
-retention = "none"
-telemetry = "disabled"
-
-[[capabilities]]
-capability = "context.projection.prepare/v1"
-authority = "advise"
-scopes = ["tool_call"]
-input_contract = {{ schema = "context.projection.prepare.input/v1", resource = "input.schema.json", sha256 = "bdd09189791e34ce768e624bc19a5bf0d9569b8886b2a5f1c2408aeb8b8b5d9f" }}
-output_contract = {{ schema = "context.projection.prepare.output/v1", resource = "output.schema.json", sha256 = "a295cf2b855899f9dfe5f1dda242d803af81852e6677526f79457c3214288028" }}
-native_input = {{ resource = "native.schema.json", sha256 = "{EMPTY_SCHEMA_SHA256}" }}
-native_output = {{ resource = "native.schema.json", sha256 = "{EMPTY_SCHEMA_SHA256}" }}
-
-[capabilities.codec]
-kind = "json-map/v1"
-
-[[capabilities.codec.request.fields]]
-target = "/content"
-source = {{ kind = "input", pointer = "/artifact/content" }}
-on_missing = "reject"
-
-[capabilities.codec.response.disposition]
-source = "/disposition"
-on_unknown = "fail"
-
-[capabilities.codec.response.disposition.values]
-applied = "produced"
-
-[[capabilities.codec.response.output_fields]]
-target = "/candidate/source_artifact_id"
-source = {{ kind = "input", pointer = "/artifact/id" }}
-when_disposition = ["produced"]
-
-[[capabilities.codec.response.output_fields]]
-target = "/candidate/source_digest"
-source = {{ kind = "input", pointer = "/artifact/digest" }}
-when_disposition = ["produced"]
-
-[[capabilities.codec.response.output_fields]]
-target = "/candidate/content"
-source = {{ kind = "response", pointer = "/output" }}
-when_disposition = ["produced"]
-
-[[capabilities.codec.response.output_fields]]
-target = "/candidate/media_type"
-source = {{ kind = "const", value = "text/plain" }}
-when_disposition = ["produced"]
-
-[[capabilities.codec.response.output_fields]]
-target = "/candidate/transform_chain"
-source = {{ kind = "const", value = ["fixture"] }}
-when_disposition = ["produced"]
-
-[[capabilities.codec.response.output_fields]]
-target = "/candidate/reversibility"
-source = {{ kind = "const", value = "lossless" }}
-when_disposition = ["produced"]
-"#
     )
 }
 
@@ -502,5 +783,13 @@ fn submission(content: &str) -> ToolResultSubmission {
         origin: ContextArtifactOrigin::CommandOutput,
         tool_name: Some(BoundedName::new("shell").expect("fixture tool name is bounded")),
         allow_text_reencoding: true,
+    }
+}
+
+fn pending_call(command: &str) -> PendingToolCallSubmission {
+    PendingToolCallSubmission {
+        command: command.to_owned(),
+        language: SecurityCodeLanguage::Bash,
+        tool_name: Some(BoundedName::new("shell").expect("fixture tool name is bounded")),
     }
 }

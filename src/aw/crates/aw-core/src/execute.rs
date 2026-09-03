@@ -13,10 +13,11 @@ use aw_contracts::provider::{
     CapabilityInvocation, ExecutionScope, ProviderHealthState, ProviderInvocationBudget,
     ProviderInvocationResult, ProviderPayload, ProviderSelection, VersionedSchema,
 };
-use aw_provider_host::ProviderGuaranteeState;
+use aw_contracts::security::{GateDegradation, ObservationGapReason};
+use aw_provider_host::{ProviderGuaranteeState, RuntimeCapabilityEntry};
 use serde_json::Value;
 
-use crate::plan::{CapabilityPlanStep, CapabilitySelection, PlanBoundary};
+use crate::plan::{CapabilityPlanStep, CapabilitySelection, PlanBoundary, StepFailurePolicy};
 use crate::{canonical_input_digest, unix_time_ms, Core, CoreError};
 
 /// Routing preferences applied to Capability steps that admit exactly one route.
@@ -48,10 +49,49 @@ impl CapabilityPreferences {
     }
 }
 
+/// Why routing produced no target for a step allowed to degrade.
+///
+/// Resolution reports its own small vocabulary, and each boundary maps it to the
+/// vocabulary that boundary publishes. An observation gap and a gate degradation
+/// are different public facts even when the routing cause is identical.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RouteGap {
+    /// No admitted implementation satisfies the Capability Contract.
+    NoImplementation,
+    /// A matching implementation only declares its isolation controls.
+    ControlsNotEnforced,
+    /// Several implementations qualify and routing policy named none.
+    AmbiguousRoute,
+}
+
+impl RouteGap {
+    /// Maps a routing cause to the Observe vocabulary.
+    pub(crate) fn as_observation_reason(self) -> ObservationGapReason {
+        match self {
+            // A fan-out step invokes every qualifying implementation, so
+            // ambiguity cannot arise there; report it as absent rather than
+            // inventing a reason the Observe vocabulary does not carry.
+            Self::NoImplementation | Self::AmbiguousRoute => ObservationGapReason::NoImplementation,
+            Self::ControlsNotEnforced => ObservationGapReason::ControlsNotEnforced,
+        }
+    }
+
+    /// Maps a routing cause to the Tool Call gate vocabulary.
+    pub(crate) fn as_gate_degradation(self) -> GateDegradation {
+        match self {
+            Self::NoImplementation => GateDegradation::NoImplementation,
+            Self::ControlsNotEnforced => GateDegradation::ControlsNotEnforced,
+            Self::AmbiguousRoute => GateDegradation::AmbiguousRoute,
+        }
+    }
+}
+
 /// One plan step with its routing already decided.
 pub(crate) struct ResolvedStep {
     pub(crate) step: CapabilityPlanStep,
     pub(crate) targets: Vec<ProviderSelection>,
+    /// Why this step has no route, when its policy allows degrading.
+    pub(crate) gap: Option<RouteGap>,
 }
 
 impl Core {
@@ -109,10 +149,17 @@ impl Core {
             })
             .collect::<Vec<_>>();
 
-        let matched_before_trust = !eligible.is_empty();
-        if !self.config.allow_unenforced_providers && matched_before_trust {
+        let degrades = !matches!(step.failure, StepFailurePolicy::RejectPlan);
+        if !self.config.allow_unenforced_providers && !eligible.is_empty() {
             eligible.retain(|entry| entry.guarantee != ProviderGuaranteeState::DeclaredNotEnforced);
             if eligible.is_empty() {
+                if degrades {
+                    return Ok(ResolvedStep {
+                        step,
+                        targets: Vec::new(),
+                        gap: Some(RouteGap::ControlsNotEnforced),
+                    });
+                }
                 return Err(CoreError::ProviderControlsNotEnforced);
             }
         }
@@ -127,8 +174,31 @@ impl Core {
             }
         }
 
+        fn select(entry: &RuntimeCapabilityEntry) -> ProviderSelection {
+            ProviderSelection {
+                provider_id: entry.provider_id.clone(),
+                provider_version: entry.provider_version.clone(),
+                manifest_digest: entry.manifest_digest.clone(),
+            }
+        }
+
         let preference = preferences.preferred_providers.get(&step.capability.id);
-        let targets = match step.selection {
+        match step.selection {
+            CapabilitySelection::AllDistinctProviders => {
+                if eligible.is_empty() {
+                    return Ok(ResolvedStep {
+                        step,
+                        targets: Vec::new(),
+                        gap: Some(RouteGap::NoImplementation),
+                    });
+                }
+                let targets = eligible.iter().map(|entry| select(entry)).collect();
+                Ok(ResolvedStep {
+                    step,
+                    targets,
+                    gap: None,
+                })
+            }
             CapabilitySelection::ExactlyOne => {
                 let selected = match preference {
                     Some(preferred) => eligible
@@ -138,12 +208,27 @@ impl Core {
                             provider_id: preferred.as_str().to_owned(),
                         })?,
                     None => match eligible.as_slice() {
+                        [] if degrades => {
+                            return Ok(ResolvedStep {
+                                step,
+                                targets: Vec::new(),
+                                gap: Some(RouteGap::NoImplementation),
+                            })
+                        }
                         [] => {
                             return Err(CoreError::CapabilityUnavailable {
                                 capability: schema_label(&step.capability),
                             })
                         }
                         [only] => *only,
+                        many if degrades => {
+                            let _ = many;
+                            return Ok(ResolvedStep {
+                                step,
+                                targets: Vec::new(),
+                                gap: Some(RouteGap::AmbiguousRoute),
+                            });
+                        }
                         many => {
                             return Err(CoreError::AmbiguousCapabilityRoute {
                                 capability: schema_label(&step.capability),
@@ -156,15 +241,13 @@ impl Core {
                         }
                     },
                 };
-                vec![ProviderSelection {
-                    provider_id: selected.provider_id.clone(),
-                    provider_version: selected.provider_version.clone(),
-                    manifest_digest: selected.manifest_digest.clone(),
-                }]
+                Ok(ResolvedStep {
+                    step,
+                    targets: vec![select(selected)],
+                    gap: None,
+                })
             }
-        };
-
-        Ok(ResolvedStep { step, targets })
+        }
     }
 
     /// Invokes one resolved target under Core policy, deadline, and budget.

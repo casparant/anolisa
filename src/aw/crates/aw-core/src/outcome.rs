@@ -5,8 +5,13 @@
 
 use aw_contracts::common::Digest;
 use aw_contracts::context::ContextProjectionCandidate;
+use aw_contracts::error::ContractError;
 use aw_contracts::ids::ArtifactId;
-use aw_contracts::provider::ProviderReceipt;
+use aw_contracts::provider::{ProviderReceipt, VersionedSchema};
+use aw_contracts::security::{
+    GateDegradation, ObservationGapReason, SecurityDetectedLanguage, SecurityFinding,
+    SecurityFindingSeverity, SecurityInspectionVerdict, SecurityRuleId, ToolCallGate,
+};
 use serde::Serialize;
 
 /// Advise candidate paired with the receipt for the invocation that produced it.
@@ -21,6 +26,61 @@ pub struct PreparedProjection {
     pub receipt: ProviderReceipt,
 }
 
+/// One accepted Observe result, normalized across inspection Capabilities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CapabilityObservation {
+    /// Capability that produced these facts.
+    pub capability: VersionedSchema,
+    /// Highest-level conclusion the implementation reported.
+    pub verdict: SecurityInspectionVerdict,
+    /// Per-rule counts. A finding never carries the value it matched.
+    pub findings: Vec<SecurityFinding>,
+    /// Bytes the implementation reported inspecting.
+    pub scanned_bytes: u64,
+    /// Whether the implementation stopped before the whole artifact.
+    pub truncated: bool,
+    /// Language a code inspection reported analysing, when it classified one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language_detected: Option<SecurityDetectedLanguage>,
+    /// Content-free receipt for the invocation that produced these facts.
+    pub receipt: ProviderReceipt,
+}
+
+impl CapabilityObservation {
+    /// Returns the most severe severity across the findings, if any.
+    #[must_use]
+    pub fn peak_severity(&self) -> Option<SecurityFindingSeverity> {
+        self.findings.iter().map(|finding| finding.severity).max()
+    }
+
+    /// Returns the total number of matches attributed to all findings.
+    #[must_use]
+    pub fn matched_total(&self) -> u64 {
+        self.findings
+            .iter()
+            .map(|finding| u64::from(finding.count))
+            .sum()
+    }
+}
+
+/// One planned Observe Capability that produced no usable fact.
+///
+/// A gap is a recorded fact in its own right. Core reports why an observation is
+/// absent instead of collapsing every cause into a silent success.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ObservationGap {
+    /// Capability Core planned but could not complete.
+    pub capability: VersionedSchema,
+    /// Why the observation is absent.
+    pub reason: ObservationGapReason,
+    /// Bounded safe failure, when the invocation reached a settled receipt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ContractError>,
+    /// Receipt when Core accepted an invocation that then settled unusable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<ProviderReceipt>,
+}
+
 /// Core result for one observed tool result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ToolResultOutcome {
@@ -30,12 +90,69 @@ pub struct ToolResultOutcome {
     pub source_digest: Digest,
     /// Result of the single Advise context-projection step.
     pub projection: PreparedProjection,
+    /// Content-free Observe facts in deterministic plan order.
+    pub observations: Vec<CapabilityObservation>,
+    /// Planned Observe Capabilities that produced no fact, and why.
+    pub observation_gaps: Vec<ObservationGap>,
 }
 
 impl ToolResultOutcome {
     /// Returns every accepted receipt in deterministic plan order.
+    ///
+    /// Observe receipts precede the Advise receipt because Core invokes the
+    /// steps in that order. A gap that never reached an accepted invocation
+    /// contributes no receipt.
     #[must_use]
     pub fn receipts(&self) -> Vec<&ProviderReceipt> {
-        vec![&self.projection.receipt]
+        self.observations
+            .iter()
+            .map(|observation| &observation.receipt)
+            .chain(
+                self.observation_gaps
+                    .iter()
+                    .filter_map(|gap| gap.receipt.as_ref()),
+            )
+            .chain(std::iter::once(&self.projection.receipt))
+            .collect()
     }
+
+    /// Returns the most severe severity observed across all inspections.
+    #[must_use]
+    pub fn peak_severity(&self) -> Option<SecurityFindingSeverity> {
+        self.observations
+            .iter()
+            .filter_map(CapabilityObservation::peak_severity)
+            .max()
+    }
+
+    /// Returns the total number of matches observed across all inspections.
+    #[must_use]
+    pub fn matched_total(&self) -> u64 {
+        self.observations
+            .iter()
+            .map(CapabilityObservation::matched_total)
+            .sum()
+    }
+}
+
+/// Core gate result for one pending Tool Call.
+///
+/// [`ToolCallGate::NotMediated`] is not an approval. It states that no governed
+/// verdict exists, so an Agent Environment must apply its own default rather
+/// than read the absence of an opinion as permission.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ToolCallDecision {
+    /// Gate outcome the Agent Environment must honour.
+    pub gate: ToolCallGate,
+    /// Rationale codes safe for operator presentation.
+    ///
+    /// Codes only. The command text never appears here, so a gate notice cannot
+    /// echo the argument it refused.
+    pub reasons: Vec<SecurityRuleId>,
+    /// Content-free receipt when Core accepted a mediation invocation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<ProviderReceipt>,
+    /// Why the gate resolved without an implementation verdict.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub degradation: Option<GateDegradation>,
 }
