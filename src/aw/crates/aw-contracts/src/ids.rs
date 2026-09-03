@@ -206,6 +206,26 @@ define_id!(
     "rms",
     "Identifies one logical message emitted by an Agent runtime."
 );
+define_id!(
+    LedgerEventId,
+    "evt",
+    "Identifies one append-only record in the AW Ledger."
+);
+define_id!(
+    LedgerProjectionId,
+    "prj",
+    "Identifies one Capability projection snapshot attached to a Ledger event."
+);
+define_id!(
+    LedgerEvidenceId,
+    "evd",
+    "Identifies one Observe evidence bundle attached to a Ledger event."
+);
+define_id!(
+    LedgerCredentialId,
+    "cdl",
+    "Identifies one Mediate gate credential attached to a Ledger event."
+);
 
 #[cfg(test)]
 mod tests {
@@ -273,5 +293,50 @@ mod tests {
             artifact_id
         );
         assert!(TurnId::parse(artifact_id.as_str()).is_err());
+    }
+
+    #[test]
+    fn ledger_ids_use_four_distinct_prefixes() {
+        use super::{
+            DeliveryId, LedgerCredentialId, LedgerEventId, LedgerEvidenceId, LedgerProjectionId,
+        };
+
+        let event = LedgerEventId::new();
+        let projection = LedgerProjectionId::new();
+        let evidence = LedgerEvidenceId::new();
+        let credential = LedgerCredentialId::new();
+        let delivery = DeliveryId::new();
+
+        assert!(event.as_str().starts_with("evt_"));
+        assert!(projection.as_str().starts_with("prj_"));
+        assert!(evidence.as_str().starts_with("evd_"));
+        assert!(credential.as_str().starts_with("cdl_"));
+
+        assert_eq!(
+            LedgerEventId::parse(event.as_str()).expect("a generated event ID is canonical"),
+            event
+        );
+        assert_eq!(
+            LedgerProjectionId::parse(projection.as_str())
+                .expect("a generated projection ID is canonical"),
+            projection
+        );
+        assert_eq!(
+            LedgerEvidenceId::parse(evidence.as_str())
+                .expect("a generated evidence ID is canonical"),
+            evidence
+        );
+        assert_eq!(
+            LedgerCredentialId::parse(credential.as_str())
+                .expect("a generated credential ID is canonical"),
+            credential
+        );
+
+        // `cdl_` must not be accepted as a delivery, and vice versa.
+        assert!(DeliveryId::parse(credential.as_str()).is_err());
+        assert!(LedgerCredentialId::parse(delivery.as_str()).is_err());
+        // Cross-type rejection within the Ledger domain.
+        assert!(LedgerEvidenceId::parse(credential.as_str()).is_err());
+        assert!(LedgerCredentialId::parse(evidence.as_str()).is_err());
     }
 }
