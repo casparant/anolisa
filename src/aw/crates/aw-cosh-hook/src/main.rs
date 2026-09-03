@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use aw_contracts::common::BoundedName;
+use aw_core::CapabilityPreferences;
 use aw_cosh_hook::{local_host_target, run_cosh_post_tool_use, CoshHookConfig};
 use aw_provider_host::{ProviderAdmissionOptions, ProviderManifestSource};
 use clap::Parser;
@@ -39,9 +40,18 @@ struct Cli {
     /// Stable target identifier in the local host authority.
     #[arg(long, value_name = "ID")]
     target_id: String,
-    /// Exact Provider selected when several implementations qualify.
-    #[arg(long, value_name = "PROVIDER")]
-    preferred_provider: Option<String>,
+    /// Pin one Provider for one Capability, as `CAPABILITY=PROVIDER`.
+    ///
+    /// Applies only to Capabilities the Core plan routes to a single
+    /// implementation. Repeat the flag to pin several Capabilities.
+    #[arg(long, value_name = "CAPABILITY=PROVIDER")]
+    preferred_provider: Vec<String>,
+    /// Maximum time Core grants one Provider invocation, in milliseconds.
+    ///
+    /// The effective limit is the smallest of this value, the Provider's own
+    /// declared limit, and the remaining invocation deadline.
+    #[arg(long, value_name = "MS")]
+    provider_wall_time_ms: Option<u64>,
     /// Trust this Provider even though its network and filesystem declarations
     /// are not yet enforced by an OS sandbox.
     #[arg(long)]
@@ -68,14 +78,23 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         (None, Some(path)) => ProviderManifestSource::Directory(path),
         _ => return Err("exactly one Provider manifest source is required".into()),
     };
-    let preferred_provider_id = cli.preferred_provider.map(BoundedName::new).transpose()?;
+    let mut preferences = CapabilityPreferences::default();
+    for pair in cli.preferred_provider {
+        let (capability, provider) = pair
+            .split_once('=')
+            .ok_or("--preferred-provider expects CAPABILITY=PROVIDER")?;
+        preferences
+            .preferred_providers
+            .insert(BoundedName::new(capability)?, BoundedName::new(provider)?);
+    }
     let config = CoshHookConfig {
         provider_source,
         provider_admission: ProviderAdmissionOptions {
             executable_roots: cli.executable_root,
         },
         target: local_host_target(cli.target_id)?,
-        preferred_provider_id,
+        preferences,
+        provider_wall_time_ms: cli.provider_wall_time_ms,
         allow_unenforced_provider: cli.allow_unenforced_provider,
     };
     let result =
@@ -90,7 +109,7 @@ fn append_receipt_log(
     path: &Path,
     run: &aw_cosh_hook::CoshHookRun,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if run.receipt.is_none() {
+    if run.receipts.is_empty() {
         return Ok(());
     }
     let mut options = OpenOptions::new();

@@ -13,9 +13,11 @@ use aw_provider_host::{ProviderAdmissionOptions, ProviderCatalog, ProviderManife
 use serde_json::json;
 
 use super::{
-    context_artifact_id, context_projection_input, sha256_digest, tool_result_idempotency_key,
-    Core, CoreConfig, CoreError, PrepareToolResultOptions, SessionContextSpec,
+    context_artifact_id, context_projection_input, sha256_digest, CapabilityPreferences, Core,
+    CoreConfig, CoreError, SessionContextSpec,
 };
+use crate::execute::capability_idempotency_key;
+use crate::plan::PlanBoundary;
 
 /// Core-side invocation ceiling used by every plan test.
 ///
@@ -68,18 +70,18 @@ fn default_core_refuses_content_provider_without_enforced_controls() {
         &ProviderAdmissionOptions::default(),
     )
     .expect("fixture Provider is admitted");
-    let core = Core::new(catalog);
+    let mut core = Core::new(catalog);
     let context = core
         .establish_execution_context(context_spec(None))
         .expect("session scope is valid");
 
     let error = core
-        .prepare_tool_result(
+        .observe_tool_result(
             &context,
             TurnId::new(),
             ToolUseId::new(),
             submission("source"),
-            PrepareToolResultOptions::default(),
+            &CapabilityPreferences::default(),
         )
         .expect_err("unenforced Provider requires explicit trust");
 
@@ -117,7 +119,7 @@ fn canonical_tool_input_contains_the_source_artifact_and_post_tool_boundary() {
 
 #[test]
 fn tool_result_route_populates_exact_scope_and_returns_content_free_receipt() {
-    let (_packages, core) = core_fixture(&["projection-a"]);
+    let (_packages, mut core) = core_fixture(&["projection-a"]);
     let work_id = AgentWorkId::new();
     let attempt_id = AttemptId::new();
     let propagated = ExecutionContextId::new();
@@ -130,86 +132,167 @@ fn tool_result_route_populates_exact_scope_and_returns_content_free_receipt() {
     let turn_id = TurnId::new();
     let tool_use_id = ToolUseId::new();
 
-    let prepared = core
-        .prepare_tool_result(
+    let outcome = core
+        .observe_tool_result(
             &context,
             turn_id.clone(),
             tool_use_id.clone(),
             submission("sensitive original output"),
-            PrepareToolResultOptions::default(),
+            &CapabilityPreferences::default(),
         )
         .expect("the unique exact Provider is invoked");
 
-    let candidate = prepared
+    let receipt = &outcome.projection.receipt;
+    let candidate = outcome
+        .projection
         .candidate
         .as_ref()
         .expect("the fixture reports a produced candidate");
     assert_eq!(candidate.content, "projected output");
-    assert_eq!(candidate.source_artifact_id, prepared.source_artifact_id);
-    assert_eq!(candidate.source_digest, prepared.source_digest);
-    assert_eq!(prepared.receipt.provider_id.as_str(), "projection-a");
-    assert_eq!(prepared.receipt.scope.execution_context_id, propagated);
-    assert_eq!(prepared.receipt.scope.work_id, Some(work_id));
-    assert_eq!(prepared.receipt.scope.attempt_id, Some(attempt_id));
-    assert_eq!(prepared.receipt.scope.turn_id, Some(turn_id));
-    assert_eq!(prepared.receipt.scope.tool_use_id, Some(tool_use_id));
+    assert_eq!(candidate.source_artifact_id, outcome.source_artifact_id);
+    assert_eq!(candidate.source_digest, outcome.source_digest);
+    assert_eq!(receipt.provider_id.as_str(), "projection-a");
+    assert_eq!(receipt.scope.execution_context_id, propagated);
+    assert_eq!(receipt.scope.work_id, Some(work_id));
+    assert_eq!(receipt.scope.attempt_id, Some(attempt_id));
+    assert_eq!(receipt.scope.turn_id, Some(turn_id));
+    assert_eq!(receipt.scope.tool_use_id, Some(tool_use_id));
+    assert_eq!(outcome.receipts().len(), 1);
 
-    let receipt = serde_json::to_string(&prepared.receipt).expect("receipt serializes");
-    assert!(!receipt.contains("sensitive original output"));
-    assert!(!receipt.contains("projected output"));
+    let encoded = serde_json::to_string(receipt).expect("receipt serializes");
+    assert!(!encoded.contains("sensitive original output"));
+    assert!(!encoded.contains("projected output"));
 }
 
 #[test]
 fn ambiguous_routes_require_an_explicit_provider_preference() {
-    let (_packages, core) = core_fixture(&["projection-a", "projection-b"]);
+    let (_packages, mut core) = core_fixture(&["projection-a", "projection-b"]);
     let context = core
         .establish_execution_context(context_spec(None))
         .expect("session scope is valid");
 
     let error = core
-        .prepare_tool_result(
+        .observe_tool_result(
             &context,
             TurnId::new(),
             ToolUseId::new(),
             submission("source"),
-            PrepareToolResultOptions::default(),
+            &CapabilityPreferences::default(),
         )
         .expect_err("Core must not pick arbitrarily between eligible Providers");
     assert!(matches!(
         error,
-        CoreError::AmbiguousContextProviders { provider_ids }
-            if provider_ids == "projection-a, projection-b"
+        CoreError::AmbiguousCapabilityRoute { ref capability, ref provider_ids }
+            if capability == "context.projection.prepare/v1"
+                && provider_ids == "projection-a, projection-b"
     ));
 
-    let prepared = core
-        .prepare_tool_result(
+    let preferences = CapabilityPreferences::for_capability(
+        "context.projection.prepare",
+        BoundedName::new("projection-b").expect("fixture name is bounded"),
+    )
+    .expect("fixture preference is bounded");
+    let outcome = core
+        .observe_tool_result(
             &context,
             TurnId::new(),
             ToolUseId::new(),
             submission("source"),
-            PrepareToolResultOptions {
-                preferred_provider_id: Some(
-                    BoundedName::new("projection-b").expect("fixture name is bounded"),
-                ),
-            },
+            &preferences,
         )
         .expect("an eligible explicit preference resolves the route");
-    assert_eq!(prepared.receipt.provider_id.as_str(), "projection-b");
+    assert_eq!(
+        outcome.projection.receipt.provider_id.as_str(),
+        "projection-b"
+    );
 }
 
 #[test]
 fn tool_result_idempotency_is_stable_across_invocation_retries() {
     let tool_use_id = ToolUseId::new();
     let input_digest = sha256_digest(b"same canonical input").expect("SHA-256 is canonical");
+    let capability = aw_contracts::context::context_projection_prepare_capability()
+        .expect("compiled-in Capability is canonical");
 
-    let first = tool_result_idempotency_key(&tool_use_id, &input_digest)
-        .expect("derived replay key is bounded");
-    let second = tool_result_idempotency_key(&tool_use_id, &input_digest)
-        .expect("derived replay key is bounded");
+    let first = capability_idempotency_key(
+        PlanBoundary::PostToolUse,
+        &capability,
+        tool_use_id.as_str(),
+        &input_digest,
+    )
+    .expect("derived replay key is bounded");
+    let second = capability_idempotency_key(
+        PlanBoundary::PostToolUse,
+        &capability,
+        tool_use_id.as_str(),
+        &input_digest,
+    )
+    .expect("derived replay key is bounded");
 
     assert_eq!(first, second);
     assert!(first.as_str().starts_with("tool-result:tol_"));
     assert!(first.as_str().ends_with(input_digest.as_str()));
+    assert!(
+        first.as_str().len() <= aw_contracts::common::MAX_IDEMPOTENCY_KEY_BYTES,
+        "replay key must fit the bounded contract: {} bytes",
+        first.as_str().len()
+    );
+}
+
+#[test]
+fn capability_keys_do_not_collide_across_capabilities() {
+    let tool_use_id = ToolUseId::new();
+    let input_digest = sha256_digest(b"one canonical input").expect("SHA-256 is canonical");
+    let projection = aw_contracts::context::context_projection_prepare_capability()
+        .expect("compiled-in Capability is canonical");
+    let inspection = aw_contracts::security::security_content_inspect_capability()
+        .expect("compiled-in Capability is canonical");
+
+    let projection_key = capability_idempotency_key(
+        PlanBoundary::PostToolUse,
+        &projection,
+        tool_use_id.as_str(),
+        &input_digest,
+    )
+    .expect("derived replay key is bounded");
+    let inspection_key = capability_idempotency_key(
+        PlanBoundary::PostToolUse,
+        &inspection,
+        tool_use_id.as_str(),
+        &input_digest,
+    )
+    .expect("derived replay key is bounded");
+
+    assert_ne!(projection_key, inspection_key);
+}
+
+#[test]
+fn a_preference_for_an_unplanned_capability_is_rejected() {
+    let (_packages, mut core) = core_fixture(&["projection-a"]);
+    let context = core
+        .establish_execution_context(context_spec(None))
+        .expect("session scope is valid");
+    let preferences = CapabilityPreferences::for_capability(
+        "security.content.inspect",
+        BoundedName::new("projection-a").expect("fixture name is bounded"),
+    )
+    .expect("fixture preference is bounded");
+
+    let error = core
+        .observe_tool_result(
+            &context,
+            TurnId::new(),
+            ToolUseId::new(),
+            submission("source"),
+            &preferences,
+        )
+        .expect_err("an inapplicable preference must not be silently ignored");
+
+    assert!(matches!(
+        error,
+        CoreError::PreferenceNotApplicable { ref capability, .. }
+            if capability == "security.content.inspect"
+    ));
 }
 
 #[test]
@@ -232,7 +315,7 @@ fn one_observed_tool_result_has_a_stable_artifact_identity() {
 
 #[test]
 fn repeated_preparation_reuses_the_observed_artifact() {
-    let (_packages, core) = core_fixture(&["projection-a"]);
+    let (_packages, mut core) = core_fixture(&["projection-a"]);
     let context = core
         .establish_execution_context(context_spec(None))
         .expect("session scope is valid");
@@ -240,28 +323,28 @@ fn repeated_preparation_reuses_the_observed_artifact() {
     let tool_use_id = ToolUseId::new();
 
     let first = core
-        .prepare_tool_result(
+        .observe_tool_result(
             &context,
             turn_id.clone(),
             tool_use_id.clone(),
             submission("same source"),
-            PrepareToolResultOptions::default(),
+            &CapabilityPreferences::default(),
         )
         .expect("first preparation succeeds");
     let retried = core
-        .prepare_tool_result(
+        .observe_tool_result(
             &context,
             turn_id,
             tool_use_id,
             submission("same source"),
-            PrepareToolResultOptions::default(),
+            &CapabilityPreferences::default(),
         )
         .expect("retry preparation succeeds");
 
     assert_eq!(first.source_artifact_id, retried.source_artifact_id);
     assert_eq!(first.source_digest, retried.source_digest);
     assert_ne!(
-        first.receipt.invocation_id, retried.receipt.invocation_id,
+        first.projection.receipt.invocation_id, retried.projection.receipt.invocation_id,
         "each local attempt keeps its own invocation fact"
     );
 }

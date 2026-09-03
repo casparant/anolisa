@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use aw_contracts::common::{BoundedName, BoundedOpaque, TargetRef};
 use aw_contracts::context::{ContextArtifactOrigin, ToolResultSubmission};
 use aw_contracts::ids::{ActorId, AgentSessionId, EnvironmentId, ToolUseId, TurnId};
-use aw_core::{Core, CoreConfig, PrepareToolResultOptions, SessionContextSpec};
+use aw_core::{CapabilityPreferences, Core, CoreConfig, SessionContextSpec};
 use aw_provider_host::{ProviderAdmissionOptions, ProviderCatalog, ProviderManifestSource};
 
 #[test]
@@ -27,7 +27,7 @@ fn core_prepares_a_real_tool_result_through_tokenless() {
         },
     )
     .expect("the real Tokenless package is admitted");
-    let core = Core::with_config(
+    let mut core = Core::with_config(
         catalog,
         CoreConfig {
             allow_unenforced_providers: true,
@@ -62,8 +62,8 @@ fn core_prepares_a_real_tool_result_through_tokenless() {
         .expect("the fixture contains tool-result content")
         .to_owned();
 
-    let prepared = core
-        .prepare_tool_result(
+    let outcome = core
+        .observe_tool_result(
             &context,
             TurnId::new(),
             ToolUseId::new(),
@@ -76,20 +76,23 @@ fn core_prepares_a_real_tool_result_through_tokenless() {
                 ),
                 allow_text_reencoding: true,
             },
-            PrepareToolResultOptions::default(),
+            &CapabilityPreferences::default(),
         )
         .expect("Core invokes Tokenless through the generic Provider Host");
 
-    let candidate = prepared
+    let candidate = outcome
+        .projection
         .candidate
+        .clone()
         .expect("Tokenless produces a context projection for the fixture");
-    assert_eq!(candidate.source_artifact_id, prepared.source_artifact_id);
-    assert_eq!(candidate.source_digest, prepared.source_digest);
+    assert_eq!(candidate.source_artifact_id, outcome.source_artifact_id);
+    assert_eq!(candidate.source_digest, outcome.source_digest);
     assert!(!candidate.content.is_empty());
     assert_ne!(candidate.content, source);
-    assert_eq!(prepared.receipt.provider_id.as_str(), "tokenless");
-    assert_eq!(prepared.receipt.meters.len(), 2);
-    let receipt = serde_json::to_string(&prepared.receipt).expect("receipt serializes");
+    assert_eq!(outcome.projection.receipt.provider_id.as_str(), "tokenless");
+    assert_eq!(outcome.projection.receipt.meters.len(), 2);
+    assert_eq!(outcome.receipts().len(), 1);
+    let receipt = serde_json::to_string(&outcome.projection.receipt).expect("receipt serializes");
     assert!(!receipt.contains("scheduler trace retained only for operator diagnostics"));
     assert!(!receipt.contains(&candidate.content));
 }

@@ -3,6 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use aw_core::CapabilityPreferences;
 use aw_cosh_hook::{local_host_target, run_cosh_post_tool_use, CoshHookConfig};
 use aw_provider_host::{ProviderAdmissionOptions, ProviderManifestSource};
 use serde_json::{json, Value};
@@ -52,14 +53,20 @@ fn cosh_post_tool_result_runs_through_core_and_tokenless() {
                 executable_roots: vec![root.join("src/tokenless/target/debug")],
             },
             target: local_host_target("test-host").expect("target is valid"),
-            preferred_provider_id: None,
+            preferences: CapabilityPreferences::default(),
+            provider_wall_time_ms: None,
             allow_unenforced_provider: true,
         },
     )
     .expect("COSH hook runs through AW Core");
 
     assert!(run.replacement_requested);
-    let receipt = run.receipt.expect("accepted invocation has a receipt");
+    assert_eq!(
+        run.receipts.len(),
+        1,
+        "the current PostToolUse plan holds one step"
+    );
+    let receipt = &run.receipts[0];
     assert_eq!(receipt.provider_id.as_str(), "tokenless");
     assert_eq!(
         receipt.scope.execution_context_id.as_str(),
@@ -73,7 +80,7 @@ fn cosh_post_tool_result_runs_through_core_and_tokenless() {
         receipt.scope.tool_use_id.as_ref().map(|id| id.as_str()),
         Some("tol_66666666-6666-4666-8666-666666666666")
     );
-    let receipt_json = serde_json::to_string(&receipt).expect("receipt serializes");
+    let receipt_json = serde_json::to_string(receipt).expect("receipt serializes");
     assert!(!receipt_json.contains("scheduler trace retained"));
 
     let output: Value = serde_json::from_slice(&output).expect("COSH hook output is valid JSON");

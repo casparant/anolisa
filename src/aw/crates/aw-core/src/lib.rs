@@ -1,39 +1,41 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-//! Core-owned execution context and context-preparation policy.
+//! Core-owned execution context and Capability Plan policy.
 //!
-//! Agent Environments establish a stable execution context here and submit
-//! tool results without constructing Provider envelopes. Core selects an
-//! admitted implementation, invokes it, and returns a candidate separately
-//! from the content-free Provider receipt.
+//! Agent Environments establish a stable execution context here and submit one
+//! event without constructing Provider envelopes. Core decides which
+//! Capabilities apply to that event, resolves every route before invoking any
+//! implementation, and returns typed facts separately from the content-free
+//! Provider receipts.
 
 use std::num::TryFromIntError;
 use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 
-use aw_contracts::common::{
-    BoundedName, BoundedStringError, Digest, DigestError, IdempotencyKey, TargetRef,
-};
+use aw_contracts::common::{BoundedName, BoundedStringError, Digest, DigestError, TargetRef};
 use aw_contracts::context::{
-    context_projection_prepare_capability, context_projection_prepare_input_contract,
-    context_projection_prepare_output_contract, ContextArtifactOrigin, ContextContractBuildError,
-    ContextProjectionCandidate, ToolResultSubmission,
+    ContextArtifactOrigin, ContextContractBuildError, ContextProjectionCandidate,
+    ToolResultSubmission,
 };
 use aw_contracts::ids::{
     ActorId, AgentSessionId, AgentWorkId, ArtifactId, AttemptId, EnvironmentId, ExecutionContextId,
-    IdError, ProviderInvocationId, ToolUseId, TurnId,
+    IdError, ToolUseId, TurnId,
 };
-use aw_contracts::provider::{
-    CapabilityInvocation, ExecutionScope, ProviderAuthority, ProviderDisposition,
-    ProviderHealthState, ProviderInvocationBudget, ProviderPayload, ProviderReceipt,
-    ProviderScopeKind, ProviderSelection, SchemaReference, VersionedSchema,
-};
-use aw_provider_host::{
-    canonical_json_v1_bytes, ProviderCatalog, ProviderGuaranteeState, ProviderHostError,
-};
+use aw_contracts::provider::{ExecutionScope, ProviderDisposition, VersionedSchema};
+use aw_provider_host::{canonical_json_v1_bytes, ProviderCatalog, ProviderHostError};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use thiserror::Error;
 use uuid::Uuid;
+
+mod execute;
+mod outcome;
+mod plan;
+
+pub use execute::CapabilityPreferences;
+pub use outcome::{PreparedProjection, ToolResultOutcome};
+
+use execute::schema_label;
+use plan::{PlanBoundary, StepKind};
 
 const MAX_TRANSFORM_CHAIN_ITEMS: usize = 64;
 
@@ -159,29 +161,6 @@ impl Default for CoreConfig {
     }
 }
 
-/// Optional routing preference for one tool-result preparation.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PrepareToolResultOptions {
-    /// Exact Provider identity to use when multiple implementations qualify.
-    pub preferred_provider_id: Option<BoundedName>,
-}
-
-/// Core result for one tool output offered to context preparation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreparedToolResult {
-    /// Core identity allocated to the immutable source artifact.
-    pub source_artifact_id: ArtifactId,
-    /// SHA-256 of the original tool-result content.
-    pub source_digest: Digest,
-    /// Provider proposal available for a later Core adoption decision.
-    ///
-    /// A bypassed, denied, failed, uncertain, or effect result carries no
-    /// projection candidate even if a Provider returned transient output.
-    pub candidate: Option<ContextProjectionCandidate>,
-    /// Content-free terminal Provider facts safe for persistence and display.
-    pub receipt: ProviderReceipt,
-}
-
 /// Core policy owner over one admitted Provider catalog.
 #[derive(Debug)]
 pub struct Core {
@@ -238,39 +217,31 @@ impl Core {
         })
     }
 
-    /// Offers one observed tool result to the context-projection Capability.
+    /// Runs the Core PostToolUse Capability Plan for one observed tool result.
     ///
     /// Core allocates the artifact and invocation identities, computes source
-    /// and canonical input digests, binds the Tool Call scope, chooses an exact
-    /// admitted Provider release, and applies its deadline and output budget.
-    /// The returned candidate remains advice; this method does not replace the
-    /// Agent's original tool result.
+    /// and canonical input digests, binds the Tool Call scope, resolves every
+    /// planned route against the current Runtime Capability Graph, and only then
+    /// invokes each implementation under its deadline and output budget. A
+    /// returned candidate remains advice; this method never replaces the Agent's
+    /// original tool result.
     ///
     /// # Errors
     ///
-    /// Returns an error for an incomplete tool scope, no unique eligible
-    /// Provider route, malformed Provider output, clock failure, or Host error.
-    pub fn prepare_tool_result(
-        &self,
+    /// Returns an error for an incomplete tool scope, an inapplicable routing
+    /// preference, no unique eligible implementation for a single-route step,
+    /// malformed Provider output, clock failure, or Host error.
+    pub fn observe_tool_result(
+        &mut self,
         context: &AgentExecutionContext,
         turn_id: TurnId,
         tool_use_id: ToolUseId,
         submission: ToolResultSubmission,
-        options: PrepareToolResultOptions,
-    ) -> Result<PreparedToolResult, CoreError> {
+        preferences: &CapabilityPreferences,
+    ) -> Result<ToolResultOutcome, CoreError> {
         if context.agent_session_id.is_none() {
             return Err(CoreError::ToolResultWithoutAgentSession);
         }
-
-        let capability = context_projection_prepare_capability()?;
-        let input_contract = context_projection_prepare_input_contract()?;
-        let output_contract = context_projection_prepare_output_contract()?;
-        let provider = self.select_context_provider(
-            &capability,
-            &input_contract,
-            &output_contract,
-            options.preferred_provider_id.as_ref(),
-        )?;
 
         let source_digest = sha256_digest(submission.content.as_bytes())?;
         let artifact_id = context_artifact_id(
@@ -279,115 +250,72 @@ impl Core {
             &tool_use_id,
             &source_digest,
         )?;
-        let input_body = context_projection_input(&artifact_id, &source_digest, &submission)?;
-        let canonical_input = canonical_json_v1_bytes(&input_body)?;
-        let input_digest = sha256_digest(&canonical_input)?;
-        let invocation_id = ProviderInvocationId::new();
-        let idempotency_key = tool_result_idempotency_key(&tool_use_id, &input_digest)?;
-        let deadline_at_ms = unix_time_ms()?
-            .checked_add(self.config.provider_wall_time_ms)
-            .ok_or(CoreError::DeadlineOverflow)?;
-        let invocation = CapabilityInvocation {
-            invocation_id,
-            provider,
-            capability,
-            scope: context.tool_scope(turn_id, tool_use_id),
-            binding_id: None,
-            idempotency_key,
-            policy_revision: self.config.policy_revision,
-            deadline_at_ms,
-            budget: ProviderInvocationBudget {
-                wall_time_ms: self.config.provider_wall_time_ms,
-                output_bytes: self.config.provider_output_bytes,
-            },
-            input: ProviderPayload {
-                schema: input_contract.schema,
-                digest: input_digest,
-                body: input_body,
-            },
-        };
-        let result = self.providers.invoke(&invocation, None)?;
-        let candidate = if result.receipt.disposition == ProviderDisposition::Produced {
-            let output = result
-                .outcome
-                .output
-                .ok_or(CoreError::ProducedWithoutOutput)?;
-            if output.schema != output_contract.schema {
-                return Err(CoreError::UnexpectedOutputSchema {
-                    actual: schema_label(&output.schema),
-                });
-            }
-            let envelope: ContextProjectionOutput = serde_json::from_value(output.body)?;
-            validate_candidate(&envelope.candidate, &artifact_id, &source_digest)?;
-            Some(envelope.candidate)
-        } else {
-            None
-        };
+        let scope = context.tool_scope(turn_id, tool_use_id.clone());
+        let resolved = self.resolve_plan(plan::post_tool_use_plan()?, preferences)?;
 
-        Ok(PreparedToolResult {
-            source_artifact_id: artifact_id,
-            source_digest,
-            candidate,
-            receipt: result.receipt,
-        })
-    }
-
-    fn select_context_provider(
-        &self,
-        capability: &VersionedSchema,
-        input_contract: &SchemaReference,
-        output_contract: &SchemaReference,
-        preferred_provider_id: Option<&BoundedName>,
-    ) -> Result<ProviderSelection, CoreError> {
-        let graph = self.providers.capability_graph();
-        let mut candidates = graph
-            .capabilities
-            .iter()
-            .filter(|entry| {
-                entry.capability == *capability
-                    && entry.authority == ProviderAuthority::Advise
-                    && entry.scopes.contains(&ProviderScopeKind::ToolCall)
-                    && entry.health == ProviderHealthState::Ready
-                    && entry.input_contract == *input_contract
-                    && entry.output_contract == *output_contract
-            })
-            .collect::<Vec<_>>();
-
-        if !self.config.allow_unenforced_providers && !candidates.is_empty() {
-            candidates
-                .retain(|entry| entry.guarantee != ProviderGuaranteeState::DeclaredNotEnforced);
-            if candidates.is_empty() {
-                return Err(CoreError::ProviderControlsNotEnforced);
+        let mut projection = None;
+        for step in resolved {
+            match step.step.kind {
+                StepKind::ContextProjection => {
+                    let target = step
+                        .targets
+                        .into_iter()
+                        .next()
+                        .ok_or(CoreError::MissingResolvedRoute)?;
+                    let input =
+                        context_projection_input(&artifact_id, &source_digest, &submission)?;
+                    let result = self.invoke_step(
+                        &step.step,
+                        PlanBoundary::PostToolUse,
+                        target,
+                        scope.clone(),
+                        tool_use_id.as_str(),
+                        input,
+                    )?;
+                    let candidate = self.accept_projection_candidate(
+                        &step.step.output_contract.schema,
+                        &result,
+                        &artifact_id,
+                        &source_digest,
+                    )?;
+                    projection = Some(PreparedProjection {
+                        candidate,
+                        receipt: result.receipt,
+                    });
+                }
             }
         }
 
-        candidates.sort_by(|left, right| left.provider_id.cmp(&right.provider_id));
-        let selected = match preferred_provider_id {
-            Some(preferred) => candidates
-                .into_iter()
-                .find(|entry| entry.provider_id == *preferred)
-                .ok_or_else(|| CoreError::PreferredProviderUnavailable {
-                    provider_id: preferred.as_str().to_owned(),
-                })?,
-            None => match candidates.as_slice() {
-                [] => return Err(CoreError::ContextProjectionUnavailable),
-                [only] => *only,
-                many => {
-                    return Err(CoreError::AmbiguousContextProviders {
-                        provider_ids: many
-                            .iter()
-                            .map(|entry| entry.provider_id.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    })
-                }
-            },
-        };
-        Ok(ProviderSelection {
-            provider_id: selected.provider_id.clone(),
-            provider_version: selected.provider_version.clone(),
-            manifest_digest: selected.manifest_digest.clone(),
+        Ok(ToolResultOutcome {
+            source_artifact_id: artifact_id,
+            source_digest,
+            projection: projection.ok_or(CoreError::MissingResolvedRoute)?,
         })
+    }
+
+    fn accept_projection_candidate(
+        &self,
+        output_schema: &VersionedSchema,
+        result: &aw_contracts::provider::ProviderInvocationResult,
+        artifact_id: &ArtifactId,
+        source_digest: &Digest,
+    ) -> Result<Option<ContextProjectionCandidate>, CoreError> {
+        if result.receipt.disposition != ProviderDisposition::Produced {
+            return Ok(None);
+        }
+        let output = result
+            .outcome
+            .output
+            .as_ref()
+            .ok_or(CoreError::ProducedWithoutOutput)?;
+        if output.schema != *output_schema {
+            return Err(CoreError::UnexpectedOutputSchema {
+                actual: schema_label(&output.schema),
+            });
+        }
+        let envelope: ContextProjectionOutput = serde_json::from_value(output.body.clone())?;
+        validate_candidate(&envelope.candidate, artifact_id, source_digest)?;
+        Ok(Some(envelope.candidate))
     }
 }
 
@@ -403,26 +331,53 @@ pub enum CoreError {
     /// Core Provider ceilings must be enforceable and non-zero.
     #[error("Provider wall-time and output-byte limits must be non-zero")]
     InvalidConfig,
-    /// No admitted Provider satisfies the exact context Contract and policy.
-    #[error("no ready Advise Provider implements the exact Tool Call context Contract")]
-    ContextProjectionUnavailable,
+    /// No admitted implementation satisfies the exact Capability Contract.
+    #[error("no ready Provider implements the exact Contract for Capability `{capability}`")]
+    CapabilityUnavailable {
+        /// Capability that could not be routed.
+        capability: String,
+    },
     /// A matching Provider would receive content without enforced isolation.
     #[error(
-        "matching context Providers only declare network and filesystem controls; explicit trusted-Provider opt-in is required"
+        "matching Providers only declare network and filesystem controls; explicit trusted-Provider opt-in is required"
     )]
     ProviderControlsNotEnforced,
     /// More than one implementation qualifies and policy supplied no preference.
-    #[error("multiple context Providers qualify; select one of: {provider_ids}")]
-    AmbiguousContextProviders {
+    #[error("multiple Providers implement `{capability}`; select one of: {provider_ids}")]
+    AmbiguousCapabilityRoute {
+        /// Capability with more than one eligible implementation.
+        capability: String,
         /// Deterministically sorted eligible Provider identities.
         provider_ids: String,
     },
     /// The requested implementation does not satisfy current routing policy.
-    #[error("preferred context Provider `{provider_id}` is not eligible")]
+    #[error("preferred Provider `{provider_id}` is not eligible")]
     PreferredProviderUnavailable {
         /// Requested Provider identity.
         provider_id: String,
     },
+    /// A routing preference named a Capability the plan does not single-route.
+    ///
+    /// Narrowing a fan-out Capability by one preference would silently stop the
+    /// other installed implementations, so Core rejects the request instead.
+    #[error("routing preference for `{capability}` is not applicable; planned: {planned}")]
+    PreferenceNotApplicable {
+        /// Capability named by the rejected preference.
+        capability: String,
+        /// Capabilities the current plan contains.
+        planned: String,
+    },
+    /// Two admitted entries claim the same Provider and Capability revision.
+    #[error("Provider `{provider_id}` declares `{capability}` more than once")]
+    DuplicateCapabilityRoute {
+        /// Provider identity that appears twice for one Capability.
+        provider_id: String,
+        /// Capability claimed more than once.
+        capability: String,
+    },
+    /// A resolved step carried no route where its policy requires one.
+    #[error("a resolved Capability step carried no Provider route")]
+    MissingResolvedRoute,
     /// Produced disposition requires a transient typed output.
     #[error("Provider reported `produced` without a transient output")]
     ProducedWithoutOutput,
@@ -577,19 +532,9 @@ fn unix_time_ms() -> Result<u64, CoreError> {
     u64::try_from(elapsed.as_millis()).map_err(CoreError::ClockOutOfRange)
 }
 
-fn schema_label(schema: &VersionedSchema) -> String {
-    format!("{}/v{}", schema.id.as_str(), schema.version)
-}
-
-fn tool_result_idempotency_key(
-    tool_use_id: &ToolUseId,
-    input_digest: &Digest,
-) -> Result<IdempotencyKey, BoundedStringError> {
-    IdempotencyKey::new(format!(
-        "tool-result:{}:{}",
-        tool_use_id.as_str(),
-        input_digest.as_str()
-    ))
+fn canonical_input_digest(body: &serde_json::Value) -> Result<Digest, CoreError> {
+    let canonical = canonical_json_v1_bytes(body)?;
+    Ok(sha256_digest(&canonical)?)
 }
 
 #[cfg(test)]

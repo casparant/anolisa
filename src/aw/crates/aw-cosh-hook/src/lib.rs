@@ -17,7 +17,7 @@ use aw_contracts::provider::{
     ProviderDisposition, ProviderMeasurementKind, ProviderMeter, ProviderReceipt,
 };
 use aw_core::{
-    Core, CoreConfig, CoreError, PrepareToolResultOptions, PreparedToolResult, SessionContextSpec,
+    CapabilityPreferences, Core, CoreConfig, CoreError, SessionContextSpec, ToolResultOutcome,
 };
 use aw_provider_host::{
     ProviderAdmissionOptions, ProviderCatalog, ProviderHostError, ProviderManifestSource,
@@ -38,8 +38,13 @@ pub struct CoshHookConfig {
     pub provider_admission: ProviderAdmissionOptions,
     /// Host or remote target asserted for this local adapter invocation.
     pub target: TargetRef,
-    /// Provider selected by policy when several implementations qualify.
-    pub preferred_provider_id: Option<BoundedName>,
+    /// Providers selected by policy for Capabilities that admit one route.
+    pub preferences: CapabilityPreferences,
+    /// Override for the time Core grants one Provider invocation.
+    ///
+    /// Leave this unset to keep the Core default. Raise it only for a Provider
+    /// whose measured start-up cost does not fit the default ceiling.
+    pub provider_wall_time_ms: Option<u64>,
     /// Explicitly trust a Provider before OS controls enforce its declarations.
     pub allow_unenforced_provider: bool,
 }
@@ -53,8 +58,8 @@ pub struct CoshHookRun {
     /// COSH may still apply later Hook aggregation or redaction, so this is
     /// not proof of the final bytes delivered to a model.
     pub replacement_requested: bool,
-    /// Provider facts when Core reached an accepted invocation.
-    pub receipt: Option<ProviderReceipt>,
+    /// Content-free facts for every invocation Core accepted in its plan.
+    pub receipts: Vec<ProviderReceipt>,
 }
 
 /// Failure returned before the adapter can emit a trustworthy hook response.
@@ -129,7 +134,7 @@ pub fn run_cosh_post_tool_use(
         write_response(&mut writer, &CoshHookOutput::default())?;
         return Ok(CoshHookRun {
             replacement_requested: false,
-            receipt: None,
+            receipts: Vec::new(),
         });
     }
     let content =
@@ -138,17 +143,21 @@ pub fn run_cosh_post_tool_use(
         write_response(&mut writer, &CoshHookOutput::default())?;
         return Ok(CoshHookRun {
             replacement_requested: false,
-            receipt: None,
+            receipts: Vec::new(),
         });
     }
 
     let catalog =
         ProviderCatalog::discover(config.provider_source.clone(), &config.provider_admission)?;
-    let core = Core::with_config(
+    let defaults = CoreConfig::default();
+    let mut core = Core::with_config(
         catalog,
         CoreConfig {
             allow_unenforced_providers: config.allow_unenforced_provider,
-            ..CoreConfig::default()
+            provider_wall_time_ms: config
+                .provider_wall_time_ms
+                .unwrap_or(defaults.provider_wall_time_ms),
+            ..defaults
         },
     )?;
     let context = core.establish_execution_context(SessionContextSpec {
@@ -167,16 +176,14 @@ pub fn run_cosh_post_tool_use(
         content,
         allow_text_reencoding: true,
     };
-    let prepared = core.prepare_tool_result(
+    let outcome = core.observe_tool_result(
         &context,
         scope.turn_id,
         scope.tool_use_id,
         submission,
-        PrepareToolResultOptions {
-            preferred_provider_id: config.preferred_provider_id.clone(),
-        },
+        &config.preferences,
     )?;
-    let output = hook_output(&prepared);
+    let output = hook_output(&outcome);
     let replacement_requested = output
         .hook_specific_output
         .as_ref()
@@ -186,7 +193,7 @@ pub fn run_cosh_post_tool_use(
 
     Ok(CoshHookRun {
         replacement_requested,
-        receipt: Some(prepared.receipt),
+        receipts: outcome.receipts().into_iter().cloned().collect(),
     })
 }
 
@@ -274,12 +281,13 @@ fn origin_for_tool(tool_name: &str) -> ContextArtifactOrigin {
     }
 }
 
-fn hook_output(prepared: &PreparedToolResult) -> CoshHookOutput {
-    let Some(candidate) = prepared.candidate.as_ref().filter(|candidate| {
+fn hook_output(outcome: &ToolResultOutcome) -> CoshHookOutput {
+    let receipt = &outcome.projection.receipt;
+    let Some(candidate) = outcome.projection.candidate.as_ref().filter(|candidate| {
         candidate.reversibility == ContextReversibility::Lossless && !candidate.content.is_empty()
     }) else {
         let system_message = matches!(
-            prepared.receipt.disposition,
+            receipt.disposition,
             ProviderDisposition::Denied
                 | ProviderDisposition::Failed
                 | ProviderDisposition::Uncertain
@@ -287,8 +295,8 @@ fn hook_output(prepared: &PreparedToolResult) -> CoshHookOutput {
         .then(|| {
             format!(
                 "AW · {} · original tool result kept ({})",
-                prepared.receipt.provider_id.as_str(),
-                disposition_label(prepared.receipt.disposition)
+                receipt.provider_id.as_str(),
+                disposition_label(receipt.disposition)
             )
         });
         return CoshHookOutput {
@@ -300,7 +308,7 @@ fn hook_output(prepared: &PreparedToolResult) -> CoshHookOutput {
 
     CoshHookOutput {
         suppress_output: Some(true),
-        system_message: Some(savings_message(&prepared.receipt)),
+        system_message: Some(savings_message(receipt)),
         hook_specific_output: Some(CoshHookSpecificOutput {
             hook_event_name: POST_TOOL_USE,
             updated_tool_response: Some(candidate.content.clone()),
@@ -414,7 +422,8 @@ mod tests {
             provider_source: ProviderManifestSource::File("/provider-does-not-exist".into()),
             provider_admission: ProviderAdmissionOptions::default(),
             target: local_host_target("test-host").expect("target is valid"),
-            preferred_provider_id: None,
+            preferences: CapabilityPreferences::default(),
+            provider_wall_time_ms: None,
             allow_unenforced_provider: false,
         };
 
@@ -428,7 +437,7 @@ mod tests {
         .expect("error results bypass before Provider discovery");
 
         assert!(!run.replacement_requested);
-        assert!(run.receipt.is_none());
+        assert!(run.receipts.is_empty());
         assert_eq!(
             serde_json::from_slice::<Value>(&output).expect("hook output is JSON"),
             serde_json::json!({})
@@ -437,8 +446,8 @@ mod tests {
 
     #[test]
     fn reversible_candidate_emits_replacement_and_savings() {
-        let prepared = prepared_result(Some(candidate()), ProviderDisposition::Produced);
-        let output = hook_output(&prepared);
+        let outcome = projection_outcome(Some(candidate()), ProviderDisposition::Produced);
+        let output = hook_output(&outcome);
         let encoded = serde_json::to_value(output).expect("hook output serializes");
 
         assert_eq!(
@@ -455,9 +464,9 @@ mod tests {
     fn retrievable_candidate_waits_for_a_retrieval_contract() {
         let mut retrievable = candidate();
         retrievable.reversibility = ContextReversibility::Retrievable;
-        let prepared = prepared_result(Some(retrievable), ProviderDisposition::Produced);
+        let outcome = projection_outcome(Some(retrievable), ProviderDisposition::Produced);
 
-        let output = hook_output(&prepared);
+        let output = hook_output(&outcome);
 
         assert!(output.hook_specific_output.is_none());
         assert!(output.system_message.is_none());
@@ -467,9 +476,9 @@ mod tests {
     fn empty_candidate_is_not_reported_as_adopted() {
         let mut empty = candidate();
         empty.content.clear();
-        let prepared = prepared_result(Some(empty), ProviderDisposition::Produced);
+        let outcome = projection_outcome(Some(empty), ProviderDisposition::Produced);
 
-        let output = hook_output(&prepared);
+        let output = hook_output(&outcome);
 
         assert!(output.hook_specific_output.is_none());
         assert!(output.system_message.is_none());
@@ -477,8 +486,8 @@ mod tests {
 
     #[test]
     fn failed_provider_keeps_original_without_content_in_message() {
-        let prepared = prepared_result(None, ProviderDisposition::Failed);
-        let output = hook_output(&prepared);
+        let outcome = projection_outcome(None, ProviderDisposition::Failed);
+        let output = hook_output(&outcome);
         let encoded = serde_json::to_value(output).expect("hook output serializes");
 
         assert!(encoded.get("hookSpecificOutput").is_none());
@@ -500,10 +509,10 @@ mod tests {
         }
     }
 
-    fn prepared_result(
+    fn projection_outcome(
         candidate: Option<ContextProjectionCandidate>,
         disposition: ProviderDisposition,
-    ) -> PreparedToolResult {
+    ) -> ToolResultOutcome {
         let source_artifact_id = candidate
             .as_ref()
             .map(|candidate| candidate.source_artifact_id.clone())
@@ -512,11 +521,13 @@ mod tests {
             .as_ref()
             .map(|candidate| candidate.source_digest.clone())
             .unwrap_or_else(|| digest('a'));
-        PreparedToolResult {
+        ToolResultOutcome {
             source_artifact_id,
             source_digest,
-            candidate,
-            receipt: receipt(disposition),
+            projection: aw_core::PreparedProjection {
+                candidate,
+                receipt: receipt(disposition),
+            },
         }
     }
 
