@@ -597,7 +597,95 @@ request 中非 null `passphrase` 必须写成 `[REDACTED]`。event result key �
 `scanStatus` 投影为 `verdict`；batch event verdict 取最严重状态。scanner finding
 `metadata` 不做 key 改写。所有 projection 使用安全 copy，不能回写业务 data。
 
-## 11. **[CURRENT]** V1 配置与资源来源
+## 11. **[CURRENT]** `aw-provider` AW Provider 入口
+
+`agent-sec-cli aw-provider` 不是第 9 个 middleware action。它是 AW Provider Host 通过
+`exec-json/v1` driver 调用 agent-sec-core 的入口，**刻意绕过** `security_middleware.invoke`
+与其 lifecycle：不写 SecurityEvent、不写 telemetry、不做 CLI 日志初始化。这与
+`skill-ledger analyze` 是同一类先例，原因是 AW Provider manifest 声明了
+`writes = []`、`retention = "none"`、`telemetry = "disabled"`，而 middleware lifecycle
+会使这些声明失真。
+
+### 11.1 进程契约
+
+| 属性 | 值 |
+| --- | --- |
+| 调用形式 | `agent-sec-cli aw-provider`，无任何选项 |
+| 输入 | stdin 一份完整 native JSON，上限 64 MiB |
+| 输出 | stdout 一份完整 native JSON，无 banner、无日志 |
+| exit 0 | **所有**协议内结果，含 `deny` verdict 与 settled scanner 失败 |
+| exit 2 | stdin 不是一份可用请求（超限、非 JSON、不满足 schema、协议版本不符）；stdout 为空 |
+| 环境 | 不依赖继承环境；Host 执行 `env_clear()` 后只设 `LANG`/`LC_ALL` |
+| 副作用 | 无。e2e 用快照断言运行前后 `HOME` 内容完全一致 |
+
+无选项是 manifest 决定的：AW Provider manifest 顶层只有一份 `[executable]`，包内三个
+Capability 共用同一条命令行，因此请求的 operation 只能出现在请求体里。
+
+### 11.2 Native request
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `protocol_version` | int | 是 | 当前只接受 `1` |
+| `operation` | enum | 是 | `content_inspect` / `code_inspect` / `command_inspect` |
+| `content` | string | 是 | 待检查文本 |
+| `source` | string | 否 | 仅 `content_inspect`；非法值归一为 `unknown` |
+| `include_low_confidence` | bool | 否 | 仅 `content_inspect`，默认 `false` |
+| `language` | enum | 否 | `auto`（默认）/ `bash` / `python` |
+
+未知字段一律拒绝。`auto` 解析为 bash，因为 bash 路径会额外提取内联解释器负载，从而
+也覆盖嵌在 shell 命令里的 Python；实际分析语言由响应回报。
+
+### 11.3 Native response
+
+| 字段 | 类型 | 出现条件 | 说明 |
+| --- | --- | --- | --- |
+| `protocol_version` | int | 恒有 | `1` |
+| `disposition` | enum | 恒有 | `completed` / `skipped` / `error` |
+| `findings_total` | int | **恒有** | 见下方不变量 |
+| `scanned_bytes` | int | **恒有** | 见下方不变量 |
+| `truncated` | bool | 恒有 | 是否提前截断 |
+| `verdict` | enum | 仅 `completed` | inspect：`clean`/`suspicious`/`sensitive`；command：`allow`/`warn`/`deny` |
+| `findings` | array | 仅 `completed` | 每项 `rule_id`/`category`/`severity`/`confidence`/`count`，最多 64 项 |
+| `reasons` | array | 仅 `command_inspect` | `rule_id` 列表，最多 32 项 |
+| `language_detected` | enum | 代码类能力 | `bash`/`python`/`unknown` |
+| `engine` | string | 仅 `completed` | 引擎标识 |
+
+两条必须长期成立的不变量：
+
+1. **`findings_total` 与 `scanned_bytes` 在每一种 disposition 下都存在。** Provider Host
+   对所有声明 meter 求值，与 disposition 无关；缺字段会变成 invalid-response 失败，而
+   不是一次 bypass。
+2. **任何字段都不携带命中内容。** finding 只报告哪条规则命中、如何分类、命中几次。
+   `code_scanner` 的 `Finding.evidence`（命中源码行）在此边界被丢弃；`pii_checker` 的
+   `evidence_redacted`、`span`、`raw_evidence`、`redacted_text` 一律不输出。
+   `rule_id` 归一到 `[a-z0-9._-]`，长度上限 64，因此它也不能成为内容信道。
+
+### 11.4 与 middleware action 的行为差异
+
+| 维度 | 8 个 middleware action | `aw-provider` |
+| --- | --- | --- |
+| SecurityEvent | 每次调用写入 | 不写 |
+| telemetry | lifecycle 写入 | 不写 |
+| CLI 日志 | `setup_cli_logging()` 写 JSONL | 跳过 |
+| PII custom rules | 读 `~/.config/agent-sec/pii-checker/rules.yaml` | **关闭**，不读用户配置 |
+| `error` verdict | `success=false, exit_code=1` | `disposition="error"`, exit 0，且不带 verdict |
+| Prompt scanner | 可用 | 不暴露：`fast` 之外的 mode 需要网络，AW 声明 `network = "none"` |
+
+`code_scan --mode llm` 与 `prompt_scan` 的 `standard/strict/multi_turn` 都依赖本地模型
+服务，因此不进入本入口；它们要等 AW 出现 `local-service/v1` 类 Driver。
+
+### 11.5 最低 fixture
+
+- 三个 operation 各一条 clean 与一条命中；
+- 命中响应断言不含命中原文（stdout 与 stderr 均检查）；
+- 空 `content` → `disposition="error"`、无 `verdict`、exit 0；
+- 非 JSON、协议版本不符、未知字段 → exit 非 0 且 stdout 为空；
+- 清空环境后运行前后 `HOME` 快照一致。
+
+实现位置：`agent-sec-cli/src/agent_sec_cli/aw_provider/`。fixture 位置：
+`tests/unit-test/aw_provider/`、`tests/e2e/cli/test_aw_provider_e2e.py`。
+
+## 12. **[CURRENT]** V1 配置与资源来源
 
 | 能力 | 主要来源 |
 | --- | --- |
@@ -614,7 +702,7 @@ request 中非 null `passphrase` 必须写成 `[REDACTED]`。event result key �
 **[TARGET V2]** 由 capability/config contract 统一解析领域配置，asc-daemon composition
 root 注入依赖；asc-cli 只处理终端交互和 RPC DTO，不读取领域状态或复制默认值。
 
-## 12. V1/Rust action conformance
+## 13. V1/Rust action conformance
 
 ### 12.1 **[CURRENT][PRESERVE V1]** action 行为基线
 
@@ -650,7 +738,7 @@ root 注入依赖；asc-cli 只处理终端交互和 RPC DTO，不读取领域�
 - Skill Ledger：11 command、六状态、batch severity、key lifecycle、write failure、并发和
   crash recovery。
 
-## 13. 当前实现证据
+## 14. 当前实现证据
 
 - action inventory：`agent-sec-cli/src/agent_sec_cli/security_middleware/router.py`。
 - adapters：`security_middleware/backends/*.py`。

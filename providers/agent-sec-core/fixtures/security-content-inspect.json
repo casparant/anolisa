@@ -1,0 +1,14 @@
+{
+  "artifact": {
+    "id": "art_example_secrets_001",
+    "digest": "b2826f178d1b78e540e3731c4d52b618608e239ba703e412b1c18074ce0488c4",
+    "content": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----\nAccessKeyId: LTAI5tExampleAccessKey1\n",
+    "media_type": "text/plain",
+    "origin": "command_output",
+    "tool_name": "read_file"
+  },
+  "boundary": "post_tool",
+  "constraints": {
+    "include_low_confidence": false
+  }
+}
