@@ -70,6 +70,24 @@
       "status": "active"
     },
     {
+      "id": "aw",
+      "display_name": "AW Core",
+      "aliases": [],
+      "issue_option": "aw",
+      "path_prefixes": [
+        "src/aw/"
+      ],
+      "label": "component:aw",
+      "commit_scope": "aw",
+      "commit_scope_aliases": [],
+      "release_tag_prefix": "aw/v",
+      "ci_key": "aw",
+      "issue_triagers": [
+        "casparant"
+      ],
+      "status": "active"
+    },
+    {
       "id": "sec-core",
       "display_name": "Agent Security Core",
       "aliases": [
@@ -77,7 +95,8 @@
       ],
       "issue_option": "sec-core",
       "path_prefixes": [
-        "src/agent-sec-core/"
+        "src/agent-sec-core/",
+        "providers/agent-sec-core/"
       ],
       "label": "component:sec-core",
       "commit_scope": "sec-core",
@@ -144,7 +163,8 @@
       "aliases": [],
       "issue_option": "tokenless",
       "path_prefixes": [
-        "src/tokenless/"
+        "src/tokenless/",
+        "providers/tokenless/"
       ],
       "label": "component:tokenless",
       "commit_scope": "tokenless",
