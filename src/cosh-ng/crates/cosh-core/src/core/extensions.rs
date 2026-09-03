@@ -80,11 +80,13 @@ impl CoshCore {
         let extension_generation = GenerationController::new(snapshot);
         let audit_workspace = std::env::current_dir().ok();
         let audit = CoreAuditRecorder::initialize(&session_id, audit_workspace.as_deref());
+        let execution_scope_context = ExecutionScopeContext::for_session(&session_id);
         let mut core = Self {
             config,
             provider,
             tools,
             session_id,
+            execution_scope_context,
             messages: Vec::new(),
             compaction: CompactionRuntime::default(),
             model,
