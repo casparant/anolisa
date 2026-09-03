@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://anolisa.dev/schemas/skill-ledger-analyze-v1.json",
+  "$id": "https://agentic-os.sh/schemas/skill-ledger-analyze-v1.json",
   "title": "Skill Ledger read-only analysis result",
   "type": "object",
   "additionalProperties": false,
