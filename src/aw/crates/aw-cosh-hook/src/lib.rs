@@ -14,8 +14,9 @@ use std::io::{self, Read, Write};
 use aw_contracts::common::{BoundedName, BoundedOpaque, BoundedStringError, TargetRef};
 use aw_contracts::context::{ContextArtifactOrigin, ContextReversibility, ToolResultSubmission};
 use aw_contracts::ids::{
-    ActorId, AgentSessionId, EnvironmentId, ExecutionContextId, ToolUseId, TurnId,
+    ActorId, AgentSessionId, AttemptId, EnvironmentId, ExecutionContextId, ToolUseId, TurnId,
 };
+use aw_contracts::ledger::LedgerEventKind;
 use aw_contracts::provider::{
     ProviderDisposition, ProviderMeasurementKind, ProviderMeter, ProviderReceipt,
 };
@@ -34,6 +35,10 @@ use aw_provider_host::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+
+mod ledger;
+
+pub use ledger::{CoshLedgerRecord, LedgerAssurance, LedgerSpec, LedgerWriteError};
 
 const POST_TOOL_USE: &str = "PostToolUse";
 const PRE_TOOL_USE: &str = "PreToolUse";
@@ -56,6 +61,11 @@ pub struct CoshHookConfig {
     pub provider_wall_time_ms: Option<u64>,
     /// Explicitly trust a Provider before OS controls enforce its declarations.
     pub allow_unenforced_provider: bool,
+    /// Durably record what this boundary decided, when a writer is configured.
+    ///
+    /// Leave this unset to run without a Ledger. See [`LedgerSpec`] for what
+    /// the hook-side writer can and cannot promise.
+    pub ledger: Option<LedgerSpec>,
 }
 
 /// Content-free summary of one COSH hook invocation.
@@ -78,6 +88,16 @@ pub struct CoshHookRun {
     /// `Allow` does not mean the Tool Call ran.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gate: Option<ToolCallGate>,
+    /// Ledger record this hook appended, when a writer was configured and the
+    /// append settled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ledger: Option<CoshLedgerRecord>,
+    /// Set when a writer was configured but the append did not settle.
+    ///
+    /// The boundary decision still stands; the Ledger just does not claim it.
+    /// A reader must not treat a missing record as a missing decision.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub ledger_unavailable: bool,
 }
 
 /// Failure returned before the adapter can emit a trustworthy hook response.
@@ -118,6 +138,12 @@ pub enum CoshHookError {
     /// Core could not route or prepare the tool result.
     #[error(transparent)]
     Core(#[from] CoreError),
+    /// A required Ledger append did not settle.
+    ///
+    /// Reached only under [`LedgerAssurance::Required`]. The boundary fails
+    /// rather than proceed on a decision nothing recorded.
+    #[error(transparent)]
+    Ledger(#[from] LedgerWriteError),
 }
 
 /// Processes one COSH PostToolUse envelope and writes one COSH hook response.
@@ -160,6 +186,7 @@ pub fn run_cosh_post_tool_use(
         content,
         allow_text_reencoding: true,
     };
+    let tool_use_id = scope.tool_use_id.clone();
     let outcome = core.observe_tool_result(
         &context,
         scope.turn_id,
@@ -167,6 +194,17 @@ pub fn run_cosh_post_tool_use(
         submission,
         &config.preferences,
     )?;
+
+    // Record before responding. Under `Required` assurance the boundary must
+    // fail without having already told COSH what to do.
+    let (record, unavailable) = record_boundary(
+        config,
+        LedgerEventKind::PostToolUsePlan,
+        &outcome.ledger_body(),
+        &tool_use_id,
+        context.attempt_id(),
+    )?;
+
     let output = hook_output(&outcome);
     let replacement_requested = output
         .hook_specific_output
@@ -180,6 +218,8 @@ pub fn run_cosh_post_tool_use(
         receipts: outcome.receipts().into_iter().cloned().collect(),
         observation_gaps: outcome.observation_gaps.clone(),
         gate: None,
+        ledger: record,
+        ledger_unavailable: unavailable,
     })
 }
 
@@ -222,6 +262,7 @@ pub fn run_cosh_pre_tool_use(
         language: language_for_tool(&input.tool_name),
         tool_name: Some(BoundedName::new(input.tool_name)?),
     };
+    let tool_use_id = scope.tool_use_id.clone();
     let decision = core.mediate_tool_call(
         &context,
         scope.turn_id,
@@ -229,6 +270,17 @@ pub fn run_cosh_pre_tool_use(
         submission,
         &config.preferences,
     )?;
+
+    // A gate that nothing recorded is exactly what `Required` exists to
+    // prevent, so the append precedes the response here too.
+    let (record, unavailable) = record_boundary(
+        config,
+        LedgerEventKind::PreToolUseGate,
+        &decision.ledger_body(),
+        &tool_use_id,
+        context.attempt_id(),
+    )?;
+
     write_response(&mut writer, &gate_output(&decision))?;
 
     Ok(CoshHookRun {
@@ -236,6 +288,8 @@ pub fn run_cosh_pre_tool_use(
         receipts: decision.receipt.clone().into_iter().collect(),
         observation_gaps: Vec::new(),
         gate: Some(decision.gate),
+        ledger: record,
+        ledger_unavailable: unavailable,
     })
 }
 
@@ -300,6 +354,27 @@ fn read_hook_input<T: for<'de> Deserialize<'de>>(
         });
     }
     serde_json::from_slice(&input).map_err(CoshHookError::InvalidInput)
+}
+
+/// Appends one boundary record when a Ledger writer is configured.
+///
+/// Returns the record summary and whether a configured writer failed to
+/// settle. With no writer configured both are absent, which is not the same
+/// fact as an append that failed.
+fn record_boundary<T: serde::Serialize>(
+    config: &CoshHookConfig,
+    kind: LedgerEventKind,
+    body: &T,
+    tool_use_id: &ToolUseId,
+    attempt_id: Option<&AttemptId>,
+) -> Result<(Option<CoshLedgerRecord>, bool), CoshHookError> {
+    let Some(spec) = config.ledger.as_ref() else {
+        return Ok((None, false));
+    };
+    let scope = ledger::trace_scope(tool_use_id, attempt_id);
+    let record = ledger::append_record(spec, kind, body, &scope)?;
+    let unavailable = record.is_none();
+    Ok((record, unavailable))
 }
 
 fn build_core(config: &CoshHookConfig) -> Result<Core, CoshHookError> {
@@ -626,6 +701,8 @@ fn write_response(mut writer: impl Write, output: &CoshHookOutput) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
+
     use aw_contracts::common::Digest;
     use aw_contracts::context::ContextProjectionCandidate;
     use aw_contracts::ids::{ArtifactId, ProviderInvocationId};
@@ -986,6 +1063,7 @@ mod tests {
             preferences: CapabilityPreferences::default(),
             provider_wall_time_ms: None,
             allow_unenforced_provider: false,
+            ledger: None,
         }
     }
 
@@ -1113,5 +1191,183 @@ mod tests {
 
     fn digest(value: char) -> Digest {
         Digest::parse(value.to_string().repeat(64)).expect("test digest is canonical")
+    }
+
+    fn ledger_spec(root: PathBuf, assurance: LedgerAssurance) -> LedgerSpec {
+        LedgerSpec { root, assurance }
+    }
+
+    fn scope_for(tool_use_id: &ToolUseId) -> aw_contracts::ledger::LedgerTraceScope {
+        ledger::trace_scope(tool_use_id, None)
+    }
+
+    #[test]
+    fn a_recorded_gate_lands_in_a_verifiable_chain() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let spec = ledger_spec(dir.path().to_path_buf(), LedgerAssurance::Required);
+        let body = decision(ToolCallGate::Block, &["fixture.recursive_delete"], None).ledger_body();
+        let tool_use_id = ToolUseId::new();
+
+        let record = ledger::append_record(
+            &spec,
+            LedgerEventKind::PreToolUseGate,
+            &body,
+            &scope_for(&tool_use_id),
+        )
+        .expect("the append settles")
+        .expect("a record was written");
+        assert_eq!(record.sequence, 0);
+
+        let store = aw_ledger::LedgerStore::open(dir.path()).expect("store reopens");
+        assert_eq!(
+            aw_ledger::verify_chain(&store).expect("the chain verifies"),
+            1
+        );
+        let stored = store
+            .record_by_id(&record.event_id)
+            .expect("query succeeds")
+            .expect("the record is readable");
+        assert_eq!(stored.record_digest, record.record_digest);
+        assert_eq!(stored.header.kind, LedgerEventKind::PreToolUseGate);
+    }
+
+    #[test]
+    fn successive_boundary_records_extend_one_chain() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let spec = ledger_spec(dir.path().to_path_buf(), LedgerAssurance::Required);
+        let tool_use_id = ToolUseId::new();
+
+        let gate = decision(ToolCallGate::Warn, &["fixture.download_exec"], None).ledger_body();
+        let plan = outcome_with(
+            Some(candidate()),
+            ProviderDisposition::Produced,
+            Vec::new(),
+            Vec::new(),
+        )
+        .ledger_body();
+
+        for (kind, body) in [
+            (
+                LedgerEventKind::PreToolUseGate,
+                serde_json::to_value(&gate).expect("gate body serializes"),
+            ),
+            (
+                LedgerEventKind::PostToolUsePlan,
+                serde_json::to_value(&plan).expect("plan body serializes"),
+            ),
+        ] {
+            ledger::append_record(&spec, kind, &body, &scope_for(&tool_use_id))
+                .expect("the append settles")
+                .expect("a record was written");
+        }
+
+        let store = aw_ledger::LedgerStore::open(dir.path()).expect("store reopens");
+        assert_eq!(
+            aw_ledger::verify_chain(&store).expect("the chain verifies"),
+            2,
+            "two boundary records must link into one chain"
+        );
+        assert_eq!(store.tip().sequence, 1);
+    }
+
+    #[test]
+    fn the_trace_scope_makes_a_record_queryable() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let spec = ledger_spec(dir.path().to_path_buf(), LedgerAssurance::Required);
+        let tool_use_id = ToolUseId::new();
+        let body = decision(ToolCallGate::Allow, &[], None).ledger_body();
+
+        ledger::append_record(
+            &spec,
+            LedgerEventKind::PreToolUseGate,
+            &body,
+            &scope_for(&tool_use_id),
+        )
+        .expect("the append settles")
+        .expect("a record was written");
+
+        let store = aw_ledger::LedgerStore::open(dir.path()).expect("store reopens");
+        let gates = store
+            .events_by_kind(LedgerEventKind::PreToolUseGate)
+            .expect("query succeeds");
+        assert_eq!(gates.len(), 1);
+        let scope = gates[0].scope.as_ref().expect("the scope row was written");
+        assert_eq!(scope.tool_use_id.as_ref(), Some(&tool_use_id));
+    }
+
+    /// Returns a store root that cannot be created: a directory path nested
+    /// below a regular file.
+    fn unwritable_root(dir: &tempfile::TempDir) -> PathBuf {
+        let blocker = dir.path().join("not-a-directory");
+        std::fs::write(&blocker, b"").expect("blocker file is written");
+        blocker.join("ledger")
+    }
+
+    #[test]
+    fn correlated_assurance_reports_an_unsettled_append_without_failing() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let spec = ledger_spec(unwritable_root(&dir), LedgerAssurance::Correlated);
+        let body = decision(ToolCallGate::Block, &["fixture.recursive_delete"], None).ledger_body();
+
+        let record = ledger::append_record(
+            &spec,
+            LedgerEventKind::PreToolUseGate,
+            &body,
+            &scope_for(&ToolUseId::new()),
+        )
+        .expect("correlated assurance does not fail the boundary");
+        assert!(
+            record.is_none(),
+            "an unsettled append must not claim a record"
+        );
+    }
+
+    #[test]
+    fn required_assurance_fails_when_the_append_cannot_settle() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let spec = ledger_spec(unwritable_root(&dir), LedgerAssurance::Required);
+        let body = decision(ToolCallGate::Block, &["fixture.recursive_delete"], None).ledger_body();
+
+        let error = ledger::append_record(
+            &spec,
+            LedgerEventKind::PreToolUseGate,
+            &body,
+            &scope_for(&ToolUseId::new()),
+        )
+        .expect_err("required assurance must fail the boundary");
+        assert!(
+            error.to_string().contains("ledger append failed"),
+            "the failure must name the Ledger: {error}"
+        );
+    }
+
+    #[test]
+    fn a_recorded_gate_body_never_carries_the_command() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let spec = ledger_spec(dir.path().to_path_buf(), LedgerAssurance::Required);
+        let body = decision(ToolCallGate::Block, &["fixture.recursive_delete"], None).ledger_body();
+
+        let record = ledger::append_record(
+            &spec,
+            LedgerEventKind::PreToolUseGate,
+            &body,
+            &scope_for(&ToolUseId::new()),
+        )
+        .expect("the append settles")
+        .expect("a record was written");
+
+        let store = aw_ledger::LedgerStore::open(dir.path()).expect("store reopens");
+        let bytes = store
+            .record_body_bytes(&record.event_id)
+            .expect("body bytes are readable");
+        let stored = String::from_utf8(bytes).expect("canonical bytes are UTF-8");
+        assert!(
+            !stored.contains("\"command\""),
+            "a stored gate body must not carry a command key: {stored}"
+        );
+        assert!(
+            stored.contains("fixture.recursive_delete"),
+            "the rule code is what makes the refusal actionable: {stored}"
+        );
     }
 }

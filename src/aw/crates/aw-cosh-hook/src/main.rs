@@ -12,6 +12,7 @@ use aw_contracts::common::BoundedName;
 use aw_core::CapabilityPreferences;
 use aw_cosh_hook::{
     local_host_target, run_cosh_post_tool_use, run_cosh_pre_tool_use, CoshHookConfig,
+    LedgerAssurance, LedgerSpec,
 };
 use aw_provider_host::{ProviderAdmissionOptions, ProviderManifestSource};
 use clap::{Parser, ValueEnum};
@@ -82,6 +83,37 @@ struct Cli {
     /// Append content-free Provider receipts and replacement requests as JSONL.
     #[arg(long, value_name = "PATH")]
     receipt_log: Option<PathBuf>,
+    /// Durably record this boundary's decision in a Ledger below one directory.
+    ///
+    /// The hook process is the writer, so two concurrent hooks contend on the
+    /// same database. Use `--ledger-mode` to say whether losing that race is
+    /// acceptable.
+    #[arg(long, value_name = "DIR")]
+    ledger: Option<PathBuf>,
+    /// What the hook requires of a durable Ledger append.
+    #[arg(long, value_enum, default_value_t = LedgerModeArg::Correlated, requires = "ledger")]
+    ledger_mode: LedgerModeArg,
+}
+
+/// Assurance level requested of the interim hook-side Ledger writer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum LedgerModeArg {
+    /// Record the decision, but let the boundary proceed if the append fails.
+    Correlated,
+    /// Fail the boundary when the append fails.
+    ///
+    /// On PreToolUse the resulting non-zero exit is what makes COSH fail
+    /// closed, so an unrecorded gate blocks rather than passes.
+    Required,
+}
+
+impl From<LedgerModeArg> for LedgerAssurance {
+    fn from(value: LedgerModeArg) -> Self {
+        match value {
+            LedgerModeArg::Correlated => Self::Correlated,
+            LedgerModeArg::Required => Self::Required,
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -119,6 +151,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         preferences,
         provider_wall_time_ms: cli.provider_wall_time_ms,
         allow_unenforced_provider: cli.allow_unenforced_provider,
+        ledger: cli.ledger.map(|root| LedgerSpec {
+            root,
+            assurance: LedgerAssurance::from(cli.ledger_mode),
+        }),
     };
     let stdin = std::io::stdin().lock();
     let stdout = std::io::stdout().lock();

@@ -7,6 +7,10 @@ use aw_contracts::common::Digest;
 use aw_contracts::context::ContextProjectionCandidate;
 use aw_contracts::error::ContractError;
 use aw_contracts::ids::ArtifactId;
+use aw_contracts::ledger::{
+    LedgerInvocationRef, LedgerObservation, LedgerObservationGap, LedgerProjectionOutcome,
+    PostToolUsePlanBody, PreToolUseGateBody,
+};
 use aw_contracts::provider::{ProviderReceipt, VersionedSchema};
 use aw_contracts::security::{
     GateDegradation, ObservationGapReason, SecurityDetectedLanguage, SecurityFinding,
@@ -133,6 +137,62 @@ impl ToolResultOutcome {
             .map(CapabilityObservation::matched_total)
             .sum()
     }
+
+    /// Projects this outcome into the content-free Ledger record body.
+    ///
+    /// The Advise candidate is reduced to its shape metadata. A candidate
+    /// carries the model-visible representation itself, so copying it into a
+    /// Ledger record would defeat content-freedom; the invocation's
+    /// `output_digest` is what lets a reader prove which candidate was meant.
+    #[must_use]
+    pub fn ledger_body(&self) -> PostToolUsePlanBody {
+        PostToolUsePlanBody {
+            source_artifact_id: self.source_artifact_id.clone(),
+            source_digest: self.source_digest.clone(),
+            observations: self
+                .observations
+                .iter()
+                .map(|observation| LedgerObservation {
+                    capability: observation.capability.clone(),
+                    verdict: observation.verdict,
+                    findings: observation.findings.clone(),
+                    scanned_bytes: observation.scanned_bytes,
+                    truncated: observation.truncated,
+                    language_detected: observation.language_detected,
+                    invocation: LedgerInvocationRef::from_receipt(&observation.receipt),
+                })
+                .collect(),
+            observation_gaps: self
+                .observation_gaps
+                .iter()
+                .map(|gap| LedgerObservationGap {
+                    capability: gap.capability.clone(),
+                    reason: gap.reason,
+                    invocation: gap.receipt.as_ref().map(LedgerInvocationRef::from_receipt),
+                })
+                .collect(),
+            projection: LedgerProjectionOutcome {
+                candidate_offered: self.projection.candidate.is_some(),
+                media_type: self
+                    .projection
+                    .candidate
+                    .as_ref()
+                    .map(|candidate| candidate.media_type.clone()),
+                transform_chain: self
+                    .projection
+                    .candidate
+                    .as_ref()
+                    .map(|candidate| candidate.transform_chain.clone())
+                    .unwrap_or_default(),
+                reversibility: self
+                    .projection
+                    .candidate
+                    .as_ref()
+                    .map(|candidate| candidate.reversibility),
+                invocation: LedgerInvocationRef::from_receipt(&self.projection.receipt),
+            },
+        }
+    }
 }
 
 /// Core gate result for one pending Tool Call.
@@ -155,4 +215,21 @@ pub struct ToolCallDecision {
     /// Why the gate resolved without an implementation verdict.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub degradation: Option<GateDegradation>,
+}
+
+impl ToolCallDecision {
+    /// Projects this decision into the content-free Ledger record body.
+    ///
+    /// Recording a refusal is the point of this record, so the rationale codes
+    /// travel with it. They are [`SecurityRuleId`] values, whose character set
+    /// cannot carry the command text that triggered the gate.
+    #[must_use]
+    pub fn ledger_body(&self) -> PreToolUseGateBody {
+        PreToolUseGateBody {
+            gate: self.gate,
+            reasons: self.reasons.clone(),
+            degradation: self.degradation,
+            invocation: self.receipt.as_ref().map(LedgerInvocationRef::from_receipt),
+        }
+    }
 }

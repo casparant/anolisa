@@ -16,4 +16,5 @@ thiserror.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+aw-ledger = { path = "../aw-ledger" }
 tempfile.workspace = true

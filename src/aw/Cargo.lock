@@ -80,6 +80,7 @@ name = "aw-core"
 version = "0.1.0"
 dependencies = [
  "aw-contracts",
+ "aw-ledger",
  "aw-provider-host",
  "serde",
  "serde_json",
@@ -95,10 +96,12 @@ version = "0.1.0"
 dependencies = [
  "aw-contracts",
  "aw-core",
+ "aw-ledger",
  "aw-provider-host",
  "clap",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
@@ -107,6 +110,7 @@ name = "aw-ledger"
 version = "0.1.0"
 dependencies = [
  "aw-contracts",
+ "clap",
  "rusqlite",
  "serde",
  "serde_json",

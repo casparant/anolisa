@@ -56,6 +56,7 @@ fn cosh_post_tool_result_runs_through_core_and_tokenless() {
             preferences: CapabilityPreferences::default(),
             provider_wall_time_ms: None,
             allow_unenforced_provider: true,
+            ledger: None,
         },
     )
     .expect("COSH hook runs through AW Core");

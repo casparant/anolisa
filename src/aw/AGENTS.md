@@ -5,22 +5,33 @@
 
 ## Architecture
 
-The workspace currently contains four crates:
+The workspace currently contains five crates:
 
 - `aw-contracts`: side-effect-free public identities and versioned Contracts.
 - `aw-provider-host`: headless Provider discovery, admission, graph projection,
   process supervision, and invocation.
 - `aw-core`: execution-context ownership, exact Capability routing, invocation
   policy, and Provider candidate validation.
-- `aw-cosh-hook`: COSH-specific `PostToolUse` wire adapter over AW Core.
+- `aw-ledger`: append-only Ledger admission, hash chain, SQLite storage,
+  bounded queries, and chain verification.
+- `aw-cosh-hook`: COSH-specific `PostToolUse` and `PreToolUse` wire adapters
+  over AW Core, plus the interim hook-side Ledger writer.
 
 Dependency direction is:
 
 ```text
 aw-cosh-hook -> aw-core -> aw-provider-host -> aw-contracts
-          |              `------------------------------->|
-          `---------------------------------------------->|
+          |  \           `------------------------------->|
+          |   `-> aw-ledger ------------------------------>|
+          `----------------------------------------------->|
 ```
+
+`aw-ledger` depends only on `aw-contracts` and must not learn Core outcome
+types. Ledger record body schemas live in `aw-contracts` because they are
+versioned Contracts; the projections from a Core outcome into those bodies live
+in `aw-core` because Core owns the outcome. `aw-ledger` is a dev-dependency of
+`aw-core` so those projections can be proven content-free against real
+admission rather than by inspection.
 
 No AW crate may depend on `src/cosh-ng/` or a concrete Provider. The COSH
 adapter owns the COSH wire shape locally so Core remains Agent Environment

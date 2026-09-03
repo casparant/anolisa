@@ -5,6 +5,9 @@
 #[path = "tests/providers.rs"]
 mod providers;
 
+#[path = "tests/ledger.rs"]
+mod ledger;
+
 use aw_contracts::common::{BoundedName, BoundedOpaque, TargetRef};
 use aw_contracts::context::{ContextArtifactOrigin, ToolResultSubmission};
 use aw_contracts::ids::{
