@@ -25,6 +25,7 @@ SEC_DIR="${ROOT_DIR}/src/agent-sec-core"
 SKILLS_DIR="${ROOT_DIR}/src/os-skills"
 SIGHT_DIR="${ROOT_DIR}/src/agentsight"
 TOKEN_DIR="${ROOT_DIR}/src/tokenless"
+TOKEN_PROVIDER_DIR="${ROOT_DIR}/providers/tokenless"
 MEM_DIR="${ROOT_DIR}/src/agent-memory"
 SKILLFS_DIR="${ROOT_DIR}/src/skillfs"
 COSH_DIR="${ROOT_DIR}/src/cosh-ng"
@@ -447,6 +448,11 @@ build_tokenless() {
         err "Spec template not found: $spec_in"
         return 1
     fi
+    if [ ! -f "${TOKEN_PROVIDER_DIR}/provider.toml" ] || \
+       [ ! -d "${TOKEN_PROVIDER_DIR}/schemas" ]; then
+        err "Tokenless Provider package is incomplete: ${TOKEN_PROVIDER_DIR}"
+        return 1
+    fi
 
     # Version from env or Cargo.toml workspace
     local version="${VERSION:-}"
@@ -510,6 +516,20 @@ build_tokenless() {
         --exclude='adapters/tokenless/codex/.codex-plugin/plugin.json' \
         --exclude='adapters/tokenless/qwencode/qwen-extension.json' \
         . | tar -xf - -C "$pkg_dir"
+
+    # Keep the repository's source and Provider roots independent while making
+    # the RPM source artifact self-contained. Only runtime contract files are
+    # staged; fixtures and documentation remain repository-only material.
+    local provider_schemas=("${TOKEN_PROVIDER_DIR}/schemas/"*.json)
+    if [ ! -f "${provider_schemas[0]}" ]; then
+        err "No Tokenless Provider schemas found in ${TOKEN_PROVIDER_DIR}/schemas"
+        return 1
+    fi
+    mkdir -p "$pkg_dir/provider/schemas"
+    install -p -m 0644 "${TOKEN_PROVIDER_DIR}/provider.toml" \
+        "$pkg_dir/provider/provider.toml"
+    install -p -m 0644 "${provider_schemas[@]}" \
+        "$pkg_dir/provider/schemas/"
 
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
