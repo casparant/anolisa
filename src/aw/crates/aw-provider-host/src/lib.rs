@@ -25,39 +25,18 @@ pub use graph::{
     ProviderPermissionDeclaration, RuntimeCapabilityEntry, RuntimeCapabilityGraph,
 };
 
+/// Encodes one value as Agent Workload canonical JSON v1.
+///
+/// Re-exported from [`aw_contracts::canonical::canonical_json_v1_bytes`]. The
+/// encoding is a contract shared by every AW boundary that digests payloads,
+/// so the implementation lives in `aw-contracts` and downstream crates may
+/// import it from either module.
+pub use aw_contracts::canonical::canonical_json_v1_bytes;
+
 /// Maximum manifest size accepted during discovery.
 pub const MAX_PROVIDER_MANIFEST_BYTES: usize = 1024 * 1024;
 /// Maximum invocation document accepted by the headless CLI before admission.
 pub const MAX_PROVIDER_INVOCATION_BYTES: usize = 65 * 1024 * 1024;
-
-/// Encodes one value as Agent Workload canonical JSON v1.
-///
-/// Objects are recursively sorted by key, arrays retain order, and the result
-/// is compact UTF-8 JSON. Provider payload digests and `exec-json/v1` stdin use
-/// these exact bytes so equivalent object insertion orders produce one digest.
-///
-/// # Errors
-///
-/// Returns an error if `serde_json` cannot encode the normalized value.
-pub fn canonical_json_v1_bytes(value: &Value) -> Result<Vec<u8>, serde_json::Error> {
-    serde_json::to_vec(&canonical_json_v1_value(value))
-}
-
-fn canonical_json_v1_value(value: &Value) -> Value {
-    match value {
-        Value::Object(object) => {
-            let mut entries = object.iter().collect::<Vec<_>>();
-            entries.sort_by_key(|(key, _)| *key);
-            let mut canonical = serde_json::Map::new();
-            for (key, value) in entries {
-                canonical.insert(key.clone(), canonical_json_v1_value(value));
-            }
-            Value::Object(canonical)
-        }
-        Value::Array(values) => Value::Array(values.iter().map(canonical_json_v1_value).collect()),
-        _ => value.clone(),
-    }
-}
 
 /// One explicit source of Provider manifests.
 #[derive(Debug, Clone, PartialEq, Eq)]

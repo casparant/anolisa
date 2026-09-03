@@ -6,6 +6,7 @@
 //! implementations depend on these types without becoming part of the public
 //! system contract.
 
+pub mod canonical;
 pub mod common;
 pub mod context;
 pub mod error;
