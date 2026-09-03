@@ -7,20 +7,22 @@ capabilities to one Agent or one user interface. This workspace owns the public
 Contracts, Core policy, and headless Provider mechanisms used by Agent
 Environments, IDEs, workflow engines, and individual Providers.
 
-The current implementation contains four crates:
+The current implementation contains five crates:
 
 | Crate | Responsibility |
 | --- | --- |
 | `aw-contracts` | Transport-independent identities and versioned Capability and Provider Contracts |
 | `aw-provider-host` | Provider discovery, admission, codec mapping, bounded invocation, and diagnostics |
 | `aw-core` | Execution-context ownership, exact Capability routing, invocation policy, and candidate validation |
-| `aw-cosh-hook` | COSH `PostToolUse` adapter for the Core context-projection path |
+| `aw-ledger` | Append-only Ledger admission, hash chain, SQLite storage, bounded queries, and chain verification |
+| `aw-cosh-hook` | COSH `PreToolUse` and `PostToolUse` adapters, plus the interim hook-side Ledger writer |
 
 COSH is the default interactive Agent Environment in the product architecture.
-The current PoC connects its built-in Agent's `PostToolUse` boundary to AW
-Core and the generic Provider Host, with tokenless as the first real Provider.
-It does not yet install that hook by default or cover arbitrary Agents launched
-inside `cosh-shell`.
+The current PoC connects both of its built-in Agent's Tool Call boundaries to
+AW Core and the generic Provider Host: `PreToolUse` for the Mediate gate and
+`PostToolUse` for Observe plus Advise. tokenless and agent-sec-core are the
+first two real Providers. It does not yet install those hooks by default or
+cover arbitrary Agents launched inside `cosh-shell`.
 
 ## Dependency Direction
 
@@ -105,6 +107,50 @@ user-visible behavior, receipt semantics, and current limitations. See
 [COSH AW Correlation](../cosh-ng/docs/design/aw-hook-correlation.md) for
 the exact Hook wire boundary.
 
+## Record a Boundary Decision
+
+Both adapters can durably record what the boundary decided, in an append-only
+hash-chained Ledger:
+
+```bash
+"$AW_REPO_ROOT/src/aw/target/debug/aw-cosh-hook" \
+  --event PreToolUse \
+  --manifest-dir "$AW_REPO_ROOT/providers" \
+  --executable-root /absolute/path/to/provider/bin \
+  --target-id local-source-poc \
+  --allow-unenforced-provider \
+  --ledger /absolute/path/to/ledger-dir \
+  --ledger-mode required \
+  < pre-tool-use.json
+```
+
+`--ledger-mode` states what the caller requires of the append. `correlated`
+(the default) keeps the boundary working and leaves the fact unclaimed;
+`required` fails the boundary instead, which on `PreToolUse` is what makes COSH
+fail closed. The hook process is the writer, so this is an interim arrangement —
+see [AW Ledger](docs/design/ledger.md#the-interim-hook-writer).
+
+Read a Ledger back with the inspector. It links its own bundled SQLite, which
+matters because the store uses STRICT tables and a host with `sqlite3` older
+than 3.37 cannot open the schema at all:
+
+```bash
+cargo build --manifest-path src/aw/Cargo.toml -p aw-ledger --bin aw-ledger
+
+src/aw/target/debug/aw-ledger --ledger /absolute/path/to/ledger-dir verify
+src/aw/target/debug/aw-ledger --ledger /absolute/path/to/ledger-dir list
+src/aw/target/debug/aw-ledger --ledger /absolute/path/to/ledger-dir body evt_<uuid>
+```
+
+`verify` recomputes every body digest, record digest, and parent link rather
+than reading the stored values. `body` prints exactly the bytes that were
+stored, so content-freedom can be audited instead of asserted.
+
+See [AW Ledger](docs/design/ledger.md) for the record model, hash chain, and
+current limitations, and [Multi-Provider Case](docs/design/multi-provider-case.md)
+for an end-to-end trace of three Capabilities across two Providers recorded at
+both boundaries.
+
 ## Planned Workspace Shape
 
 The long-term workspace keeps Contracts, Provider hosting, system state, client
@@ -115,6 +161,7 @@ src/aw/crates/
 |-- aw-contracts/       # present
 |-- aw-provider-host/   # present
 |-- aw-core/            # present: context and Provider policy coordination
+|-- aw-ledger/          # present: append-only boundary record and hash chain
 |-- aw-cosh-hook/       # present: COSH-specific boundary adapter
 |-- aw-client/          # public client protocol and SDK surface
 `-- aw-service/         # service transport and supervision
