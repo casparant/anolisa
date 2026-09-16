@@ -128,12 +128,13 @@ Rectangle {
                             RowLayout {
                                 spacing: 8
                                 EntryButton {
+                                    objectName: "agentAction-" + card.modelData.id
                                     Layout.fillWidth: true
-                                    text: card.modelData.available ? "打开" : (["qoder-cli", "codex", "qoderwake"].indexOf(card.modelData.install) >= 0 ? "安装…" : card.modelData.id === "qoder" ? "打开下载页" : "查看说明")
+                                    text: card.modelData.available ? "打开" : (["qoder", "qoder-cli", "codex", "qoderwake"].indexOf(card.modelData.install) >= 0 ? "安装…" : "查看说明")
                                     accent: card.modelData.available
                                     enabled: !root.busy && (card.modelData.available || card.modelData.install !== "none")
                                     onClicked: {
-                                        var action = card.modelData.available ? "launch" : (["qoder-cli", "codex", "qoderwake"].indexOf(card.modelData.install) >= 0 ? "install" : "docs")
+                                        var action = card.modelData.available ? "launch" : (["qoder", "qoder-cli", "codex", "qoderwake"].indexOf(card.modelData.install) >= 0 ? "install" : "docs")
                                         root.actionRequested([action, card.modelData.id, "--project", projectField.text])
                                     }
                                 }

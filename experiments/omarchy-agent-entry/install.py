@@ -20,6 +20,9 @@ FILES = [
     "EntryButton.qml",
     "EntryField.qml",
     "agent_entry.py",
+    "qoder/install.py",
+    "qoder/PKGBUILD",
+    "qoder/qoder.conf",
 ]
 
 
@@ -82,6 +85,7 @@ def main() -> None:
         print("升级前备份：", backup)
     target.mkdir(parents=True, exist_ok=False)
     for name in FILES:
+        (target / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SOURCE / name, target / name)
     helper = target / "agent_entry.py"
     helper.chmod(0o755)

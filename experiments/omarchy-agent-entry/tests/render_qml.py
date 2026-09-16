@@ -39,6 +39,14 @@ root.actionRequested.connect(
 
 def click(name: str) -> None:
     item = root.findChild(QObject, name)
+    # Repeater delegates belong to the visual tree, not always the QObject tree.
+    pending = [root]
+    while item is None and pending:
+        candidate = pending.pop()
+        if candidate.objectName() == name:
+            item = candidate
+        else:
+            pending.extend(candidate.childItems())
     if item is None:
         raise RuntimeError("Missing UI item: " + name)
     point = item.mapToScene(item.boundingRect().center())
@@ -54,6 +62,8 @@ def capture() -> None:
         "--project",
         "/home/user/Projects/anolisa",
     ], actions
+    click("agentAction-qoder")
+    assert actions[-1] == ["install", "qoder", "--project", "/home/user/Projects/anolisa"], actions
     if not view.grabWindow().save(str(output)):
         raise RuntimeError("Failed to capture " + str(output))
     print(output)
@@ -67,9 +77,10 @@ def capture() -> None:
     view.resize(800, 680)
     QTest.qWait(150)
     view.grabWindow().save(str(output.with_name(output.stem + "-narrow.png")))
-    print("PASS: QtQuick load, terminal action signal, registration dialog, Escape, resize")
+    print("PASS: QtQuick load, terminal / Qoder install signals, registration, Escape, resize")
     app.quit()
 
 
 QTimer.singleShot(1200, capture)
+QTimer.singleShot(10000, lambda: app.exit(1))
 raise SystemExit(app.exec())

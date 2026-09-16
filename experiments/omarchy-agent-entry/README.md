@@ -21,16 +21,16 @@ or release inventory**. Its current UI is in Chinese.
   entry points.
 - Install Qoder CLI, Codex CLI, or QoderWake after reviewing the source in a
   terminal and explicitly typing INSTALL.
+- Install Qoder GUI by converting its official DEB to a local pacman package.
+  The download URL lives in `qoder/qoder.conf`; no vendor binaries are committed.
 - Register a custom terminal command, GUI program, or Web URL.
 - Authenticate in each Agent's own UI. This plugin does not collect credentials.
 
-**Automatic Qoder GUI installation is deferred.** Its button opens the official
-download page; it does not convert RPM/DEB packages to Arch packages. The inspected
-official RPM contains `/opt/Qoder/qoder`, a desktop entry, and `qoder:` /
-`qoder-app:` URL handlers. Dependencies, Electron sandbox behavior, and login
-callbacks still need target-machine testing. An existing installation can be
-detected through its desktop file or configured with an explicit command.
-QoderWork is not included.
+**Qoder GUI now has an experimental x86_64 installer.** Its Install button runs
+the standalone converter described below. It preserves the official application,
+icons, and `qoder:` / `qoder-app:` handlers without executing Debian install
+scripts. Linux installation, sandbox startup, and browser login still need
+target-machine acceptance. This is the new Qoder GUI, not Qoder IDE or QoderWork.
 
 This is not an embedded terminal, unified chat client, or task-monitoring
 Dashboard. Tokenless and Checkpoint data are not connected or simulated.
@@ -70,14 +70,82 @@ an independent Omarchy `post-boot.d` hook; it does not start Agents or tasks.
 
 1. Open Shell Terminal. An existing cosh-ng can be launched separately; this
    prototype does not include its binary.
-2. Choose Install for Qoder CLI, Codex CLI, or QoderWake. Review the source and
+2. Choose Install for Qoder GUI, Qoder CLI, Codex CLI, or QoderWake. Review the source and
    type INSTALL in the terminal. Network access and accounts are supplied by
    the target machine.
 3. Refresh after installation, then Open and complete native authentication.
-4. For Qoder GUI, use the download-page button or configure an existing binary.
+4. Qoder GUI uses the converter below. Configure an explicit command if an
+   existing installation is not detected.
 5. QoderWake starts only after an explicit click. The helper calls `whoami`,
    then native `login` if needed, then
    `start --host 127.0.0.1 --open`. It does not expose a public listener.
+
+### Install Qoder GUI on Omarchy / Arch
+
+Run from this experiment directory as the desktop user. Prerequisites are
+installed with pacman; the converter itself must **not** run with sudo:
+
+```bash
+sudo pacman -S --needed base-devel curl libarchive zstd python
+python3 qoder/install.py
+```
+
+The Dashboard's Qoder Install button calls the same script in a terminal.
+Review the source URL, type `INSTALL`, and confirm pacman's dependency / package
+transaction. The script downloads the DEB, reads its version and architecture,
+builds `anolisa-qoder-bin` with makepkg, and invokes `sudo pacman -U`. This
+repackages binaries; it does not compile Qoder. No package repository is added.
+
+The URL and optional SHA256 pin are in **`qoder/qoder.conf`**. After plugin
+deployment its copy is at
+`~/.config/omarchy/plugins/anolisa.agent-entry/qoder/qoder.conf`.
+The parser reads INI data, not Shell code. Downloads use HTTPS; the default is
+Qoder's official moving `latest` URL. A computed hash is only a local integrity
+record, not an upstream signature. To pin a reviewed release, configure its
+official URL and a trusted SHA256. Plugin upgrades back up the old conf along
+with the old plugin; reapply your custom settings when upgrading.
+
+```bash
+# Build without sudo or installation, using the URL in conf:
+python3 qoder/install.py --build-only
+# Or use a DEB you already downloaded from Qoder:
+python3 qoder/install.py --build-only --deb /path/to/Qoder-linux-amd64.deb
+# Optional separate configuration file:
+python3 qoder/install.py --conf /path/to/qoder.conf
+# Launch; keep the GUI command separate from Qoder CLI:
+qoder-desktop
+# Update by rerunning the converter; uninstall the converted app with:
+sudo pacman -R anolisa-qoder-bin
+```
+
+Downloads, build artifacts, and a version/hash receipt stay outside the checkout,
+under `${XDG_CACHE_HOME:-~/.cache}/anolisa-agent-entry/qoder/build-*`. Keep enough
+free space for the download, two unpacked copies, and the final package (several
+GB). Repeated builds keep separate caches for diagnosis / rollback; they are
+not automatically pruned. The converter refuses non-x86_64 hosts, unknown
+package identities, and pinned-hash mismatches. pacman owns installed files;
+file conflicts are reported, never bypassed with overwrite flags.
+
+Electron uses unprivileged user namespaces, checked before installation. The
+converter does not disable the sandbox, enable setuid, or change AppArmor policy.
+A hardened host that blocks namespaces needs administrator review, not a
+`--no-sandbox` workaround. With `--build-only`, the target host must be checked
+separately. Runtime dependencies are installed by pacman, not DEB maintainer scripts.
+
+Browser login relies on `qoder.desktop` and both URL handlers. If a previous
+installation owns a handler, inspect its registration first:
+
+```bash
+xdg-mime query default x-scheme-handler/qoder
+xdg-mime query default x-scheme-handler/qoder-app
+# Only if you want this Qoder GUI to own the callbacks:
+xdg-mime default qoder.desktop x-scheme-handler/qoder
+xdg-mime default qoder.desktop x-scheme-handler/qoder-app
+```
+
+Use the converter for upgrades so pacman's inventory stays accurate. Do not
+run an upstream DEB/RPM updater on top of this package. Removing the Dashboard
+does not remove Qoder, and removing Qoder does not delete its user account data.
 
 ### Configure commands
 
@@ -157,7 +225,10 @@ plugin's startup hook out of `post-boot.d/`. There is no online updater.
 
 The manifest was checked using the official Omarchy **v4.0.1** validator.
 Python tests cover launch arguments, configuration, installation confirmation,
-backup, and uninstall. Real QtQuick rendering tests check the terminal button's
+backup, uninstall, and Qoder metadata/config parsing and package layout. The
+converter's payload extraction was also checked against the official Qoder
+`1:0.2.5` amd64 DEB on macOS; makepkg and pacman are not available on this host.
+Real QtQuick rendering tests check the terminal button's
 action signal, the registration dialog, Escape handling, and resizing.
 
 **Linux/Hyprland/Omarchy integration has not been exercised on a target
@@ -181,6 +252,8 @@ QT_QPA_PLATFORM=offscreen python3 tests/render_qml.py /tmp/agent-entry-preview.p
 Target acceptance sequence: toggle from the bar → launch a terminal → register
 a real command → install and authenticate one CLI Agent → hide the Dashboard
 and confirm the terminal remains → log in again to check automatic display.
+For Qoder GUI: install → `pacman -Q anolisa-qoder-bin` → `qoder-desktop` → complete
+browser login → return to the GUI → open a project → launch from the Dashboard.
 
 ## Files
 
@@ -189,6 +262,8 @@ and confirm the terminal remains → log in again to check automatic display.
 - `BarWidget.qml`: top-bar button.
 - `agent_entry.py`: launch, installation, and configuration; independently callable.
 - `install.py`: local plugin installation and enablement.
+- `qoder/install.py`, `qoder/PKGBUILD`, `qoder/qoder.conf`: standalone official-DEB
+  conversion, Arch package recipe, and download configuration.
 
 The general UI uses QtQuick. Manifest discovery, bar placement, and Shell IPC
 use Omarchy's plugin contract. Other Quickshell environments may reuse parts of

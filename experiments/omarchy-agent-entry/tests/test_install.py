@@ -42,6 +42,8 @@ class InstallTest(unittest.TestCase):
         config.write_text('{"version":1,"agents":[]}')
         self.invoke("--autostart")
         self.assertTrue((self.target / "Dashboard.qml").is_file())
+        for name in ("qoder/install.py", "qoder/PKGBUILD", "qoder/qoder.conf"):
+            self.assertEqual((self.target / name).read_bytes(), (ROOT / name).read_bytes())
         self.assertTrue((self.home / ".local/bin/anolisa-agent-entry").is_symlink())
         self.assertIn(" open ", self.hook.read_text())
         self.invoke("--uninstall")

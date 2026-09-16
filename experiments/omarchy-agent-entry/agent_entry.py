@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local Agent entry. No daemon, root privileges, credentials or shell eval."""
+"""Local Agent entry. No daemon, credential store or shell eval."""
 
 from __future__ import annotations
 
@@ -65,9 +65,9 @@ def catalog() -> list[dict[str, Any]]:
             name="Qoder",
             kind="gui",
             candidates=["qoder-desktop", "Qoder"],
-            subtitle="图形客户端 · Arch 安装待验证",
+            subtitle="图形客户端 · 官方 DEB 转 Arch 包",
             docs="https://qoder.com/download",
-            install="guide",
+            install="qoder",
         ),
         dict(
             id="qoder-cli",
@@ -339,7 +339,10 @@ def confirm(message: str) -> None:
 
 
 def install_agent(agent_id: str) -> None:
-    if agent_id == "qoder-cli":
+    if agent_id == "qoder":
+        subprocess.run([sys.executable, str(ROOT / "qoder/install.py")], env=env(), check=True)
+        return
+    elif agent_id == "qoder-cli":
         url = "https://qoder.com/install"
     elif agent_id == "qoderwake":
         url = "https://download.qoder.com/qoderwake/install.sh"
@@ -448,7 +451,7 @@ def main() -> int:
             result = {"message": "安装器已完成；请刷新入口并运行 Agent 完成登录。"}
         elif args.action == "install":
             item = get_agent(args.id)
-            if item["install"] not in ("qoder-cli", "codex", "qoderwake"):
+            if item["install"] not in ("qoder", "qoder-cli", "codex", "qoderwake"):
                 raise ValueError("没有适用的自动安装器，请查看官方说明")
             open_terminal(helper_payload("install-run", args.id), project_dir(args.project))
             result = {"message": "安装确认窗口已打开，请在终端查看并确认。"}

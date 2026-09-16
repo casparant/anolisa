@@ -101,6 +101,15 @@ class EntryTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 entry.confirm("test")
 
+    def test_qoder_installer_is_a_standalone_script(self) -> None:
+        self.assertEqual(entry.get_agent("qoder")["install"], "qoder")
+        with patch.object(entry.subprocess, "run") as run:
+            entry.install_agent("qoder")
+            self.assertEqual(
+                run.call_args.args[0], [entry.sys.executable, str(ROOT / "qoder/install.py")]
+            )
+            self.assertTrue(run.call_args.kwargs["check"])
+
     def test_manifest(self) -> None:
         manifest = json.loads((ROOT / "manifest.json").read_text())
         self.assertEqual(manifest["id"], entry.PLUGIN_ID)

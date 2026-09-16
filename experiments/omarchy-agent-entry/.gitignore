@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 preview*.png
 !assets/preview.png
+*.deb
+*.rpm
+*.pkg.tar.*
+/qoder/src/
+/qoder/pkg/

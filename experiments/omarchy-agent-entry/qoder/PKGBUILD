@@ -1,0 +1,42 @@
+# Repackage the proprietary Qoder GUI. Invoke through install.py, not as root.
+pkgname=anolisa-qoder-bin
+pkgver=${QODER_VERSION:?Use qoder/install.py}
+epoch=${QODER_EPOCH:?Use qoder/install.py}
+pkgrel=1
+pkgdesc='Qoder GUI repackaged from the official DEB for Omarchy / Arch'
+arch=('x86_64')
+url='https://qoder.com'
+license=('LicenseRef-Qoder')
+depends=('gtk3' 'libnotify' 'nss' 'libxss' 'libxtst' 'xdg-utils'
+         'at-spi2-core' 'util-linux-libs' 'libsecret' 'alsa-lib'
+         'glibc' 'gcc-libs' 'mesa' 'desktop-file-utils' 'hicolor-icon-theme')
+options=('!strip' '!debug')
+source=('Qoder.deb')
+noextract=('Qoder.deb')
+sha256sums=("${QODER_SHA256:?Use qoder/install.py}")
+
+package() {
+    local payload="$srcdir/payload"
+    mkdir -p "$payload"
+    # Extract as the build user; never execute Debian maintainer scripts.
+    bsdtar -xOf "$srcdir/Qoder.deb" data.tar.xz > "$srcdir/data.tar.xz" || return 1
+    bsdtar --no-same-owner -xf "$srcdir/data.tar.xz" -C "$payload" || return 1
+    test -f "$payload/opt/Qoder/qoder" || return 1
+    test -f "$payload/opt/Qoder/chrome-sandbox" || return 1
+    test -f "$payload/usr/share/applications/qoder.desktop" || return 1
+    grep -q 'x-scheme-handler/qoder;' "$payload/usr/share/applications/qoder.desktop" || return 1
+    grep -q 'x-scheme-handler/qoder-app;' "$payload/usr/share/applications/qoder.desktop" || return 1
+
+    mkdir -p "$pkgdir/opt" "$pkgdir/usr/bin" "$pkgdir/usr/share/applications" \
+             "$pkgdir/usr/share/icons"
+    cp -a "$payload/opt/Qoder" "$pkgdir/opt/" || return 1
+    cp -a "$payload/usr/share/icons/hicolor" "$pkgdir/usr/share/icons/" || return 1
+    # Arch normally supports the user-namespace sandbox. Do not add setuid or --no-sandbox.
+    chmod 0755 "$pkgdir/opt/Qoder/chrome-sandbox" || return 1
+    # Keep Qoder CLI's ambiguous 'qoder' command free, including URL callback launches.
+    printf '#!/bin/sh\nexec /opt/Qoder/qoder "$@"\n' > "$pkgdir/usr/bin/qoder-desktop"
+    chmod 0755 "$pkgdir/usr/bin/qoder-desktop"
+    sed 's|^Exec=.*|Exec=/usr/bin/qoder-desktop %U|' \
+        "$payload/usr/share/applications/qoder.desktop" \
+        > "$pkgdir/usr/share/applications/qoder.desktop"
+}
