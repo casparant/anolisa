@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "anolisa.agent-entry",
+  "name": "ANOLISA Agent Entry",
+  "version": "0.1.0",
+  "description": "Agent launcher, terminal entry, installation guidance and local registration",
+  "kinds": ["bar-widget", "panel"],
+  "keepLoaded": true,
+  "entryPoints": {"barWidget": "BarWidget.qml", "panel": "Dashboard.qml"},
+  "barWidget": {"displayName": "Agent 入口", "category": "AI", "defaultSection": "right", "allowMultiple": false}
+}

@@ -241,6 +241,11 @@ calls from an existing Agent without changing its framework.
 [Build from Source](https://agentic-os.sh/docs/building/) ·
 [Changelog](https://agentic-os.sh/changelog/)
 
+## Experiments
+
+[Omarchy Agent Entry](experiments/omarchy-agent-entry/README.md) is a standalone
+desktop-entry prototype. It is not included in the default build or releases.
+
 ## Community
 
 <div align="center">

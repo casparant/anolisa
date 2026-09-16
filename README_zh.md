@@ -233,6 +233,11 @@ anolisa install tokenless
 [源码构建](https://agentic-os.sh/zh/docs/building/) ·
 [变更日志](https://agentic-os.sh/zh/changelog/)
 
+## 实验原型
+
+[Omarchy Agent 入口](experiments/omarchy-agent-entry/README_zh.md)是独立桌面入口原型，
+不纳入默认构建和正式发行。
+
 ## 社区
 
 <div align="center">
