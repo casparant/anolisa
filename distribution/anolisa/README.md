@@ -46,7 +46,7 @@ files while continuing to check their presence, permissions, and path safety.
 
 | Command | Description |
 |---------|-------------|
-| `adapter` | Manage component-to-framework adapters (scan / enable / disable / status) |
+| `adapter` | Manage component-to-framework adapters (scan / enable / disable / status; `--all <framework>` applies one verb framework-wide) |
 | `osbase kernel` | Kernel modules and eBPF management |
 | `osbase sandbox` | Sandbox runtime management (runc, gvisor, firecracker, etc.) |
 | `osbase security` | Security overlay management (loongshield, seccomp-profiles) |
@@ -63,6 +63,13 @@ Enable the Tokenless local plugin with `anolisa adapter enable tokenless opencod
 ANOLISA manages its plugin link; restart OpenCode after enabling or disabling it.
 See the [adapter reference](../../docs/user-guide/en/user-entrypoint/anolisa-cli.md#adapter)
 for custom configuration directories and existing-installation ownership.
+
+Wire up a whole ecosystem entry with
+`anolisa adapter enable --all dsh --profile web`: it enables every
+installed component that declares a `dsh` adapter, registering each one in every
+named profile. Profile-scoped frameworks require explicit `--profile` values.
+Members stay independent — each keeps its own receipt, and a failing member
+exits 1 without undoing the others.
 
 ## Install Modes
 

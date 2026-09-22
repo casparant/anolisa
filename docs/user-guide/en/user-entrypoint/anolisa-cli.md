@@ -210,8 +210,10 @@ Manage component adapters:
 ```bash
 anolisa adapter scan
 anolisa adapter enable <component> [framework]
+anolisa adapter enable --all <framework>
 anolisa adapter disable <component> [framework]
-anolisa adapter status [component]
+anolisa adapter disable --all <framework>
+anolisa adapter status [component] [--framework <framework>]
 ```
 
 For OpenClaw plugins, executing `adapter enable` accepts the plugin's declared
@@ -219,6 +221,38 @@ capabilities. ANOLISA adds `--accept-capabilities` only when the installer's
 help advertises it, including in the dry-run plan. Capability consent does
 not authorize `--allow-unsafe-plugin-install`; a consent rejection is reported
 separately from a plugin-safety rejection.
+
+#### Framework-wide batches
+
+`--all <framework>` applies one verb to every component that
+declares that framework's adapter, which is how an ecosystem entry wires a
+whole product at once. The framework is this flag's value, while the
+single-component form keeps it positional; `--all` and a component name are
+mutually exclusive. DSH adapters are profile-scoped, so each profile must be
+named explicitly and every selected component is registered in all of them:
+
+```bash
+anolisa adapter enable --all dsh --profile web --profile dev
+anolisa adapter status --framework dsh
+anolisa adapter disable --all dsh
+```
+
+A batch is a sequence of ordinary single-component operations: each member
+keeps its own receipt, its own framework CLI call, and its own failure. Exit
+status and reporting follow the member results rather than the first error:
+
+| Situation | Result |
+|-----------|--------|
+| Every member succeeded | exit 0; `summary: total=N ok=N` |
+| One or more members failed | exit 1 and `ok: false` under `--json`; successful members stay enabled, and a member whose framework call failed partway keeps a `cleanup_failed` receipt so a retry can clean up |
+| No installed component declares the framework, no driver exists, or the framework is absent | `enable --all` exits 2 (`INVALID_ARGUMENT`) and changes nothing |
+| No receipt for the framework | `disable --all` exits 0 and reports nothing to disable |
+
+`--json` returns `{ framework, dry_run, total, succeeded, failed, items[] }`,
+where each item carries `component`, `status`
+(`enabled` / `disabled` / `planned` / `noop` / `cleanup_failed` / `failed`), an
+optional `reason`, dry-run `plan` actions, and `notices`. `--dry-run` previews
+every member without calling the framework.
 
 For OpenCode, manage an installed Tokenless plugin with:
 

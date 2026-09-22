@@ -192,14 +192,45 @@ user scope 的 forget 不能删除只是在视图中可见的 system 记录。
 ```bash
 anolisa adapter scan
 anolisa adapter enable <component> [framework]
+anolisa adapter enable --all <framework>
 anolisa adapter disable <component> [framework]
-anolisa adapter status [component]
+anolisa adapter disable --all <framework>
+anolisa adapter status [component] [--framework <framework>]
 ```
 
 对于 OpenClaw 插件，执行 `adapter enable` 即同意插件声明的能力。ANOLISA
 仅在安装器 help 列出 `--accept-capabilities` 时添加该参数，dry-run 计划也
 遵循相同规则。Capability consent 不授予 `--allow-unsafe-plugin-install`
 权限；同意被拒绝时会单独诊断，不归为插件安全扫描拒绝。
+
+#### 按 framework 批量执行
+
+`--all <framework>` 对声明了该 framework adapter 的所有组件执行
+同一个动作，生态入口用它一次性接入整个产品。此处 framework 是该 flag 的取值，
+单组件形式仍用位置参数；`--all` 与组件名互斥。DSH adapter 以 profile 为范围，
+因此必须显式指定每个 profile，选中的组件会注册进全部指定 profile：
+
+```bash
+anolisa adapter enable --all dsh --profile web --profile dev
+anolisa adapter status --framework dsh
+anolisa adapter disable --all dsh
+```
+
+批量操作就是一串普通的单组件操作：每个成员保留自己的 receipt、自己的
+framework CLI 调用和自己的失败结果。退出码与输出取决于成员结果，而不是第一个
+错误：
+
+| 情况 | 结果 |
+|------|------|
+| 全部成员成功 | 退出 0；`summary: total=N ok=N` |
+| 一个或多个成员失败 | 退出 1，`--json` 下 `ok: false`；已成功的成员保持启用，framework 调用中途失败的成员保留 `cleanup_failed` receipt，供重试时清理 |
+| 没有已安装组件声明该 framework、没有对应 driver，或本机检测不到该 framework | `enable --all` 退出 2（`INVALID_ARGUMENT`），不做任何修改 |
+| 该 framework 没有 receipt | `disable --all` 退出 0，并提示没有可禁用项 |
+
+`--json` 返回 `{ framework, dry_run, total, succeeded, failed, items[] }`，
+每个 item 包含 `component`、`status`（`enabled` / `disabled` / `planned` /
+`noop` / `cleanup_failed` / `failed`）、可选的 `reason`、dry-run 的 `plan`
+动作以及 `notices`。`--dry-run` 会预览全部成员，且不调用 framework。
 
 对于 OpenCode，可用以下命令管理已安装的 Tokenless 插件：
 

@@ -19,18 +19,30 @@
 //! without touching framework state. `<framework>` may be omitted when the
 //! component ships adapters for exactly one framework.
 //!
+//! ## `adapter enable --all <framework>`
+//!
+//! Enables every installed component that declares this framework's
+//! adapter — the one-command form an ecosystem entry needs, e.g. wiring
+//! every DSH-capable component into the same profiles. The `batch` module
+//! documents target selection and the aggregate result shape: each member
+//! still goes through the single-component path, so receipts and locking
+//! are unchanged.
+//!
 //! ## `adapter disable <component> [<framework>]`
 //!
 //! Reverses enable using the receipt only, then removes it. Idempotent:
 //! disabling something not enabled is a successful no-op. If cleanup
 //! cannot complete, the receipt is kept (marked `cleanup_failed`) and the
 //! command exits degraded so the state is not silently lost.
+//! `--all <framework>` disables every receipt for that framework,
+//! including orphaned ones.
 //!
-//! ## `adapter status [<component>]`
+//! ## `adapter status [<component>] [--framework <framework>]`
 //!
 //! Read-only: reports each receipt's health summary and the individual
 //! conditions behind it. Verification that cannot run reports `unknown`
-//! rather than a faked healthy/absent verdict.
+//! rather than a faked healthy/absent verdict. The two filters narrow the
+//! same receipt set and may be combined.
 
 use clap::{ArgAction, Parser, Subcommand};
 use serde::Serialize;
@@ -53,6 +65,7 @@ use self::application::{
 };
 
 mod application;
+mod batch;
 
 /// CLI arguments for the `adapter` sub-surface.
 #[derive(Parser)]
@@ -69,11 +82,19 @@ pub enum AdapterCommands {
     Scan,
     /// Enable a component's adapter for a framework.
     Enable {
-        /// Component name (e.g. `tokenless`).
-        component: String,
+        /// Component name (e.g. `tokenless`). Required unless `--all`.
+        #[arg(value_name = "COMPONENT", required_unless_present = "all")]
+        component: Option<String>,
         /// Target framework (e.g. `openclaw`). Omit when the component
         /// ships adapters for exactly one framework.
+        #[arg(value_name = "FRAMEWORK")]
         framework: Option<String>,
+        /// Enable every installed component that declares this framework's
+        /// adapter, instead of one named component. The framework is the
+        /// flag's value because a batch always needs one, while the
+        /// single-component form keeps its positional framework.
+        #[arg(long, value_name = "FRAMEWORK", conflicts_with = "component")]
+        all: Option<String>,
         /// Explicit safety bypass: authorize an unsafe plugin install.
         ///
         /// This is an explicit security-bypass authorization. When set,
@@ -94,16 +115,25 @@ pub enum AdapterCommands {
     },
     /// Disable a previously enabled adapter.
     Disable {
-        /// Component name.
-        component: String,
+        /// Component name. Required unless `--all`.
+        #[arg(value_name = "COMPONENT", required_unless_present = "all")]
+        component: Option<String>,
         /// Target framework. Omit to disable the component's single
         /// enabled adapter.
+        #[arg(value_name = "FRAMEWORK")]
         framework: Option<String>,
+        /// Disable every receipt for this framework, including orphaned
+        /// receipts whose component or bundle is gone.
+        #[arg(long, value_name = "FRAMEWORK", conflicts_with = "component")]
+        all: Option<String>,
     },
     /// Report adapter receipt status.
     Status {
         /// Limit to one component; omit for all receipts.
         component: Option<String>,
+        /// Limit to one framework; omit for all receipts.
+        #[arg(long, value_name = "FRAMEWORK")]
+        framework: Option<String>,
     },
 }
 
@@ -226,20 +256,53 @@ pub fn handle(args: AdapterArgs, ctx: &CliContext) -> Result<(), CliError> {
         AdapterCommands::Enable {
             component,
             framework,
+            all,
             allow_unsafe_plugin_install,
             profiles,
-        } => handle_enable(
-            ctx,
-            &component,
-            framework.as_deref(),
-            allow_unsafe_plugin_install,
-            profiles,
-        ),
+        } => {
+            if let Some(framework) = all.as_deref() {
+                return batch::handle_enable_all(
+                    ctx,
+                    framework,
+                    allow_unsafe_plugin_install,
+                    profiles,
+                );
+            }
+            let Some(component) = component.as_deref() else {
+                return Err(missing_component("adapter enable"));
+            };
+            handle_enable(
+                ctx,
+                component,
+                framework.as_deref(),
+                allow_unsafe_plugin_install,
+                profiles,
+            )
+        }
         AdapterCommands::Disable {
             component,
             framework,
-        } => handle_disable(ctx, &component, framework.as_deref()),
-        AdapterCommands::Status { component } => handle_status(ctx, component.as_deref()),
+            all,
+        } => {
+            if let Some(framework) = all.as_deref() {
+                return batch::handle_disable_all(ctx, framework);
+            }
+            let Some(component) = component.as_deref() else {
+                return Err(missing_component("adapter disable"));
+            };
+            handle_disable(ctx, component, framework.as_deref())
+        }
+        AdapterCommands::Status {
+            component,
+            framework,
+        } => handle_status(ctx, component.as_deref(), framework.as_deref()),
+    }
+}
+
+fn missing_component(command: &str) -> CliError {
+    CliError::InvalidArgument {
+        command: command.to_string(),
+        reason: "a component name is required unless --all is given".to_string(),
     }
 }
 
@@ -594,7 +657,11 @@ fn execution_intent(dry_run: bool) -> ExecutionIntent {
 // status
 // ---------------------------------------------------------------------------
 
-fn handle_status(ctx: &CliContext, component: Option<&str>) -> Result<(), CliError> {
+fn handle_status(
+    ctx: &CliContext,
+    component: Option<&str>,
+    framework: Option<&str>,
+) -> Result<(), CliError> {
     const COMMAND: &str = "adapter status";
     let (component, manager) = match component {
         Some(name) => {
@@ -606,9 +673,12 @@ fn handle_status(ctx: &CliContext, component: Option<&str>) -> Result<(), CliErr
         }
         None => (None, build_manager(ctx)),
     };
-    let report: StatusReport = manager
+    let mut report: StatusReport = manager
         .status(component.as_deref())
         .map_err(|e| map_err(COMMAND, e))?;
+    if let Some(framework) = framework {
+        report.entries.retain(|entry| entry.framework == framework);
+    }
 
     if ctx.json {
         let receipts = report
@@ -628,7 +698,10 @@ fn handle_status(ctx: &CliContext, component: Option<&str>) -> Result<(), CliErr
     }
 
     if report.entries.is_empty() {
-        println!("No adapter receipts.");
+        match framework {
+            Some(framework) => println!("No adapter receipts for framework '{framework}'."),
+            None => println!("No adapter receipts."),
+        }
         return Ok(());
     }
     for e in &report.entries {
@@ -739,11 +812,13 @@ mod tests {
             AdapterCommands::Enable {
                 component,
                 framework,
+                all,
                 allow_unsafe_plugin_install,
                 profiles,
             } => {
-                assert_eq!(component, "tokenless");
+                assert_eq!(component.as_deref(), Some("tokenless"));
                 assert!(framework.is_none());
+                assert!(all.is_none(), "--all must default to absent");
                 assert!(
                     !allow_unsafe_plugin_install,
                     "unsafe install must default to false"
@@ -776,11 +851,13 @@ mod tests {
             AdapterCommands::Enable {
                 component,
                 framework,
+                all,
                 allow_unsafe_plugin_install,
                 profiles,
             } => {
-                assert_eq!(component, "tokenless");
+                assert_eq!(component.as_deref(), Some("tokenless"));
                 assert_eq!(framework.as_deref(), Some("openclaw"));
+                assert!(all.is_none(), "--all must default to absent");
                 assert!(
                     allow_unsafe_plugin_install,
                     "flag must be captured when passed"
@@ -845,8 +922,23 @@ mod tests {
         let cli = TestCli::try_parse_from(["x", "status"]).expect("parse");
         assert!(matches!(
             cli.command,
-            AdapterCommands::Status { component: None }
+            AdapterCommands::Status {
+                component: None,
+                framework: None
+            }
         ));
+
+        let cli = TestCli::try_parse_from(["x", "status", "--framework", "dsh"]).expect("parse");
+        match cli.command {
+            AdapterCommands::Status {
+                component,
+                framework,
+            } => {
+                assert!(component.is_none());
+                assert_eq!(framework.as_deref(), Some("dsh"));
+            }
+            _ => panic!("expected status"),
+        }
     }
 
     #[test]

@@ -46,7 +46,7 @@ anolisa update all
 
 | 命令 | 说明 |
 |------|------|
-| `adapter` | 管理组件到框架的适配器 |
+| `adapter` | 管理组件到框架的适配器（scan / enable / disable / status；`--all <framework>` 按 framework 批量执行） |
 | `osbase kernel` | 内核模块与 eBPF 管理 |
 | `osbase sandbox` | 沙箱运行时管理（runc、gvisor、firecracker 等） |
 | `osbase security` | 安全覆盖层管理 |
@@ -63,6 +63,12 @@ unsafe-install 覆盖权限。
 ANOLISA 管理插件链接；启用或禁用后需重启 OpenCode。
 自定义配置目录及已有安装的接管规则见
 [adapter 参考](../../docs/user-guide/zh/user-entrypoint/anolisa-cli.md#adapter)。
+
+用 `anolisa adapter enable --all dsh --profile web` 一次接入整个
+生态入口：它会启用所有声明了 `dsh` adapter 的已安装组件，并把每个组件注册进
+所有指定的 profile。以 profile 为范围的 framework 必须显式给出 `--profile`。
+各成员相互独立——各自保留自己的 receipt，某个成员失败时退出码为 1，
+不会回滚其他成员。
 
 ## 安装模式
 

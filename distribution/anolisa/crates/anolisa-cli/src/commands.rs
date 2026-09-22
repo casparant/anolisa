@@ -921,14 +921,30 @@ mod tests {
     fn adapter_mutation_previews_retain_the_system_root_requirement() {
         let commands = [
             adapter::AdapterCommands::Enable {
-                component: "tokenless".to_string(),
+                component: Some("tokenless".to_string()),
                 framework: Some("openclaw".to_string()),
+                all: None,
                 allow_unsafe_plugin_install: false,
                 profiles: Vec::new(),
             },
+            // A framework-wide batch keeps the single-component policy: it
+            // mutates framework state, so its preview stays privileged.
+            adapter::AdapterCommands::Enable {
+                component: None,
+                framework: None,
+                all: Some("dsh".to_string()),
+                allow_unsafe_plugin_install: false,
+                profiles: vec!["web".to_string()],
+            },
             adapter::AdapterCommands::Disable {
-                component: "tokenless".to_string(),
+                component: Some("tokenless".to_string()),
                 framework: Some("openclaw".to_string()),
+                all: None,
+            },
+            adapter::AdapterCommands::Disable {
+                component: None,
+                framework: None,
+                all: Some("dsh".to_string()),
             },
         ];
         let mut ctx = ctx_with_prefix(PathBuf::from("/"));
@@ -1155,7 +1171,10 @@ mod tests {
 
         assert_read_only(Commands::Component(ComponentCommands::Adapter(
             adapter::AdapterArgs {
-                command: adapter::AdapterCommands::Status { component: None },
+                command: adapter::AdapterCommands::Status {
+                    component: None,
+                    framework: None,
+                },
             },
         )));
         assert_read_only(Commands::Management(ManagementCommands::Register(
