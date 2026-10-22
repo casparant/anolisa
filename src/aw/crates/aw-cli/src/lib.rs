@@ -1,6 +1,7 @@
 //! Unified AW command presentation and orchestration over reusable framework libraries.
 
 mod cli;
+mod inventory;
 mod package;
 mod routing;
 
@@ -54,6 +55,10 @@ Compatibility: aw serve, aw status and aw stop remain available."
             Ok(cli::Exit::Code(0))
         }
         routing::Route::Runtime { command, arguments } => runtime(command, arguments),
+        routing::Route::Inventory { command, arguments } => {
+            inventory::dispatch(command, arguments)?;
+            Ok(cli::Exit::Code(0))
+        }
         routing::Route::Package { command, arguments } => {
             package::dispatch(command, arguments)?;
             Ok(cli::Exit::Code(0))
@@ -67,6 +72,9 @@ fn help() {
 aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR\n\
 aw uninstall --prefix ABSOLUTE_DIR\n\
 aw agent connect --config FILE --agent TARGET [--native-profile PROFILE]\n\
+aw agent list --config FILE [--json]\n\
+aw provider list --config FILE [--json]\n\
+aw provider show NAME --config FILE [--json]\n\
 aw config init --prefix ABSOLUTE_DIR --config ABSOLUTE_FILE --state-dir ABSOLUTE_DIR [OPTIONS]\n\
 aw config show|add-provider|remove-provider|add-event|add-hook|remove-hook --config ABSOLUTE_FILE [OPTIONS]\n\
 aw config validate --config FILE [--against BASELINE_FILE]\n\

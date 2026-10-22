@@ -29,6 +29,20 @@ aw --version
 原有 `aw serve/status/stop` 命令保持兼容。`--version` 显示 CLI crate 版本，
 不是已安装包的 Preview 发布标识或原生 Agent 版本。
 
+## 查看已配置的 Agent 与 Provider
+
+```bash
+aw agent list --config "$HOME/aw/aw.yaml"
+aw provider list --config "$HOME/aw/aw.yaml" --json
+aw provider show compression --config "$HOME/aw/aw.yaml"
+```
+
+`show` 使用配置中实际存在的 Provider 名称。这些命令只校验并读取指定文件，不启动
+Agent、Provider 或服务。输出名称、协议、传输类型及 event/step 引用，不显示私有配置、
+环境变量或执行参数。`referenced` 也包含已禁用的引用，其启用标志单独展示。
+已配置或已引用不代表运行时已经生效。JSON 以 `scope: "configuration"` 和
+`runtime_checked: false` 标明这一边界。
+
 ## 升级与卸载
 
 升级前退出 Agent，用旧版 AW 和原配置停止服务，备份配置与状态目录。
