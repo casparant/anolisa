@@ -29,6 +29,38 @@ aw --version
 原有 `aw serve/status/stop` 命令保持兼容。`--version` 显示 CLI crate 版本，
 不是已安装包的 Preview 发布标识或原生 Agent 版本。
 
+## 查看安装记录
+
+```bash
+aw list --installed --prefix "$AW_PREFIX"
+aw list --installed --prefix "$AW_PREFIX" --json
+```
+
+读取指定目录的 AW 安装记录，展示组件版本、平台、源码提交、文件数量和依赖。
+它不扫描整台机器、不查询 RPM/DEB、不校验文件内容，也不运行已安装的程序。
+状态分为 `absent`（目录不存在）、`unmanaged`（没有 AW 安装记录）和
+`installed`（已有记录）。没有记录不代表不存在软件；记录损坏时会报错，不伪装成
+空列表。JSON 使用 `scope: "installation_records"`、`payload_verified: false`
+和 `runtime_checked: false`。
+
+## 检查安装完整性
+
+```bash
+aw doctor --prefix "$AW_PREFIX"
+aw doctor --prefix "$AW_PREFIX" --json
+```
+
+检查 Preview 必备文件和依赖声明，以及记录中的文件摘要、权限、路径安全性、
+同构建依赖和文件归属冲突。
+结果区分 `checked` 与 `unhealthy` 组件，并列出具体问题。这是只读快照，
+不下载、执行或修复软件，不认证发布者身份，也不检查服务、Agent 或 Provider
+是否就绪。AW 未记录的文件不在检查范围内。
+
+仅在安装存在、全部检查完成且没有问题时以 `0` 退出。目录不存在、没有安装记录、
+检查未完成或发现完整性问题均返回 `1`。JSON 使用 `scope: "installation_integrity"`；
+元数据损坏可能在生成报告前报错。运行时是否工作，仍需单独结合
+`aw service status` 和 Agent 的实际工具行为判断。
+
 ## 查看已配置的 Agent 与 Provider
 
 ```bash

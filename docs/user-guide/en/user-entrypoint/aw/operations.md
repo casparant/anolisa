@@ -31,6 +31,41 @@ systemd units or start an Agent. The original `aw serve/status/stop` commands re
 compatible. `--version` reports the CLI crate version, not an installed bundle's
 Preview release identifier or native Agent version.
 
+## List installation records
+
+```bash
+aw list --installed --prefix "$AW_PREFIX"
+aw list --installed --prefix "$AW_PREFIX" --json
+```
+
+Read the selected prefix's AW receipts to see component versions, platforms,
+source commits, file counts and dependencies. This does not scan the system,
+query RPM/DEB, verify payload files or run installed programs. The states are
+`absent` (no prefix), `unmanaged` (no AW receipts) and `installed` (recorded).
+Missing records are not evidence that no software exists; malformed receipts
+produce an error rather than an empty list. JSON uses
+`scope: "installation_records"`, `payload_verified: false` and `runtime_checked: false`.
+
+## Check installation integrity
+
+```bash
+aw doctor --prefix "$AW_PREFIX"
+aw doctor --prefix "$AW_PREFIX" --json
+```
+
+Check mandatory Preview file/dependency declarations, recorded payload hashes,
+permissions, safe file paths, same-build
+dependencies and conflicting file ownership. Results distinguish `checked` from
+`unhealthy` components and identify individual findings. This read-only snapshot
+does not download, execute or repair software, verify publisher identity, or
+check service/Agent/Provider readiness. Files not recorded by AW are outside its scope.
+
+Exit code is `0` only when an installation exists and all checks finish without
+findings. Absent or unmanaged prefixes, incomplete checks and integrity problems
+return `1`. JSON uses `scope: "installation_integrity"`; malformed metadata can
+fail before a report is produced. Use `aw service status` and actual Agent tool
+behavior separately to verify runtime operation.
+
 ## Inspect configured Agents and Providers
 
 ```bash

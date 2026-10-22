@@ -1,8 +1,11 @@
 //! Unified AW command presentation and orchestration over reusable framework libraries.
 
 mod cli;
+mod doctor;
+mod installed;
 mod inventory;
 mod package;
+mod provider_config;
 mod routing;
 
 use aw_service::{Client, Operation, Server};
@@ -55,8 +58,17 @@ Compatibility: aw serve, aw status and aw stop remain available."
             Ok(cli::Exit::Code(0))
         }
         routing::Route::Runtime { command, arguments } => runtime(command, arguments),
+        routing::Route::Doctor { arguments } => doctor::dispatch(arguments),
+        routing::Route::Installed { arguments } => {
+            installed::dispatch(arguments)?;
+            Ok(cli::Exit::Code(0))
+        }
         routing::Route::Inventory { command, arguments } => {
             inventory::dispatch(command, arguments)?;
+            Ok(cli::Exit::Code(0))
+        }
+        routing::Route::ProviderConfig { arguments } => {
+            provider_config::dispatch(arguments)?;
             Ok(cli::Exit::Code(0))
         }
         routing::Route::Package { command, arguments } => {
@@ -69,12 +81,16 @@ Compatibility: aw serve, aw status and aw stop remain available."
 fn help() {
     println!(
             "aw run --config FILE --agent TARGET [--native-settings JSON_FILE] [--native-profile PROFILE] [--native-state-dir DIRECTORY] -- [AGENT_ARGS]\n\
-aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR\n\
+aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR [--dry-run [--json]]\n\
 aw uninstall --prefix ABSOLUTE_DIR\n\
+aw doctor --prefix ABSOLUTE_DIR [--json]\n\
+aw list --installed --prefix ABSOLUTE_DIR [--json]\n\
 aw agent connect --config FILE --agent TARGET [--native-profile PROFILE]\n\
 aw agent list --config FILE [--json]\n\
 aw provider list --config FILE [--json]\n\
 aw provider show NAME --config FILE [--json]\n\
+aw provider add NAME --config ABS_FILE --definition FILE\n\
+aw provider remove NAME --config ABS_FILE\n\
 aw config init --prefix ABSOLUTE_DIR --config ABSOLUTE_FILE --state-dir ABSOLUTE_DIR [OPTIONS]\n\
 aw config show|add-provider|remove-provider|add-event|add-hook|remove-hook --config ABSOLUTE_FILE [OPTIONS]\n\
 aw config validate --config FILE [--against BASELINE_FILE]\n\

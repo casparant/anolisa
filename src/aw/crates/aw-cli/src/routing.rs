@@ -8,8 +8,17 @@ pub(crate) enum Route<'a> {
     Help,
     Version,
     ServiceHelp,
+    Doctor {
+        arguments: &'a [String],
+    },
+    Installed {
+        arguments: &'a [String],
+    },
     Inventory {
         command: &'a str,
+        arguments: &'a [String],
+    },
+    ProviderConfig {
         arguments: &'a [String],
     },
     Runtime {
@@ -39,6 +48,8 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
     match command.as_str() {
         "--help" => Ok(Route::Help),
         "--version" if arguments.is_empty() => Ok(Route::Version),
+        "doctor" => Ok(Route::Doctor { arguments }),
+        "list" => Ok(Route::Installed { arguments }),
         "service" => {
             let (subcommand, arguments) = arguments
                 .split_first()
@@ -69,6 +80,13 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
                 arguments,
             })
         }
+        "provider"
+            if arguments
+                .first()
+                .is_some_and(|value| matches!(value.as_str(), "add" | "remove")) =>
+        {
+            Ok(Route::ProviderConfig { arguments })
+        }
         "provider" => Ok(Route::Inventory { command, arguments }),
         "config" if arguments.first().is_some_and(|value| value == "validate") => {
             Ok(Route::Runtime {
@@ -84,9 +102,14 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
                     break;
                 }
                 native |= matches!(option.as_str(), "--config" | "--agent" | "--native-profile");
-                package |= matches!(option.as_str(), "--prefix" | "--bundle");
-                // Install options are value-bearing; literal values are not command selectors.
-                options.next();
+                package |= matches!(
+                    option.as_str(),
+                    "--prefix" | "--bundle" | "--dry-run" | "--json"
+                );
+                // Values are not selectors; boolean options must not swallow the next flag.
+                if !matches!(option.as_str(), "--dry-run" | "--json" | "--help") {
+                    options.next();
+                }
             }
             if native && package {
                 return Err("cannot combine software installation options (--prefix/--bundle) with native Agent integration (--config/--agent/--native-profile); use aw agent connect for native integration".into());
@@ -160,6 +183,8 @@ mod tests {
             "install --prefix /private/prefix --config local.yaml",
             "install --agent hermes --bundle /private/bundle",
             "install --native-profile work --prefix /private/prefix",
+            "install --dry-run --config local.yaml --agent hermes",
+            "install --json --agent hermes",
         ] {
             assert!(select(&words(input))
                 .unwrap_err()

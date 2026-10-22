@@ -5,12 +5,20 @@ pub mod config_edit;
 mod configuration;
 mod filesystem;
 mod install;
+pub mod integrity;
+mod inventory;
 mod manifest;
 pub mod package;
+mod plan;
+mod read_only;
 
 pub use configuration::{configure, document, Policy, Settings};
 pub use install::{install, install_cancellable, uninstall, uninstall_cancellable};
+pub use inventory::{inventory, Inventory, InventoryState};
 pub use manifest::{digest, inspect, Component, Manifest, Payload};
+pub use plan::{
+    plan_install, InstallPlan, PlanActivation, PlanComponent, PlanFiles, PlanPrivileges, PlanSource,
+};
 
 /// Packaging failure; cleanup diagnostics never replace the original error.
 #[derive(Debug, thiserror::Error)]

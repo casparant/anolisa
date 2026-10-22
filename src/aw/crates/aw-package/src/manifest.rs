@@ -75,6 +75,44 @@ pub fn digest(path: &Path) -> Result<String> {
 /// Validate every component and payload before modifying an installation.
 pub fn inspect(bundle: &Path) -> Result<Manifest> {
     let manifest: Manifest = serde_json::from_reader(File::open(bundle.join("manifest.json"))?)?;
+    inspect_manifest(bundle, manifest)
+}
+
+/// Mandatory Preview executables shared by bundle admission and receipt diagnostics.
+pub(crate) fn required_payloads(component: &str) -> Result<&'static [&'static str]> {
+    match component {
+        "aw-core" => Ok(&["bin/aw", "bin/aw-package"]),
+        "aw-provider-tokenless" => Ok(&[
+            "libexec/aw/providers/tokenless/aw-provider-tokenless",
+            "libexec/aw/providers/tokenless/tokenless",
+            "libexec/aw/providers/tokenless/rtk",
+        ]),
+        "aw-provider-sec-core" => Ok(&[
+            "libexec/aw/providers/sec-core/aw-provider-sec-core",
+            "libexec/aw/providers/sec-core/agent-sec-cli",
+            "libexec/aw/providers/sec-core/agent-sec-daemon",
+            "libexec/aw/providers/sec-core/agent-sec-daemon-health",
+        ]),
+        _ => Err(crate::Error::Invalid("unknown component".into())),
+    }
+}
+
+/// Preview Providers must declare their same-version Core dependency explicitly.
+pub(crate) fn validate_core_requirement(component: &Component) -> Result<()> {
+    if component.component == "aw-core" {
+        return Ok(());
+    }
+    require(
+        component.requires.get("aw-core") == Some(&component.version),
+        format!(
+            "{} requires matching aw-core version in its manifest",
+            component.component
+        ),
+    )
+}
+
+/// Reuse payload verification after a caller supplies its own bounded manifest reader.
+pub(crate) fn inspect_manifest(bundle: &Path, manifest: Manifest) -> Result<Manifest> {
     require(
         manifest.format == 1 && !manifest.components.is_empty(),
         "unsupported package manifest",
@@ -97,30 +135,8 @@ pub fn inspect(bundle: &Path) -> Result<Manifest> {
                 && component.provider_protocol == "aw-provider/v1alpha1",
             "incompatible platform or Provider protocol",
         )?;
-        let required = if component.component == "aw-core" {
-            vec!["bin/aw", "bin/aw-package"]
-        } else if component.component == "aw-provider-tokenless" {
-            require(
-                component.requires.get("aw-core") == Some(&component.version),
-                "aw-provider-tokenless requires matching aw-core version in its manifest",
-            )?;
-            vec![
-                "libexec/aw/providers/tokenless/aw-provider-tokenless",
-                "libexec/aw/providers/tokenless/tokenless",
-                "libexec/aw/providers/tokenless/rtk",
-            ]
-        } else {
-            require(
-                component.requires.get("aw-core") == Some(&component.version),
-                "aw-provider-sec-core requires matching aw-core version in its manifest",
-            )?;
-            vec![
-                "libexec/aw/providers/sec-core/aw-provider-sec-core",
-                "libexec/aw/providers/sec-core/agent-sec-cli",
-                "libexec/aw/providers/sec-core/agent-sec-daemon",
-                "libexec/aw/providers/sec-core/agent-sec-daemon-health",
-            ]
-        };
+        validate_core_requirement(component)?;
+        let required = required_payloads(&component.component)?;
         require(
             required
                 .iter()

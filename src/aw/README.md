@@ -22,6 +22,12 @@ native `aw install --config ... --agent ...` and `aw-package` commands remain
 compatible. Named components, direct URLs and system package backends are not
 supported by this Preview installer.
 
+Add `--dry-run` to preview the installation Plan, or `--dry-run --json` for scripts.
+Planning does not create files or elevate privileges. Use
+`aw list --installed --prefix ABS_DIR` for installation records and
+`aw doctor --prefix ABS_DIR` to check recorded files and dependencies; both accept
+`--json`. These commands do not check runtime health or activate Providers.
+
 ```bash
 aw validate --config "$HOME/aw/aw.yaml"
 aw run --config "$HOME/aw/aw.yaml" --agent qoder
@@ -47,6 +53,11 @@ Use `aw agent list --config FILE` and `aw provider list --config FILE` to inspec
 declared targets and Provider references without running them. Both accept `--json`;
 `aw provider show NAME --config FILE` selects one Provider. These summaries omit
 private configuration and arguments and do not claim runtime activation.
+
+`aw provider add NAME --config ABS_FILE --definition FILE` and
+`aw provider remove NAME --config ABS_FILE` edit offline Provider declarations.
+They reuse the existing `aw config add-provider/remove-provider` editor, not the
+installer; see [configuration](../../docs/user-guide/en/user-entrypoint/aw/configuration.md#edit-provider-declarations).
 
 Core works independently. The Tokenless package includes RTK and TOON encoding;
 security checks require a running sec-core backend. Enable these optional
