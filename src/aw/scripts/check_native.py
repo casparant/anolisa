@@ -46,7 +46,7 @@ def load(root: Path) -> dict:
                 raise ValueError(f"{agent}: pin the sec-core runtime container digest")
             expected_argv = [
                 "{python}",
-                "crates/aw-service/tests/fixtures/sec_core/native.py",
+                "crates/aw-cli/tests/fixtures/sec_core/native.py",
                 "--agent",
                 agent,
                 "--bin",
