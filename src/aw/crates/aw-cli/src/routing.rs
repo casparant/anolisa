@@ -8,6 +8,9 @@ pub(crate) enum Route<'a> {
     Help,
     Version,
     ServiceHelp,
+    Migrate {
+        arguments: &'a [String],
+    },
     Doctor {
         arguments: &'a [String],
     },
@@ -49,6 +52,7 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
         "--help" => Ok(Route::Help),
         "--version" if arguments.is_empty() => Ok(Route::Version),
         "doctor" => Ok(Route::Doctor { arguments }),
+        "migrate" => Ok(Route::Migrate { arguments }),
         "list" => Ok(Route::Installed { arguments }),
         "service" => {
             let (subcommand, arguments) = arguments

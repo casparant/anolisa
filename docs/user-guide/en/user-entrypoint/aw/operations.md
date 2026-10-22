@@ -87,6 +87,37 @@ disabled references, whose enabled flags are shown separately. A configured or
 referenced instance is not proof of runtime activation. JSON marks this boundary
 with `scope: "configuration"` and `runtime_checked: false`.
 
+## Inspect legacy installations before migration
+
+Inspect old `anolisa` installation records before deciding what to migrate.
+Replace the example paths with existing, readable `installed.toml` files:
+
+```bash
+aw migrate inspect --state /absolute/path/user-installed.toml
+aw migrate inspect --state /absolute/path/user-installed.toml \
+  --state /absolute/path/system-installed.toml --json
+```
+
+Supply 1–8 distinct absolute paths. The command reads legacy schema 1–6 documents
+(at most 4 MiB each), rejects linked or unsafe state files, and never searches
+for other installations or elevates privileges. It reads the supplied documents
+and their file metadata only: no package-database queries, payload verification,
+service/Agent checks, state writes, ownership transfer or Hook changes.
+
+The report shows recorded scope, backend, management relation, status and version,
+file/service counts, and adapter-claim/trust-root counts. The state file's actual
+owner uid is separate from its claims; old user records without a uid remain
+unknown. Repeated names across user/system records are overlap candidates, not
+confirmed conflicts. RPM recorded in user scope and unsupported backends appear
+as findings; neither triggers a backend or scope conversion.
+
+JSON uses `scope: "legacy_installation_records"`, `mode: "read_only"` and
+`changes: []`. Exit `0` means inspection completed, even with findings; it does
+not mean migration can be applied or runtime is healthy. Missing, malformed,
+unsafe or future-schema files return an error rather than an empty installation.
+There is no migration `plan` or `apply` action yet; existing installations remain
+under their previous manager.
+
 ## Upgrade and uninstall
 
 Before upgrading, exit Agents, stop the service using the old AW binary and original configuration,
