@@ -227,7 +227,39 @@ fn install_using(
         created_prefix || !installed.is_empty(),
         "refusing a prefix without AW package receipts",
     )?;
-    verified_files(prefix, &installed)?;
+    preflight(prefix, &manifest, &installed)?;
+    for component in &manifest.components {
+        for (name, metadata) in &component.files {
+            check_cancel(cancel)?;
+            let target = prefix.join(name);
+            let mut output = transaction.create(&target)?;
+            copy(&bundle.join("payload").join(name), &mut output)?;
+            check_cancel(cancel)?;
+            require(
+                crate::digest(&target)? == metadata.sha256,
+                format!("installed payload checksum mismatch: {name}"),
+            )?;
+            output.set_permissions(Permissions::from_mode(metadata.mode))?;
+        }
+        let target = prefix
+            .join(".aw-packages")
+            .join(format!("{}.json", component.component));
+        let mut output = transaction.create(&target)?;
+        output.write_all(&serde_json::to_vec_pretty(component)?)?;
+        output.set_permissions(Permissions::from_mode(0o644))?;
+    }
+    check_cancel(cancel)?;
+    transaction.committed = true;
+    Ok(())
+}
+
+/// Shared read-only checks; execution calls these again while holding its prefix lock.
+pub(crate) fn preflight(
+    prefix: &Path,
+    manifest: &crate::Manifest,
+    installed: &BTreeMap<String, Component>,
+) -> Result<()> {
+    verified_files(prefix, installed)?;
     let mut available = installed.clone();
     for component in &manifest.components {
         require(
@@ -256,28 +288,6 @@ fn install_using(
             )?;
         }
     }
-    for component in &manifest.components {
-        for (name, metadata) in &component.files {
-            check_cancel(cancel)?;
-            let target = prefix.join(name);
-            let mut output = transaction.create(&target)?;
-            copy(&bundle.join("payload").join(name), &mut output)?;
-            check_cancel(cancel)?;
-            require(
-                crate::digest(&target)? == metadata.sha256,
-                format!("installed payload checksum mismatch: {name}"),
-            )?;
-            output.set_permissions(Permissions::from_mode(metadata.mode))?;
-        }
-        let target = prefix
-            .join(".aw-packages")
-            .join(format!("{}.json", component.component));
-        let mut output = transaction.create(&target)?;
-        output.write_all(&serde_json::to_vec_pretty(component)?)?;
-        output.set_permissions(Permissions::from_mode(0o644))?;
-    }
-    check_cancel(cancel)?;
-    transaction.committed = true;
     Ok(())
 }
 

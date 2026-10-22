@@ -78,7 +78,10 @@ fn help(command: &str) {
     if command == "provider" {
         println!(
             "aw provider list --config FILE [--json]\n\
-aw provider show NAME --config FILE [--json]"
+aw provider show NAME --config FILE [--json]\n\
+aw provider add NAME --config ABS_FILE --definition FILE\n\
+aw provider remove NAME --config ABS_FILE\n\
+add/remove edit offline configuration; see aw provider add --help."
         );
     } else {
         println!("aw agent list --config FILE [--json]");

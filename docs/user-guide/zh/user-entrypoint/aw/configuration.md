@@ -47,6 +47,29 @@ aw run --config "$AW_HOME/aw.yaml" --agent qoder
 YAML 中的路径须写成真实绝对路径，AW 不展开 `$HOME` 等变量。
 完整编辑命令和自定义规则示例见[配置工具参考](../../../../developer-guide/zh/aw/packages.md#编辑已有-provider-与-hook-配置)。
 
+## 编辑 Provider 声明
+
+使用以下快捷命令，在已有配置中增删单个 Provider 声明：
+
+```bash
+aw provider add custom --config "$AW_HOME/aw.yaml" --definition ./provider.json
+aw provider remove custom --config "$AW_HOME/aw.yaml"
+```
+
+`provider.json` 应包含完整 Provider 定义，格式为 YAML/JSON 对象，不是整份 AW
+配置，也不是程序下载地址。再次添加相同定义时文件不变；同名但定义不同会被拒绝。
+仍被任何 Hook 引用的 Provider 都不能删除，包括已禁用的 Hook，需先移除引用。
+
+| 快捷命令 | 继续支持的原有命令 |
+| --- | --- |
+| `aw provider add NAME --config ABS_FILE --definition FILE` | `aw config add-provider --config ABS_FILE --name NAME --definition FILE` |
+| `aw provider remove NAME --config ABS_FILE` | `aw config remove-provider --config ABS_FILE --name NAME` |
+
+名称以 `--` 开头时，用 `--name NAME` 替代位置参数，两种写法不能同时使用。
+这些命令复用已有配置编辑器及所有权检查，不安装或卸载软件、不创建 Hook 引用、
+不启用 Provider，也不重载服务。发生修改时文件会重新写为 YAML，不保留注释和排版，
+请保留前述编辑流程中的备份。修改后仍需另行校验、重启才能应用。
+
 ## 比较策略修改
 
 准备独立的候选文件，与现有配置比较：
