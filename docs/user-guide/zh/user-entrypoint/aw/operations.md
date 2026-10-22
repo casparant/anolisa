@@ -79,6 +79,32 @@ Agent、Provider 或服务。输出名称、协议、传输类型及 event/step 
 已配置或已引用不代表运行时已经生效。JSON 以 `scope: "configuration"` 和
 `runtime_checked: false` 标明这一边界。
 
+## 迁移前盘点旧安装
+
+先查看旧 `anolisa` 安装记录，再决定需要迁移什么。将示例路径替换为实际存在且可读的
+`installed.toml` 文件：
+
+```bash
+aw migrate inspect --state /absolute/path/user-installed.toml
+aw migrate inspect --state /absolute/path/user-installed.toml \
+  --state /absolute/path/system-installed.toml --json
+```
+
+显式提供 1–8 个不同的绝对路径。命令读取旧 schema 1–6 文档，每份最多 4 MiB，
+拒绝链接或不安全的状态文件，不搜索其他安装、不提权。只读取指定文档及其文件元数据，
+不查询包数据库、不核验已安装文件、不检查服务或 Agent、不写状态、不接管管理权，
+也不修改 Hook。
+
+报告展示记录中的 scope、backend、管理关系、状态、版本，以及文件、服务、adapter
+claims 和 trust roots 数量。状态文件的实际 owner uid 与历史声明分别展示；旧 user
+记录没有 uid 时保持未知。user/system 记录中的同名对象只是重叠候选，不直接认定冲突。
+user scope 中的 RPM 记录和不支持的后端作为 findings 提示，不自动转换后端或 scope。
+
+JSON 使用 `scope: "legacy_installation_records"`、`mode: "read_only"` 和
+`changes: []`。退出码 `0` 表示盘点完成，即使存在 findings；不表示已经可以执行迁移，
+也不表示运行健康。文件缺失、格式损坏、路径不安全或 schema 过新时返回错误，不呈现为
+空安装。当前没有迁移 `plan` 或 `apply` 操作，原安装仍由原管理者负责。
+
 ## 升级与卸载
 
 升级前退出 Agent，用旧版 AW 和原配置停止服务，备份配置与状态目录。
