@@ -182,7 +182,11 @@ fn run(mut arguments: impl Iterator<Item = String>, program: &str) -> Result<()>
         }
         "uninstall" => {
             signals::register()?;
-            aw_package::uninstall_cancellable(prefix, &signals::CANCEL)?;
+            if program == "aw" && aw_package::installed_format(prefix)? == 2 {
+                aw_package::open_install::uninstall(prefix, &signals::CANCEL)?;
+            } else {
+                aw_package::uninstall_cancellable(prefix, &signals::CANCEL)?;
+            }
             println!("Removed AW package files; external configuration and state retained");
         }
         _ => unreachable!("command was validated before parsing flags"),

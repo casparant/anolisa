@@ -81,7 +81,7 @@ Compatibility: aw serve, aw status and aw stop remain available."
 fn help() {
     println!(
             "aw run --config FILE --agent TARGET [--native-settings JSON_FILE] [--native-profile PROFILE] [--native-state-dir DIRECTORY] -- [AGENT_ARGS]\n\
-aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR [--dry-run [--json]]\n\
+aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR [--dry-run [--json]] [--allow-unverified]\n\
 aw uninstall --prefix ABSOLUTE_DIR\n\
 aw doctor --prefix ABSOLUTE_DIR [--json]\n\
 aw list --installed --prefix ABSOLUTE_DIR [--json]\n\
@@ -109,7 +109,8 @@ AgentScope 2.0.6: run requires Python script/-m entrypoint and explicit AwBridge
 QwenPaw 2.2.2b4: run requires QWENPAW_WORKING_DIR.\n\
 Hermes 952c941e: run and agent connect require --native-profile; run requires the installed AW plugin.\n\
 Claude SDK 0.2.88: run requires a foreground Python worker using aw_claude.create_client; bundled CLI 2.1.161.\n\
-Package installation currently accepts local unpacked Preview bundles only.\n\
+Package installation accepts local unpacked Preview and format 2 bundles; no URL or RPM/DEB backend.\n\
+Format 2 installs into a fresh user prefix with --allow-unverified; it does not activate software.\n\
 Compatibility: aw install --config FILE --agent TARGET retains native Hook installation;\n\
 aw validate retains the config validate behavior. Agent connect does not install an Agent."
         );

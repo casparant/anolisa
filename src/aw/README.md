@@ -19,14 +19,19 @@ An existing AW installation can install an unpacked local Preview bundle with
 remove its owned files with `aw uninstall --prefix ABS_DIR`. Native Hook
 registration uses `aw agent connect --config FILE --agent TARGET`. The legacy
 native `aw install --config ... --agent ...` and `aw-package` commands remain
-compatible. Named components, direct URLs and system package backends are not
-supported by this Preview installer.
+compatible. The original format 1 Preview packages retain their same-build
+requirements. Open format 2 bundles can contain independently versioned tools
+or Providers; install them into a new personal prefix with explicit
+`--allow-unverified` consent. See the [local bundle example](../../docs/user-guide/en/user-entrypoint/aw/installation.md#install-an-open-local-bundle).
+Named components, direct URLs and RPM/DEB backends are not supported yet.
 
 Add `--dry-run` to preview the installation Plan, or `--dry-run --json` for scripts.
 Planning does not create files or elevate privileges. Use
 `aw list --installed --prefix ABS_DIR` for installation records and
 `aw doctor --prefix ABS_DIR` to check recorded files and dependencies; both accept
-`--json`. These commands do not check runtime health or activate Providers.
+`--json` and recognize both receipt formats. Installation does not execute the
+software, change `PATH` or register Providers. These commands do not check runtime
+health or activate Providers.
 
 ```bash
 aw validate --config "$HOME/aw/aw.yaml"

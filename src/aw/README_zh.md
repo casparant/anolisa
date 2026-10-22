@@ -17,11 +17,15 @@ AW 使用 Preview 包分发，尚未接入 `anolisa install` 或 RPM。
 Preview 包，用 `aw config` 编辑配置，用 `aw uninstall --prefix ABS_DIR` 移除其拥有的文件。
 原生 Hook 注册使用 `aw agent connect --config FILE --agent TARGET`。
 旧的原生 `aw install --config ... --agent ...` 和 `aw-package` 命令保持兼容。
-此 Preview 安装器尚不支持按组件名、直接 URL 或系统包后端安装。
+原有 format 1 Preview 包保持同构建依赖要求。开放的 format 2 本地包可包含独立版本的
+工具或 Provider，需安装到新的个人目录，并用 `--allow-unverified` 明确同意本次安装，
+见[本地包示例](../../docs/user-guide/zh/user-entrypoint/aw/installation.md#安装开放的本地包)。
+尚不支持按组件名、直接 URL 或 RPM/DEB 后端安装。
 
 增加 `--dry-run` 预览安装 Plan，脚本可使用 `--dry-run --json`。
 预览不创建文件、不提权。用 `aw list --installed --prefix ABS_DIR` 查看安装记录，
 用 `aw doctor --prefix ABS_DIR` 检查记录中的文件与依赖，两者都支持 `--json`。
+两者识别两种安装记录格式。安装不执行软件、不修改 `PATH`，也不注册 Provider。
 这些命令不检查运行时健康状况，也不激活 Provider。
 
 ```bash
