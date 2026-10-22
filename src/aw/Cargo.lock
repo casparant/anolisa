@@ -68,6 +68,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "aw-cli"
+version = "0.1.0"
+dependencies = [
+ "aw-adapter",
+ "aw-config",
+ "aw-contracts",
+ "aw-exec",
+ "aw-host",
+ "aw-package",
+ "aw-provider",
+ "aw-service",
+ "libc",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "tempfile",
+]
+
+[[package]]
 name = "aw-config"
 version = "0.1.0"
 dependencies = [
