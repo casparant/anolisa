@@ -2,8 +2,8 @@
 
 [English](../../../en/user-entrypoint/aw/installation.md)
 
-需要 Linux，以及已登录的 Qoder CLI 1.1.64 或更新版本。
-其他 Agent 见[配置与 Agent 启动](configuration.md)。
+AW 需要 Linux。下文首次运行示例还需要已登录的 Qoder CLI 1.1.64 或更新版本，
+仅安装软件包不需要 Agent。其他 Agent 见[配置与 Agent 启动](configuration.md)。
 
 ## 获取安装包
 
@@ -22,7 +22,8 @@ CI 包面向 Linux x86_64，要求 glibc 2.39 或更新版本，例如 Ubuntu 24
 | `aw-provider-sec-core` | 安全 Provider 和 sec-core 程序，需先安装 core |
 | `aw-all-in-one` | 上述三个组件 |
 
-分包必须来自同一次构建。选择 all-in-one 时直接安装到新目录，无需再安装分包。
+这些是 format 1 Preview 包。分包必须来自同一次构建；选择 all-in-one 时直接
+安装到新目录，无需再安装分包。其 manifest 和安装记录格式保持不变。
 
 ## 安装
 
@@ -50,7 +51,7 @@ aw --help
 无需系统后台的个人安装，可把 `AW_PREFIX` 改成自己拥有的绝对路径，并去掉安装命令的
 `sudo`。安装目录的父目录不得被其他用户写入。root 后台应使用 root 管理的安装目录。
 
-## 预览本地安装
+## 预览本地 Preview 包安装
 
 已有 AW 时，可以使用同一个本地安装器：
 
@@ -71,9 +72,83 @@ aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle"
 安装，不另行询问确认。AW 使用当前用户的权限，不自动执行 `sudo`。
 目标中已经安装过同一组件时，请使用新目录。
 
-此入口接受解压后的 Preview 包，不接受组件名、下载 URL 或 RPM/DEB 包。
-Provider 包仍要求先安装同一次构建的 core。安装不启动服务、不注册 Agent Hook、
+这套 format 1 流程接受解压后的 Preview 包，其中的 Provider 包仍要求先安装
+同一次构建的 core。尚不支持组件名、下载 URL 或 RPM/DEB 包。
+安装不启动服务、不注册 Agent Hook、
 不启用 Provider。独立的 `aw-package` 安装器继续用于首次引导安装和兼容。
+
+## 安装开放的本地包
+
+format 2 允许作者提供本地工具或 Provider，不必加入软件目录，也不必跟随 AW 的版本。
+当前原型只支持新的用户级 raw 安装目录：使用非 root 用户，父目录须已存在、归自己所有，
+且其他用户不能写入。不覆盖、接管或追加已有目录，包括 format 1 安装目录。
+不查询软件源，也不下载依赖。
+
+以下 Linux shell 示例生成名为 `example.mant` 的无害本地测试脚本。
+它不是 manT 项目的软件或发布物，也不证明真实项目的兼容性。
+执行前需已有 `aw`，且位于 `PATH`：
+
+```bash
+AW_DEMO_ROOT="$(mktemp -d "$HOME/aw-local-demo.XXXXXX")"
+AW_DEMO_BUNDLE="$AW_DEMO_ROOT/bundle"
+AW_DEMO_PREFIX="$AW_DEMO_ROOT/installed"
+mkdir -p "$AW_DEMO_BUNDLE/payload/bin"
+printf '%s\n' '#!/bin/sh' 'echo "format-2 fixture, not the manT project"' \
+  > "$AW_DEMO_BUNDLE/payload/bin/mant-demo"
+chmod 755 "$AW_DEMO_BUNDLE/payload/bin/mant-demo"
+AW_DEMO_SIZE="$(wc -c < "$AW_DEMO_BUNDLE/payload/bin/mant-demo")"
+AW_DEMO_SHA="$(sha256sum "$AW_DEMO_BUNDLE/payload/bin/mant-demo" | cut -d ' ' -f 1)"
+AW_DEMO_ARCH="$(uname -m)"
+cat > "$AW_DEMO_BUNDLE/manifest.json" <<EOF
+{
+  "format": 2,
+  "packages": [{
+    "id": "example.mant",
+    "version": "0.1.0-demo",
+    "kind": "tool",
+    "platform": {"os": "linux", "arch": "$AW_DEMO_ARCH"},
+    "requires": [],
+    "files": {
+      "bin/mant-demo": {"size": $AW_DEMO_SIZE, "sha256": "$AW_DEMO_SHA", "mode": 493}
+    }
+  }]
+}
+EOF
+aw install --bundle "$AW_DEMO_BUNDLE" --prefix "$AW_DEMO_PREFIX" --dry-run
+aw install --bundle "$AW_DEMO_BUNDLE" --prefix "$AW_DEMO_PREFIX" --allow-unverified
+aw list --installed --prefix "$AW_DEMO_PREFIX" --json
+aw doctor --prefix "$AW_DEMO_PREFIX"
+```
+
+manifest 与 `payload/` 同级，文件键为相对安装目录的路径。`mode` 使用 JSON 十进制
+整数：`493` 表示 `0755`，`420` 表示 `0644`。摘要使用小写 SHA-256，`size` 为精确
+字节数。未知字段、链接、特殊文件，以及不在 `bin/`、`libexec/`、`share/` 内的路径
+都会被拒绝。限制为 manifest 4 MiB、最多 64 个包、8,192 个文件、单文件 512 MiB、
+文件总量 2 GiB。
+
+ID 是 `example.mant` 这类带命名空间的小写 ASCII 标识，不认证发布者身份。
+每个包有独立版本；`requires` 使用 `{"id": "example.dependency", "version": "1.0.0"}`
+这样的精确依赖条目，所有依赖必须位于同一 bundle，且不能形成环。
+不支持版本范围或跨安装目录依赖。真实 Provider 使用 `"kind": "provider"`，并增加
+`"provider": {"protocol": "aw-provider/v1alpha1", "executable": "bin/my-provider"}`；
+入口须为本包拥有的 `0755` 文件。`tool` 不得携带 `provider` 声明。
+声明协议不等于已经验证其实现。
+
+Plan 沿用相同分类。`--dry-run` 无需授权、不写入；增加 `--json` 可获得结构化输出。
+真正安装时每次都须提供 `--allow-unverified`：摘要只证明内容一致，不认证发布者，
+该选项也不保存永久受信来源。AW 复制文件并写入 `.aw-installation.json`，记录 `user`
+范围、安装用户 UID 和 `raw` 后端，不执行包内脚本、不修改 `PATH`、不启动服务、
+不注册 Provider，也不连接 Agent Hook。已安装 Provider 仍需
+[显式配置](configuration.md#编辑-provider-声明)。
+
+要移除整个演示安装，保留 `PATH` 中原有的 AW 二进制并执行：
+
+```bash
+aw uninstall --prefix "$AW_DEMO_PREFIX"
+```
+
+卸载先校验记录中的文件，并保留未知文件。它不检查运行中的引用，须先停止使用该
+目录的程序。源包 `AW_DEMO_ROOT/bundle` 不会被移除，详见[运行维护](operations.md)。
 
 ## 创建配置
 

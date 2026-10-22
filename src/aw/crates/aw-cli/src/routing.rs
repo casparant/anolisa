@@ -104,10 +104,13 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
                 native |= matches!(option.as_str(), "--config" | "--agent" | "--native-profile");
                 package |= matches!(
                     option.as_str(),
-                    "--prefix" | "--bundle" | "--dry-run" | "--json"
+                    "--prefix" | "--bundle" | "--dry-run" | "--json" | "--allow-unverified"
                 );
                 // Values are not selectors; boolean options must not swallow the next flag.
-                if !matches!(option.as_str(), "--dry-run" | "--json" | "--help") {
+                if !matches!(
+                    option.as_str(),
+                    "--dry-run" | "--json" | "--help" | "--allow-unverified"
+                ) {
                     options.next();
                 }
             }

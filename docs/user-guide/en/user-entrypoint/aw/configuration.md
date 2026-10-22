@@ -78,6 +78,13 @@ Hook references, enable a Provider or reload a service. Changed files are
 rewritten as YAML without preserving comments or formatting; keep the backup
 from the editing workflow above. Validate and restart separately to apply edits.
 
+For a Provider installed from an [open format 2 bundle](installation.md#install-an-open-local-bundle),
+the package's `provider` metadata identifies its protocol and entrypoint; it does
+not create a runtime instance. Supply a complete definition with the installed
+absolute executable path, then add the desired Hook references separately.
+`aw config init --prefix ...` still generates configuration from format 1 Preview
+packages; it does not turn format 2 manifests into runtime configuration.
+
 ## Compare policy edits
 
 Prepare a separate candidate file and compare it with the existing configuration:

@@ -38,13 +38,17 @@ aw list --installed --prefix "$AW_PREFIX"
 aw list --installed --prefix "$AW_PREFIX" --json
 ```
 
-Read the selected prefix's AW receipts to see component versions, platforms,
-source commits, file counts and dependencies. This does not scan the system,
+Read the selected prefix's AW receipts to see package versions, platforms and
+file counts. Format 1 includes source commits; format 2 adds the `tool`/`provider`
+kind and user/raw installation identity. Use `--json` for structured dependencies.
+This does not scan the system,
 query RPM/DEB, verify payload files or run installed programs. The states are
 `absent` (no prefix), `unmanaged` (no AW receipts) and `installed` (recorded).
 Missing records are not evidence that no software exists; malformed receipts
 produce an error rather than an empty list. JSON uses
 `scope: "installation_records"`, `payload_verified: false` and `runtime_checked: false`.
+Format 2 also reports `receipt_format: 2`, `installation_scope`, `backend` and
+`publisher_verified: false`. Reading a receipt does not make its source trusted.
 
 ## Check installation integrity
 
@@ -53,9 +57,10 @@ aw doctor --prefix "$AW_PREFIX"
 aw doctor --prefix "$AW_PREFIX" --json
 ```
 
-Check mandatory Preview file/dependency declarations, recorded payload hashes,
-permissions, safe file paths, same-build
-dependencies and conflicting file ownership. Results distinguish `checked` from
+Both formats check recorded payload hashes, permissions and safe file paths.
+Format 1 also checks mandatory Preview file/dependency declarations, same-build
+dependencies and conflicting file ownership; format 2 validates its recorded
+bundle-local dependency closure and exact file lengths. Results distinguish `checked` from
 `unhealthy` components and identify individual findings. This read-only snapshot
 does not download, execute or repair software, verify publisher identity, or
 check service/Agent/Provider readiness. Files not recorded by AW are outside its scope.
@@ -98,6 +103,27 @@ sudo "$AW_PREFIX/bin/aw" uninstall --prefix "$AW_PREFIX"
 
 Uninstall preserves external configuration, audit history and native Agent data. Modified or missing
 package files cause an error first. Follow the diagnostic instead of deleting a directory still in use.
+
+For an open format 2 installation, invoke the existing AW CLI as its owning
+non-root user, not a binary assumed to be inside the tool's prefix:
+
+```bash
+aw uninstall --prefix "$AW_DEMO_PREFIX"
+```
+
+The same command recognizes `.aw-installation.json` and removes the whole
+recorded bundle, not a selected package. It checks ownership and recorded file
+integrity before removal. Unknown files are preserved, so the prefix may remain.
+It does not remove the original source bundle or rewrite configuration referring
+to the prefix. Running references are not checked: stop users and update external
+configuration yourself before uninstalling. Format 2 currently has no in-place
+update or migration; install a replacement into another new prefix instead.
+
+This prototype rolls back failures handled within the process; it has no
+crash-resumable uninstall journal. If a diagnostic names a retained
+`.aw-uninstall-*` recovery directory, keep it and restore the reported files
+before retrying. Do not delete it as temporary clutter. Cancellation is checked
+between files, so a current bounded file read may finish before it takes effect.
 
 ## Keep data
 

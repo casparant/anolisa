@@ -2,8 +2,9 @@
 
 [中文版](../../../zh/user-entrypoint/aw/installation.md)
 
-Requires Linux and a signed-in Qoder CLI 1.1.64 or later. For other Agents, see
-[Configuration and Agent launch](configuration.md).
+AW requires Linux. The first-run example below also requires a signed-in Qoder
+CLI 1.1.64 or later; package installation itself does not require an Agent.
+For other Agents, see [Configuration and Agent launch](configuration.md).
 
 ## Get a package
 
@@ -23,8 +24,9 @@ and then continue here. Building requires network access to download dependencie
 | `aw-provider-sec-core` | Security Provider and sec-core programs; install core first |
 | `aw-all-in-one` | All three components above |
 
-Split packages must come from the same build. Install all-in-one directly into a new prefix;
-do not also install the split packages there.
+These are format 1 Preview packages. Split packages must come from the same
+build. Install all-in-one directly into a new prefix; do not also install the
+split packages there. Their manifest and receipt format remain unchanged.
 
 ## Install
 
@@ -53,7 +55,7 @@ For a personal installation that does not host a system backend, use an absolute
 you own and omit `sudo` from the install command. Other users must not be able to write to its
 parent directory. A root backend needs a root-managed installation.
 
-## Preview a local installation
+## Preview a local Preview-package installation
 
 If AW is already installed, the same local installer is available through:
 
@@ -77,10 +79,90 @@ code `1`; invalid input may fail before a Plan can be produced. Without
 confirmation prompt. AW uses the current user's permissions and never invokes
 `sudo` automatically. Choose a new prefix for a component already installed there.
 
-This accepts unpacked Preview bundles, not component names, download URLs or
-RPM/DEB packages. Provider packages still require core from the same build.
+This format 1 workflow accepts unpacked Preview bundles. Its Provider packages
+still require core from the same build. Component names, download URLs and
+RPM/DEB packages are not supported.
 It does not start services, register Agent Hooks or enable Providers.
 The standalone `aw-package` installer remains available for bootstrap and compatibility.
+
+## Install an open local bundle
+
+Format 2 lets an author supply a local tool or Provider without joining a catalog
+or using AW's version. This prototype supports only a new user-owned raw prefix:
+run as a non-root user, with an existing parent directory you own that others
+cannot write. Existing prefixes, including format 1 installations, cannot be
+overwritten, adopted or extended. No sources are queried or dependencies downloaded.
+
+The following Linux shell example creates `example.mant`, a harmless local test
+script. It is not the manT project's software or release, and does not demonstrate
+the real project's compatibility. Run with an already installed `aw` on `PATH`:
+
+```bash
+AW_DEMO_ROOT="$(mktemp -d "$HOME/aw-local-demo.XXXXXX")"
+AW_DEMO_BUNDLE="$AW_DEMO_ROOT/bundle"
+AW_DEMO_PREFIX="$AW_DEMO_ROOT/installed"
+mkdir -p "$AW_DEMO_BUNDLE/payload/bin"
+printf '%s\n' '#!/bin/sh' 'echo "format-2 fixture, not the manT project"' \
+  > "$AW_DEMO_BUNDLE/payload/bin/mant-demo"
+chmod 755 "$AW_DEMO_BUNDLE/payload/bin/mant-demo"
+AW_DEMO_SIZE="$(wc -c < "$AW_DEMO_BUNDLE/payload/bin/mant-demo")"
+AW_DEMO_SHA="$(sha256sum "$AW_DEMO_BUNDLE/payload/bin/mant-demo" | cut -d ' ' -f 1)"
+AW_DEMO_ARCH="$(uname -m)"
+cat > "$AW_DEMO_BUNDLE/manifest.json" <<EOF
+{
+  "format": 2,
+  "packages": [{
+    "id": "example.mant",
+    "version": "0.1.0-demo",
+    "kind": "tool",
+    "platform": {"os": "linux", "arch": "$AW_DEMO_ARCH"},
+    "requires": [],
+    "files": {
+      "bin/mant-demo": {"size": $AW_DEMO_SIZE, "sha256": "$AW_DEMO_SHA", "mode": 493}
+    }
+  }]
+}
+EOF
+aw install --bundle "$AW_DEMO_BUNDLE" --prefix "$AW_DEMO_PREFIX" --dry-run
+aw install --bundle "$AW_DEMO_BUNDLE" --prefix "$AW_DEMO_PREFIX" --allow-unverified
+aw list --installed --prefix "$AW_DEMO_PREFIX" --json
+aw doctor --prefix "$AW_DEMO_PREFIX"
+```
+
+The manifest sits beside `payload/`; file keys are paths relative to the installed
+prefix. `mode` is a JSON decimal integer: `493` means `0755`, and `420` means
+`0644`. Hashes are lowercase SHA-256; `size` is the exact byte count. Unknown
+fields, links, special files and paths outside `bin/`, `libexec/` or `share/`
+are rejected. Limits are 4 MiB of manifest, 64 packages, 8,192 files, 512 MiB
+per file and 2 GiB of payloads in total.
+
+IDs are namespaced lowercase ASCII names such as `example.mant`, not authenticated
+publisher identities. Each package has its own version. `requires` contains exact
+`{"id": "example.dependency", "version": "1.0.0"}` entries; all dependencies must
+be included in the same bundle, without cycles. There are no version ranges or
+dependencies on another prefix. For an actual Provider, use `"kind": "provider"`
+and add `"provider": {"protocol": "aw-provider/v1alpha1", "executable": "bin/my-provider"}`;
+that entrypoint must be a `0755` file owned by the same package. A `tool` must
+not declare `provider`. Declaring a protocol does not test its implementation.
+
+The same Plan categories apply. `--dry-run` needs no consent and writes nothing;
+add `--json` for its structured form. Actual installation requires
+`--allow-unverified` each time: checksums verify content consistency, not publisher
+identity, and this option does not save a trusted source. AW copies files and
+writes `.aw-installation.json`, recording `user` scope, the installing UID and
+`raw` backend. It does not execute package scripts, change `PATH`, start services,
+register Providers or connect Agent Hooks. An installed Provider still needs
+[explicit configuration](configuration.md#edit-provider-declarations).
+
+To remove this entire demo installation, keep the existing AW binary on `PATH`:
+
+```bash
+aw uninstall --prefix "$AW_DEMO_PREFIX"
+```
+
+Uninstall verifies recorded files and preserves unknown files. It does not check
+running references; stop users of the prefix first. The source bundle under
+`AW_DEMO_ROOT/bundle` is not removed. See [operations](operations.md) for details.
 
 ## Create configuration
 
