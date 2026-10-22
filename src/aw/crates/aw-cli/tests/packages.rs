@@ -326,7 +326,11 @@ fn package_help_uses_the_selected_frontend_name() {
         );
         assert!(output.contains("aw install --prefix ABS_DIR --bundle ABS_DIR"));
         assert!(!output.contains("[--bundle"));
-        assert!(output.contains("aw config init --prefix"));
+        if output.contains("--dry-run") {
+            assert!(output.contains("No automatic elevation"));
+        } else {
+            assert!(output.contains("aw config init --prefix"));
+        }
         assert!(!output.contains("aw-package"));
     }
     let output = success(
@@ -356,4 +360,113 @@ fn package_help_uses_the_selected_frontend_name() {
     );
     assert!(output.contains("aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR"));
     assert!(!output.contains("[--bundle"));
+}
+
+fn bounded(command: Command) -> aw_exec::Output {
+    use std::{
+        sync::atomic::AtomicBool,
+        time::{Duration, Instant},
+    };
+    aw_exec::run(
+        &aw_exec::CommandSpec {
+            program: command.get_program().into(),
+            args: command.get_args().map(Into::into).collect(),
+            cwd: command.get_current_dir().unwrap().into(),
+            environment: std::env::vars_os().collect(),
+        },
+        b"",
+        aw_exec::Limits {
+            input_bytes: 0,
+            stdout_bytes: 65536,
+            stderr_bytes: 65536,
+        },
+        Instant::now() + Duration::from_secs(5),
+        &AtomicBool::new(false),
+    )
+    .unwrap()
+}
+
+#[test]
+fn unified_install_dry_run_is_machine_readable_and_read_only() {
+    let f = Fixture::new();
+    let mut command = f.install();
+    command.args(["--dry-run", "--json"]);
+    let output = bounded(command);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stderr.is_empty());
+    let plan: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(plan["existing"], "absent");
+    assert_eq!(plan["source"]["payload_verified"], true);
+    assert_eq!(plan["source"]["publisher_verified"], false);
+    assert_eq!(plan["activation"]["registers_providers"], false);
+    assert!(plan["conflicts"].as_array().unwrap().is_empty());
+    assert!(!f.prefix.exists());
+    assert!(!f.config.exists());
+    assert!(!f.state.exists());
+
+    let mut command = f.install();
+    command.arg("--dry-run");
+    let output = bounded(command);
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).unwrap();
+    for category in [
+        "Source",
+        "Components",
+        "Files",
+        "Privileges",
+        "Activation",
+        "Conflicts",
+    ] {
+        assert!(text.contains(category));
+    }
+    assert!(text.contains("Dry run: nothing was changed."));
+    assert!(!f.prefix.exists());
+}
+
+#[test]
+fn unified_install_conflicts_keep_json_and_do_not_repair_files() {
+    let f = Fixture::new();
+    success(f.install().output().unwrap());
+    let receipt = fs::read(f.prefix.join(".aw-packages/aw-core.json")).unwrap();
+    fs::write(f.prefix.join("bin/aw"), b"user modification").unwrap();
+    let mut command = f.install();
+    command.args(["--json", "--dry-run"]);
+    let output = bounded(command);
+    assert_eq!(output.status.code(), Some(1));
+    let plan: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(!plan["conflicts"].as_array().unwrap().is_empty());
+    assert_eq!(
+        plan["components"][0]["installed_version"],
+        "0.1.0-preview.1"
+    );
+    assert_eq!(
+        fs::read(f.prefix.join("bin/aw")).unwrap(),
+        b"user modification"
+    );
+    assert_eq!(
+        fs::read(f.prefix.join(".aw-packages/aw-core.json")).unwrap(),
+        receipt
+    );
+}
+
+#[test]
+fn unified_install_rejects_ambiguous_preview_flags_without_mutation() {
+    let f = Fixture::new();
+    for flags in [
+        vec!["--json"],
+        vec!["--dry-run", "--dry-run"],
+        vec!["--dry-run", "--config", "unused.yaml"],
+        vec!["--unknown"],
+    ] {
+        let mut command = f.install();
+        command.args(flags);
+        let output = bounded(command);
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert!(!f.prefix.exists());
+    }
 }

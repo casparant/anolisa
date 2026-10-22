@@ -51,6 +51,33 @@ AW does not expand variables such as `$HOME`.
 For all editor commands and a custom rule example, see the
 [configuration tool reference](../../../../developer-guide/en/aw/packages.md#edit-existing-provider-and-hook-configuration).
 
+## Edit Provider declarations
+
+Use these shortcuts to add or remove one declaration in an existing configuration:
+
+```bash
+aw provider add custom --config "$AW_HOME/aw.yaml" --definition ./provider.json
+aw provider remove custom --config "$AW_HOME/aw.yaml"
+```
+
+`provider.json` must contain the complete Provider definition as a YAML/JSON
+object, not an entire AW configuration or an executable download. Adding the
+same definition again leaves the file unchanged; a different definition under
+the same name is rejected. Remove refuses Providers still referenced by any
+Hook, including disabled Hooks; remove those references first.
+
+| Shortcut | Existing command, still supported |
+| --- | --- |
+| `aw provider add NAME --config ABS_FILE --definition FILE` | `aw config add-provider --config ABS_FILE --name NAME --definition FILE` |
+| `aw provider remove NAME --config ABS_FILE` | `aw config remove-provider --config ABS_FILE --name NAME` |
+
+Use `--name NAME` instead of the positional name when it starts with `--`; do
+not combine the two forms. These commands share the existing configuration
+editor and ownership checks. They do not install/uninstall software, create
+Hook references, enable a Provider or reload a service. Changed files are
+rewritten as YAML without preserving comments or formatting; keep the backup
+from the editing workflow above. Validate and restart separately to apply edits.
+
 ## Compare policy edits
 
 Prepare a separate candidate file and compare it with the existing configuration:

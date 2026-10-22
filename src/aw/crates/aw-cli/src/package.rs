@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, path::Path};
 
 mod arguments;
 mod config;
+mod install;
 mod signals;
 
 pub(crate) fn compatibility_main() {
@@ -17,6 +18,9 @@ pub(crate) fn compatibility_main() {
 }
 
 pub(crate) fn dispatch(command: &str, arguments: &[String]) -> crate::cli::Result<()> {
+    if command == "install" {
+        return install::run(arguments);
+    }
     let (command, arguments) =
         if command == "config" && arguments.first().is_some_and(|action| action == "init") {
             ("configure", &arguments[1..])

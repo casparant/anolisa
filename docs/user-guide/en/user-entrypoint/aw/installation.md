@@ -45,6 +45,7 @@ aw --help
 ```
 
 Every checksum should report `OK`; a successful install prints `Installed verified AW components`.
+Checksums establish consistency with the downloaded manifest, not publisher identity.
 The installer refuses to overwrite existing components. [Use a new prefix when upgrading](operations.md).
 Set `AW_PREFIX` and `PATH` in subsequent terminals too, or add them to your shell configuration.
 
@@ -52,18 +53,36 @@ For a personal installation that does not host a system backend, use an absolute
 you own and omit `sudo` from the install command. Other users must not be able to write to its
 parent directory. A root backend needs a root-managed installation.
 
-## Create configuration
+## Preview a local installation
 
 If AW is already installed, the same local installer is available through:
 
 ```bash
+aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle" --dry-run
+aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle" --dry-run --json
 aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle"
 ```
+
+The first two commands only read the bundle and target; they create no prefix,
+lock or installation receipt. The Plan uses the same categories for core, split
+Provider packages and all-in-one: `Source`, `Components`, `Files`, `Privileges`,
+`Activation` and `Conflicts`. It checks payload checksums and reports known
+dependency or overwrite conflicts. An empty conflict list is not a reservation:
+lock availability, effective write access and disk capacity remain unchecked,
+and installation rechecks inputs when it executes.
+
+`--json` currently requires `--dry-run`. A conflict produces the Plan and exit
+code `1`; invalid input may fail before a Plan can be produced. Without
+`--dry-run`, a conflict-free Plan is followed by installation without an extra
+confirmation prompt. AW uses the current user's permissions and never invokes
+`sudo` automatically. Choose a new prefix for a component already installed there.
 
 This accepts unpacked Preview bundles, not component names, download URLs or
 RPM/DEB packages. Provider packages still require core from the same build.
 It does not start services, register Agent Hooks or enable Providers.
 The standalone `aw-package` installer remains available for bootstrap and compatibility.
+
+## Create configuration
 
 Create configuration as your ordinary user, keeping data outside the installation prefix.
 

@@ -19,6 +19,11 @@ Preview 包，用 `aw config` 编辑配置，用 `aw uninstall --prefix ABS_DIR`
 旧的原生 `aw install --config ... --agent ...` 和 `aw-package` 命令保持兼容。
 此 Preview 安装器尚不支持按组件名、直接 URL 或系统包后端安装。
 
+增加 `--dry-run` 预览安装 Plan，脚本可使用 `--dry-run --json`。
+预览不创建文件、不提权。用 `aw list --installed --prefix ABS_DIR` 查看安装记录，
+用 `aw doctor --prefix ABS_DIR` 检查记录中的文件与依赖，两者都支持 `--json`。
+这些命令不检查运行时健康状况，也不激活 Provider。
+
 ```bash
 aw validate --config "$HOME/aw/aw.yaml"
 aw run --config "$HOME/aw/aw.yaml" --agent qoder
@@ -43,6 +48,11 @@ aw stop --config "$HOME/aw/aw.yaml"
 目标与 Provider 引用，不执行被查看的程序。两者支持 `--json`；
 `aw provider show NAME --config FILE` 选择单个 Provider。摘要不展示私有配置和
 执行参数，也不表示运行时已经生效。
+
+`aw provider add NAME --config ABS_FILE --definition FILE` 与
+`aw provider remove NAME --config ABS_FILE` 离线增删 Provider 声明。
+它们复用原有 `aw config add-provider/remove-provider` 编辑器，不执行软件安装，
+详见[配置](../../docs/user-guide/zh/user-entrypoint/aw/configuration.md#编辑-provider-声明)。
 
 core 可独立使用。Tokenless 包自带 RTK 和 TOON 编码，安全检查需要启动 sec-core
 后端；这些能力都要通过配置启用。AW 不安装 Agent，也不配置模型凭据。

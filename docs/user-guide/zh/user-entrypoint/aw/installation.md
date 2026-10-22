@@ -43,23 +43,39 @@ aw --help
 ```
 
 校验结果应全部为 `OK`，安装完成会打印 `Installed verified AW components`。
+校验和只能证明内容与下载的清单一致，不认证发布者身份。
 安装器拒绝覆盖已有组件；升级请使用[新安装目录](operations.md)。
 后续终端也需要设置 `AW_PREFIX` 和 `PATH`，可以写入自己的 shell 配置。
 
 无需系统后台的个人安装，可把 `AW_PREFIX` 改成自己拥有的绝对路径，并去掉安装命令的
 `sudo`。安装目录的父目录不得被其他用户写入。root 后台应使用 root 管理的安装目录。
 
-## 创建配置
+## 预览本地安装
 
 已有 AW 时，可以使用同一个本地安装器：
 
 ```bash
+aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle" --dry-run
+aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle" --dry-run --json
 aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle"
 ```
+
+前两条命令只读取安装包与目标，不创建安装目录、锁或安装记录。core、Provider 分包
+与 all-in-one 使用相同的 Plan 分类：`Source`、`Components`、`Files`、`Privileges`、
+`Activation`、`Conflicts`。预览校验文件摘要，并报告已知的依赖或覆盖冲突。
+冲突为空不代表已预留资源：锁是否可用、实际写入权限和磁盘容量尚未检查，
+真正安装时还会重新检查输入。
+
+`--json` 当前必须搭配 `--dry-run`。发现冲突时输出 Plan 并以 `1` 退出；
+输入无效时可能在生成 Plan 前失败。去掉 `--dry-run` 后，无冲突的 Plan 会直接进入
+安装，不另行询问确认。AW 使用当前用户的权限，不自动执行 `sudo`。
+目标中已经安装过同一组件时，请使用新目录。
 
 此入口接受解压后的 Preview 包，不接受组件名、下载 URL 或 RPM/DEB 包。
 Provider 包仍要求先安装同一次构建的 core。安装不启动服务、不注册 Agent Hook、
 不启用 Provider。独立的 `aw-package` 安装器继续用于首次引导安装和兼容。
+
+## 创建配置
 
 以普通用户创建配置，数据保存在安装目录之外。
 
