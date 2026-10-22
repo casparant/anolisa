@@ -4,6 +4,7 @@ mod cli;
 mod doctor;
 mod installed;
 mod inventory;
+mod migrate;
 mod package;
 mod provider_config;
 mod routing;
@@ -59,6 +60,10 @@ Compatibility: aw serve, aw status and aw stop remain available."
         }
         routing::Route::Runtime { command, arguments } => runtime(command, arguments),
         routing::Route::Doctor { arguments } => doctor::dispatch(arguments),
+        routing::Route::Migrate { arguments } => {
+            migrate::dispatch(arguments)?;
+            Ok(cli::Exit::Code(0))
+        }
         routing::Route::Installed { arguments } => {
             installed::dispatch(arguments)?;
             Ok(cli::Exit::Code(0))
@@ -84,6 +89,7 @@ fn help() {
 aw install --prefix ABSOLUTE_DIR --bundle ABSOLUTE_DIR [--dry-run [--json]] [--allow-unverified]\n\
 aw uninstall --prefix ABSOLUTE_DIR\n\
 aw doctor --prefix ABSOLUTE_DIR [--json]\n\
+aw migrate inspect --state ABSOLUTE_FILE [--state ABSOLUTE_FILE ...] [--json]\n\
 aw list --installed --prefix ABSOLUTE_DIR [--json]\n\
 aw agent connect --config FILE --agent TARGET [--native-profile PROFILE]\n\
 aw agent list --config FILE [--json]\n\

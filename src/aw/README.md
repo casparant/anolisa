@@ -33,6 +33,11 @@ Planning does not create files or elevate privileges. Use
 software, change `PATH` or register Providers. These commands do not check runtime
 health or activate Providers.
 
+Before migrating an older installation, use `aw migrate inspect --state ABS_FILE`
+with optional repeated `--state` and `--json`. It reads up to 8 explicitly supplied
+legacy schema 1–6 state files without discovery, package-database/payload checks, writes
+or ownership transfer. See [legacy installation inspection](../../docs/user-guide/en/user-entrypoint/aw/operations.md#inspect-legacy-installations-before-migration).
+
 ```bash
 aw validate --config "$HOME/aw/aw.yaml"
 aw run --config "$HOME/aw/aw.yaml" --agent qoder

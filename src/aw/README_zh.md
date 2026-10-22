@@ -28,6 +28,11 @@ Preview 包，用 `aw config` 编辑配置，用 `aw uninstall --prefix ABS_DIR`
 两者识别两种安装记录格式。安装不执行软件、不修改 `PATH`，也不注册 Provider。
 这些命令不检查运行时健康状况，也不激活 Provider。
 
+迁移旧安装前，可用 `aw migrate inspect --state ABS_FILE` 盘点历史记录，
+重复 `--state` 可指定多份文件，也支持 `--json`。最多读取 8 份显式指定的旧
+schema 1–6 状态文件，不自动搜索、不核验包数据库或已安装文件、不写入或接管管理权。
+详见[迁移前盘点旧安装](../../docs/user-guide/zh/user-entrypoint/aw/operations.md#迁移前盘点旧安装)。
+
 ```bash
 aw validate --config "$HOME/aw/aw.yaml"
 aw run --config "$HOME/aw/aw.yaml" --agent qoder

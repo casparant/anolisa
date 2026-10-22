@@ -9,6 +9,7 @@ mod install;
 pub mod integrity;
 mod inventory;
 mod manifest;
+pub mod migration;
 pub mod open_bundle;
 pub mod open_install;
 pub mod package;

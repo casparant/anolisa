@@ -19,6 +19,7 @@ aw-adapter = { path = "crates/aw-adapter" }
 flate2 = "1"
 tar = "0.4"
 tempfile = "3"
+toml = "0.8.23"
 aw-service = { path = "crates/aw-service" }
 aw-config = { path = "crates/aw-config" }
 aw-core = { path = "crates/aw-core" }
