@@ -4,15 +4,19 @@
 pub mod config_edit;
 mod configuration;
 mod filesystem;
+mod format;
 mod install;
 pub mod integrity;
 mod inventory;
 mod manifest;
+pub mod open_bundle;
+pub mod open_install;
 pub mod package;
 mod plan;
 mod read_only;
 
 pub use configuration::{configure, document, Policy, Settings};
+pub use format::{bundle_format, installed_format};
 pub use install::{install, install_cancellable, uninstall, uninstall_cancellable};
 pub use inventory::{inventory, Inventory, InventoryState};
 pub use manifest::{digest, inspect, Component, Manifest, Payload};

@@ -70,6 +70,11 @@ aw provider remove custom --config "$AW_HOME/aw.yaml"
 不启用 Provider，也不重载服务。发生修改时文件会重新写为 YAML，不保留注释和排版，
 请保留前述编辑流程中的备份。修改后仍需另行校验、重启才能应用。
 
+通过[开放的 format 2 包](installation.md#安装开放的本地包)安装 Provider 后，包内的
+`provider` 元数据只声明协议和入口，不创建运行时实例。请提供完整定义，使用安装后
+可执行文件的绝对路径，再单独添加所需 Hook 引用。`aw config init --prefix ...` 仍从
+format 1 Preview 包生成配置，不会把 format 2 manifest 转换成运行时配置。
+
 ## 比较策略修改
 
 准备独立的候选文件，与现有配置比较：

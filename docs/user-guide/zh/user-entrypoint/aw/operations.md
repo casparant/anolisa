@@ -36,12 +36,15 @@ aw list --installed --prefix "$AW_PREFIX"
 aw list --installed --prefix "$AW_PREFIX" --json
 ```
 
-读取指定目录的 AW 安装记录，展示组件版本、平台、源码提交、文件数量和依赖。
+读取指定目录的 AW 安装记录，展示包版本、平台和文件数量。format 1 包含源码提交，
+format 2 增加 `tool`/`provider` 类型及 user/raw 安装身份。`--json` 提供结构化依赖。
 它不扫描整台机器、不查询 RPM/DEB、不校验文件内容，也不运行已安装的程序。
 状态分为 `absent`（目录不存在）、`unmanaged`（没有 AW 安装记录）和
 `installed`（已有记录）。没有记录不代表不存在软件；记录损坏时会报错，不伪装成
 空列表。JSON 使用 `scope: "installation_records"`、`payload_verified: false`
 和 `runtime_checked: false`。
+format 2 还输出 `receipt_format: 2`、`installation_scope`、`backend` 和
+`publisher_verified: false`。读取安装记录不会使其来源变为受信。
 
 ## 检查安装完整性
 
@@ -50,8 +53,9 @@ aw doctor --prefix "$AW_PREFIX"
 aw doctor --prefix "$AW_PREFIX" --json
 ```
 
-检查 Preview 必备文件和依赖声明，以及记录中的文件摘要、权限、路径安全性、
-同构建依赖和文件归属冲突。
+两种格式都会检查记录中的文件摘要、权限与路径安全性。format 1 还检查 Preview
+必备文件和依赖声明、同构建依赖及文件归属冲突；format 2 校验记录中的 bundle 内
+依赖闭包与精确文件长度。
 结果区分 `checked` 与 `unhealthy` 组件，并列出具体问题。这是只读快照，
 不下载、执行或修复软件，不认证发布者身份，也不检查服务、Agent 或 Provider
 是否就绪。AW 未记录的文件不在检查范围内。
@@ -89,6 +93,23 @@ sudo "$AW_PREFIX/bin/aw" uninstall --prefix "$AW_PREFIX"
 
 卸载保留外部配置、审计和原生 Agent 数据。包文件被修改或缺失时会先报错，
 按提示处理，不要直接删除仍在使用的目录。
+
+对于开放的 format 2 安装，使用其所属的非 root 用户调用已有 AW CLI，
+不要假设工具安装目录内也有 AW 二进制：
+
+```bash
+aw uninstall --prefix "$AW_DEMO_PREFIX"
+```
+
+同一命令识别 `.aw-installation.json`，移除其中记录的整个 bundle，而不是指定的单个包。
+删除前检查所有权和已记录文件的完整性，未知文件会保留，因此安装目录可能继续存在。
+它不移除原始源包，也不改写引用该目录的配置。不检查运行中的引用：卸载前应自行
+停止使用者并更新外部配置。format 2 当前没有原地更新或迁移，应将替代版本安装到
+另一个新目录。
+
+原型会回滚进程内捕获到的失败，但尚无支持崩溃后续跑的卸载日志。
+若错误提示保留了 `.aw-uninstall-*` 恢复目录，应保留并恢复提示中的文件后再重试，
+不要将它当作临时垃圾删除。取消在文件之间检查，当前有界文件读取可能先完成。
 
 ## 保存数据
 

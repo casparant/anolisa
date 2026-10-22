@@ -193,6 +193,10 @@ fn install_using(
     mut copy: impl FnMut(&Path, &mut File) -> Result<()>,
 ) -> Result<()> {
     check_cancel(cancel)?;
+    require(
+        crate::installed_format(prefix)? == 1,
+        "format 2 prefixes require the unified aw lifecycle",
+    )?;
     let manifest = inspect(bundle)?;
     check_cancel(cancel)?;
     paths::parent(prefix)?;
@@ -315,6 +319,10 @@ fn uninstall_using(
     cleanup: impl FnOnce(&Path) -> std::io::Result<()>,
 ) -> Result<()> {
     check_cancel(cancel)?;
+    require(
+        crate::installed_format(prefix)? == 1,
+        "format 2 prefixes require the unified aw lifecycle",
+    )?;
     paths::owned_directory(prefix)?;
     let _lock = paths::lock(prefix)?;
     let installed = receipts(prefix)?;

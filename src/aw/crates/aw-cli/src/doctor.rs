@@ -41,8 +41,15 @@ pub(crate) fn dispatch(arguments: &[String]) -> Result<Exit> {
     if !prefix.is_absolute() {
         return Err("--prefix requires an absolute directory".into());
     }
-    let report =
-        aw_package::integrity::inspect(prefix).map_err(|error| display_text(&error.to_string()))?;
+    let report = if aw_package::installed_format(prefix)
+        .map_err(|error| display_text(&error.to_string()))?
+        == 2
+    {
+        aw_package::open_install::inspect(prefix)
+    } else {
+        aw_package::integrity::inspect(prefix)
+    }
+    .map_err(|error| display_text(&error.to_string()))?;
     if machine {
         println!(
             "{}",

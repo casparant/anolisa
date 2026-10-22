@@ -7,11 +7,12 @@ use std::{collections::BTreeSet, path::Path};
 pub(super) fn run(arguments: &[String]) -> Result<()> {
     if arguments == ["--help"] {
         println!(
-            "aw install --prefix ABS_DIR --bundle ABS_DIR [--dry-run [--json]]\n\
-Inspect and install an unpacked local Preview bundle.\n\
+            "aw install --prefix ABS_DIR --bundle ABS_DIR [--dry-run [--json]] [--allow-unverified]\n\
+Inspect and install an unpacked local Preview or open bundle.\n\
 --dry-run reads inputs without creating a prefix, lock or receipt.\n\
 --json requires --dry-run; conflicts produce a plan and exit 1.\n\
 Checksums verify payload consistency, not publisher identity.\n\
+Open format 2 requires --allow-unverified to install into a fresh user-owned prefix.\n\
 No automatic elevation, service startup, Provider registration or Agent connection."
         );
         return Ok(());
@@ -19,7 +20,7 @@ No automatic elevation, service startup, Provider registration or Agent connecti
     let mut arguments = arguments.iter();
     let mut seen = BTreeSet::new();
     let (mut prefix, mut bundle) = (None, None);
-    let (mut dry_run, mut json) = (false, false);
+    let (mut dry_run, mut json, mut allow_unverified) = (false, false, false);
     while let Some(flag) = arguments.next() {
         if !seen.insert(flag) {
             return Err(format!("duplicate installation option: {flag}").into());
@@ -27,6 +28,7 @@ No automatic elevation, service startup, Provider registration or Agent connecti
         match flag.as_str() {
             "--dry-run" => dry_run = true,
             "--json" => json = true,
+            "--allow-unverified" => allow_unverified = true,
             "--prefix" | "--bundle" => {
                 let value = arguments
                     .next()
@@ -49,7 +51,15 @@ No automatic elevation, service startup, Provider registration or Agent connecti
     }
     let prefix = prefix.ok_or("missing --prefix")?;
     let bundle = bundle.ok_or("missing --bundle")?;
-    let plan = aw_package::plan_install(bundle, prefix)?;
+    let format = aw_package::bundle_format(bundle)?;
+    if format == 1 && allow_unverified {
+        return Err("--allow-unverified is only supported for open format 2 bundles".into());
+    }
+    let plan = if format == 2 {
+        aw_package::open_install::plan(bundle, prefix)?
+    } else {
+        aw_package::plan_install(bundle, prefix)?
+    };
     if !dry_run && !plan.conflicts.is_empty() {
         return Err(format!("installation blocked: {}", plan.conflicts.join("; ")).into());
     }
@@ -66,12 +76,23 @@ No automatic elevation, service startup, Provider registration or Agent connecti
             println!("Dry run: nothing was changed.");
         }
     } else {
+        if format == 2 && !allow_unverified {
+            return Err("publisher identity is unverified; review --dry-run, then explicitly pass --allow-unverified to install; nothing was changed".into());
+        }
         super::signals::register()?;
-        aw_package::install_cancellable(bundle, prefix, &super::signals::CANCEL)?;
-        println!(
-            "Installed verified AW components in {}",
-            display(&prefix.to_string_lossy())
-        );
+        if format == 2 {
+            aw_package::open_install::install(bundle, prefix, &super::signals::CANCEL)?;
+            println!(
+                "Installed local packages in {} (payload checksums matched; publisher unverified)",
+                display(&prefix.to_string_lossy())
+            );
+        } else {
+            aw_package::install_cancellable(bundle, prefix, &super::signals::CANCEL)?;
+            println!(
+                "Installed verified AW components in {}",
+                display(&prefix.to_string_lossy())
+            );
+        }
     }
     Ok(())
 }
@@ -118,6 +139,5 @@ fn render(plan: &InstallPlan) {
                 .join("; ")
         }
     );
-    println!("  Deferred    lock, write access and capacity; execution rechecks inputs");
-    println!("              runtime readiness is not checked");
+    println!("  Deferred    capacity, write access and runtime; execution rechecks inputs");
 }

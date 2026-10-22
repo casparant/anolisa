@@ -46,6 +46,9 @@ Read existing AW package receipts. No software is started or repaired.\n{NOTICE}
     if !prefix.is_absolute() {
         return Err("--prefix requires an absolute directory path".into());
     }
+    if aw_package::installed_format(prefix).map_err(|error| safe_text(&error.to_string()))? == 2 {
+        return open_bundle(prefix, machine);
+    }
     let inventory = aw_package::inventory(prefix).map_err(|error| safe_text(&error.to_string()))?;
     if machine {
         let components = inventory
@@ -77,6 +80,53 @@ Read existing AW package receipts. No software is started or repaired.\n{NOTICE}
         );
     } else {
         present(&inventory);
+    }
+    Ok(())
+}
+
+fn open_bundle(prefix: &Path, machine: bool) -> Result<()> {
+    let receipt = aw_package::open_install::read_receipt(prefix)
+        .map_err(|error| safe_text(&error.to_string()))?;
+    if machine {
+        let components = receipt
+            .packages
+            .iter()
+            .map(|package| {
+                json!({
+                    "name": package.id, "version": package.version, "kind": package.kind,
+                    "os": package.platform.os, "arch": package.platform.arch,
+                    "file_count": package.files.len(), "requires": package.requires,
+                })
+            })
+            .collect::<Vec<_>>();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "scope": "installation_records", "prefix": prefix, "state": "installed",
+                "receipt_format": 2, "backend": receipt.backend, "installation_scope": receipt.scope,
+                "payload_verified": false, "runtime_checked": false, "publisher_verified": false,
+                "components": components, "notice": NOTICE,
+            }))?
+        );
+    } else {
+        println!("{NOTICE}");
+        println!("Prefix: {}", safe_text(&prefix.to_string_lossy()));
+        println!("State: installed (recorded); format 2, user/raw, publisher unverified");
+        println!("\nNAME\tVERSION\tKIND\tPLATFORM\tFILES");
+        for package in &receipt.packages {
+            let kind = match package.kind {
+                aw_package::open_bundle::Kind::Tool => "tool",
+                aw_package::open_bundle::Kind::Provider => "provider",
+            };
+            println!(
+                "{}\t{}\t{kind}\t{}/{}\t{}",
+                safe_text(&package.id),
+                safe_text(&package.version),
+                safe_text(&package.platform.os),
+                safe_text(&package.platform.arch),
+                package.files.len()
+            );
+        }
     }
     Ok(())
 }

@@ -63,7 +63,9 @@ fn help_separates_software_installation_from_native_agent_connection() {
         "aw agent connect --config",
         "aw config init --prefix",
         "aw config validate --config",
-        "local unpacked Preview bundles only",
+        "local unpacked Preview and format 2 bundles",
+        "no URL or RPM/DEB backend",
+        "fresh user prefix with --allow-unverified",
         "Compatibility: aw install --config",
     ] {
         assert!(text.contains(expected), "missing {expected}");
