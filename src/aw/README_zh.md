@@ -39,6 +39,11 @@ aw stop --config "$HOME/aw/aw.yaml"
 `aw service serve` 在前台运行服务，不安装系统服务单元。
 使用 `aw service --help` 查看参数，`aw --version` 查看 CLI crate 版本。
 
+使用 `aw agent list --config FILE` 和 `aw provider list --config FILE` 查看配置中的
+目标与 Provider 引用，不执行被查看的程序。两者支持 `--json`；
+`aw provider show NAME --config FILE` 选择单个 Provider。摘要不展示私有配置和
+执行参数，也不表示运行时已经生效。
+
 core 可独立使用。Tokenless 包自带 RTK 和 TOON 编码，安全检查需要启动 sec-core
 后端；这些能力都要通过配置启用。AW 不安装 Agent，也不配置模型凭据。
 

@@ -8,6 +8,10 @@ pub(crate) enum Route<'a> {
     Help,
     Version,
     ServiceHelp,
+    Inventory {
+        command: &'a str,
+        arguments: &'a [String],
+    },
     Runtime {
         command: &'a str,
         arguments: &'a [String],
@@ -49,6 +53,12 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
             }
         }
         "agent" => {
+            if arguments
+                .first()
+                .is_some_and(|value| value == "list" || value == "--help")
+            {
+                return Ok(Route::Inventory { command, arguments });
+            }
             let (subcommand, arguments) =
                 arguments.split_first().ok_or("expected agent connect")?;
             if subcommand != "connect" {
@@ -59,6 +69,7 @@ pub(crate) fn select(arguments: &[String]) -> Result<Route<'_>> {
                 arguments,
             })
         }
+        "provider" => Ok(Route::Inventory { command, arguments }),
         "config" if arguments.first().is_some_and(|value| value == "validate") => {
             Ok(Route::Runtime {
                 command: "validate",

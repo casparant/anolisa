@@ -43,6 +43,11 @@ The same operations are available as `aw service status` and `aw service stop`.
 `aw service serve` runs a foreground service; it does not install a system unit.
 Use `aw service --help` for options and `aw --version` for the CLI crate version.
 
+Use `aw agent list --config FILE` and `aw provider list --config FILE` to inspect
+declared targets and Provider references without running them. Both accept `--json`;
+`aw provider show NAME --config FILE` selects one Provider. These summaries omit
+private configuration and arguments and do not claim runtime activation.
+
 Core works independently. The Tokenless package includes RTK and TOON encoding;
 security checks require a running sec-core backend. Enable these optional
 capabilities in the configuration. AW does not install Agents or configure model credentials.
