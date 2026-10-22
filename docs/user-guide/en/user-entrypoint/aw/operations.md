@@ -31,6 +31,22 @@ systemd units or start an Agent. The original `aw serve/status/stop` commands re
 compatible. `--version` reports the CLI crate version, not an installed bundle's
 Preview release identifier or native Agent version.
 
+## Inspect configured Agents and Providers
+
+```bash
+aw agent list --config "$HOME/aw/aw.yaml"
+aw provider list --config "$HOME/aw/aw.yaml" --json
+aw provider show compression --config "$HOME/aw/aw.yaml"
+```
+
+Use a Provider name from your configuration for `show`. These commands validate and
+read the selected file without starting an Agent, Provider or service. They show
+names, protocols, transport kinds and event/step references; private configuration,
+environment variables and executable arguments are omitted. `referenced` includes
+disabled references, whose enabled flags are shown separately. A configured or
+referenced instance is not proof of runtime activation. JSON marks this boundary
+with `scope: "configuration"` and `runtime_checked: false`.
+
 ## Upgrade and uninstall
 
 Before upgrading, exit Agents, stop the service using the old AW binary and original configuration,
