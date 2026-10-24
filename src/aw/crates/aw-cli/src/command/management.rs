@@ -26,7 +26,12 @@ pub(super) fn install(value: package::Install) -> crate::cli::Result<crate::cli:
             .bundle
             .as_deref()
             .ok_or_else(|| aw_package::Error::Invalid("missing --bundle".into()))?;
-        let plan = plan::install(&paths, Path::new(bundle), Path::new(prefix))?;
+        let plan = plan::install_with_resources(
+            &paths,
+            Path::new(bundle),
+            Path::new(prefix),
+            value.resources_dir.as_deref().map(Path::new),
+        )?;
         Ok((paths, plan))
     })();
     complete("install", value.dry_run, value.output, result)

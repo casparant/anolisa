@@ -44,7 +44,7 @@ pub(super) fn human(outcome: &Outcome, options: &Options) -> std::io::Result<()>
                         stdout,
                         "{action} {:04o} {}",
                         file.mode,
-                        terminal::escape(&file.path)
+                        terminal::escape(&file.destination.to_string_lossy())
                     )?;
                 }
                 for dependency in &plan.dependencies {

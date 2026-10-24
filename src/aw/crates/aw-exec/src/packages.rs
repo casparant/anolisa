@@ -80,7 +80,8 @@ impl PackageLeases {
     /// Hold known absolute paths, such as the current service executable.
     ///
     /// Existing symbolic aliases are resolved as well as their original ancestors.
-    /// The method reads only path ancestors and retains no executable or record data.
+    /// External resource pointers must agree with the installation's reverse binding.
+    /// The method reads path ancestors and bounded pointers, without scanning databases.
     ///
     /// # Errors
     /// Rejects relative paths, unsafe/missing managed locks, contention and lookup errors.

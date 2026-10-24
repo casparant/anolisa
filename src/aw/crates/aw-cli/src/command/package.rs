@@ -11,6 +11,9 @@ pub(super) struct Install {
     /// Absolute unpacked bundle directory; no URL or RPM/DEB backend
     #[arg(long, value_name = "ABS_DIR", requires = "prefix", conflicts_with_all = ["config", "agent", "native_profile"])]
     pub bundle: Option<String>,
+    /// External directory for share/ payloads; subsequent installs reuse its recorded location
+    #[arg(long, value_name = "ABS_DIR", requires = "bundle", conflicts_with_all = ["config", "agent", "native_profile"])]
+    pub resources_dir: Option<String>,
     /// Show packages, files and conflicts without creating or changing anything
     #[arg(long, requires = "prefix", conflicts_with = "config")]
     pub dry_run: bool,

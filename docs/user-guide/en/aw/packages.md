@@ -14,8 +14,8 @@ and `--against`. The removed editor-specific validation command has no CLI
 replacement with the same ownership checks; the Rust editor API retains them.
 Native Hook registration is `aw agent connect`; legacy native `aw install
 --config ... --agent ...` remains compatible and cannot mix package options.
-Installation still accepts only local unpacked Preview bundles, not URLs or
-arbitrary named components.
+Installation accepts local unpacked bundles, including Preview bundles; it does
+not resolve URLs or arbitrary named components.
 
 Install AW core to run your existing Qoder or OpenClaw with no Provider. Add sec-core or your own boolean policy command when needed, using one AW configuration. The AW and sec-core components in this Preview ship as native Rust binaries; building, installing and running them do not require Python. Custom Providers or hook scripts have their own runtime dependencies. OpenClaw still needs Node.js, and both Agents need their own model accounts.
 
@@ -62,6 +62,74 @@ registration and can read a system installation without using root's home.
 The default build produces core only; `--component all` produces four packages. `aw-core` installs `bin/aw`; `aw-provider-sec-core` contains the Provider and Rust V2 sec-core CLI/daemon; `aw-provider-tokenless` contains its bridge, Tokenless CLI and pinned patched RTK; `aw-all-in-one` contains exactly the same three components. Every archive also carries a root-level `aw` for bootstrap, including Provider-only archives. For split installation, extract core and Provider and run each bundle's `aw install --scope system --bundle ABS_BUNDLE --prefix ABS_PREFIX` with `sudo` against the same new prefix, **core first**. Use the same scope for both packages. Do not install all-in-one into that prefix afterward.
 
 The installer verifies hashes, modes, architecture, version and source commit, refuses replacements and records ownership in `.aw-packages`. Ctrl-C (SIGINT) or SIGTERM during installation rolls back this invocation’s writes so installation can be retried; forced termination (SIGKILL) is outside automatic rollback. Checksums detect corruption; they are not publisher signatures. Install parents must belong to the installer user and must not be writable by other users. Root owns the system backend installation; when connecting to an existing backend, a user-owned prefix is also supported.
+
+## Separate resources from programs
+
+Use `--resources-dir ABS_DIR` when a local installation needs separate program
+and resource directories. Package descriptions and unpacked bundles keep their
+existing logical paths. The installer records the selected resource directory
+in the installation's optional `resources` field and maps destinations as follows:
+
+| Logical path in the package | Installed path |
+| --- | --- |
+| `bin/example` | `PREFIX/bin/example` |
+| `libexec/example/helper` | `PREFIX/libexec/example/helper` |
+| `share/example/schema.json` | `RESOURCES_DIR/example/schema.json` |
+
+`share/` is stripped; an extra `RESOURCES_DIR/share/` directory is not created.
+Without this option on a new installation, `share/` stays below the prefix.
+Old database records without `resources` retain that layout. Adding packages
+to an installation with a recorded resource directory reuses it when the option
+is omitted. An explicit different directory is rejected; this option does not
+move an existing combined or split installation.
+
+Choose two new, separate, application-specific directories. The resource root
+must not exist at first installation; prepare its parent yourself. Parents must
+be owned by the installing user and must not be group/world writable or reached
+through symlinks. The resource root cannot equal, contain, or sit below the
+program prefix, package database, or another installation's program/resource
+root recorded in that database. These example paths are user-selected locations,
+not product defaults:
+
+```bash
+AW_EXAMPLE_PREFIX="$HOME/.local/lib/aw-example/1"
+AW_EXAMPLE_RESOURCES="$HOME/.local/share/aw-example/1"
+install -d -m 755 "$HOME/.local/lib/aw-example" "$HOME/.local/share/aw-example"
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle \
+  --dry-run --json
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle
+aw doctor --prefix "$AW_EXAMPLE_PREFIX" --json
+aw uninstall --scope user --prefix "$AW_EXAMPLE_PREFIX" --dry-run --json
+```
+
+`--dry-run` uses the same install planner without creating installation records,
+directories or locks. Its file changes include logical `path` and actual absolute
+`destination` values. `aw list --installed --json` exposes the recorded `resources`;
+`doctor`, uninstall and `aw config init` resolve files through that record, so
+they need no additional resource option. Integrity failures name the actual
+resource path. Keep mutable configuration, state and credentials outside both
+package-owned trees.
+
+AW writes two ordinary metadata files: `PREFIX/.aw-resources-dir` points to the
+resource root, and `RESOURCES_DIR/.aw-installation-prefix` points back to the
+program prefix. They exist even when the first package has no `share/` files.
+Do not move either registered directory or edit these files; verification
+detects missing or conflicting metadata. Runtime package leases follow the
+resource-side reference to the same prefix lock when an explicit command or
+absolute argument refers to a resource.
+
+Program and resource roots may be on different devices. Each filesystem stages
+its own payload and backups under the same journaled transaction; the database
+commit remains the single commit point. Both filesystems must support Linux
+`O_TMPFILE`, hard links, directory fsync and the required `renameat2` operations;
+unsupported storage fails instead of falling back to unsafe staging. On uninstall, only the selected
+packages' verified files are removed from their actual locations. Unknown files,
+the two root directories, their reference metadata and the empty installation
+registration remain after the last package is removed, permitting later reuse
+of the same recorded layout. `aw recover` uses the retained transaction record
+for interrupted changes across both roots.
 
 ## Use core without a Provider
 

@@ -1,5 +1,8 @@
 //! Local package plans and durable execution without Provider processes or remote resolution.
 
+#[path = "management/resources.rs"]
+mod resources;
+
 use aw_package::{
     database::{DatabasePaths, Inventory, InventorySource, RegistrationPointer},
     digest, plan,

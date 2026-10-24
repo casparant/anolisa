@@ -91,6 +91,7 @@ pub(super) fn installation(prefix: &Path) -> Result<Option<(Installation, Packag
         Installation {
             installation_id,
             prefix: prefix.to_path_buf(),
+            resources: None,
             owner_uid: paths::directory(prefix)?.metadata()?.uid(),
             scope: Scope::Unknown,
             manager: Manager::Raw,

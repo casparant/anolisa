@@ -20,10 +20,23 @@ use std::{
 #[cfg(test)]
 mod tests;
 
-pub(super) fn plan(paths: &DatabasePaths, bundle: &Path, prefix: &Path) -> Result<PackagePlan> {
-    plan_with_limit(paths, bundle, prefix, open_bundle::MAX_PAYLOAD_BYTES)
+pub(super) fn plan(
+    paths: &DatabasePaths,
+    bundle: &Path,
+    prefix: &Path,
+    resources: Option<&Path>,
+) -> Result<PackagePlan> {
+    plan_with_resources(
+        paths,
+        bundle,
+        prefix,
+        open_bundle::MAX_PAYLOAD_BYTES,
+        Limits::default(),
+        resources,
+    )
 }
 
+#[cfg(test)]
 fn plan_with_limit(
     paths: &DatabasePaths,
     bundle: &Path,
@@ -33,6 +46,7 @@ fn plan_with_limit(
     plan_with_limits(paths, bundle, prefix, prefix_byte_limit, Limits::default())
 }
 
+#[cfg(test)]
 fn plan_with_limits(
     paths: &DatabasePaths,
     bundle: &Path,
@@ -40,11 +54,43 @@ fn plan_with_limits(
     prefix_byte_limit: u64,
     limits: Limits,
 ) -> Result<PackagePlan> {
+    plan_with_resources(paths, bundle, prefix, prefix_byte_limit, limits, None)
+}
+
+fn plan_with_resources(
+    paths: &DatabasePaths,
+    bundle: &Path,
+    prefix: &Path,
+    prefix_byte_limit: u64,
+    limits: Limits,
+    resources: Option<&Path>,
+) -> Result<PackagePlan> {
     let bundle = open_bundle::inspect(bundle)?;
     let snapshot = Snapshot::read(paths, prefix)?;
     let mut plan = snapshot.plan(paths, prefix, Action::Install);
     let mut installation = snapshot.installation(paths, prefix);
     let (verify, installed_bytes) = snapshot::verify(&mut plan, &installation);
+    if let Some(root) = resources {
+        database::resources::validate(prefix, root)?;
+        crate::require(
+            !paths.root.starts_with(root) && !root.starts_with(&paths.root),
+            "resource root overlaps the package database",
+        )?;
+        if snapshot.selected.is_some() {
+            crate::require(
+                installation.resources.as_deref() == Some(root),
+                "cannot change the resource directory of an existing installation",
+            )?;
+        } else {
+            crate::require(
+                !root.try_exists()?,
+                "new resource root already exists without an installation record",
+            )?;
+            crate::filesystem::parent(root)?;
+            installation.resources = Some(root.into());
+        }
+    }
+    plan.resources = installation.resources.clone();
     if !snapshot.legacy.is_empty() {
         super::runtime::check(&mut plan, &installation);
     }
@@ -111,7 +157,7 @@ fn plan_with_limits(
             });
         }
         for (name, metadata) in &package.files {
-            let target = prefix.join(name);
+            let target = installation.file_path(name);
             ownership(
                 &mut plan,
                 &snapshot,
@@ -119,7 +165,12 @@ fn plan_with_limits(
                 &target,
                 &package.package_id,
             );
-            destination(&mut plan, &target, prefix, &package.package_id);
+            let root = if name.starts_with("share/") {
+                installation.resources.as_deref().unwrap_or(prefix)
+            } else {
+                prefix
+            };
+            destination(&mut plan, &target, root, &package.package_id);
             if let Some(source) = bundle.sources.get(name) {
                 writes.insert(
                     name.clone(),
@@ -131,7 +182,7 @@ fn plan_with_limits(
             }
         }
         plan.added.push(snapshot::summary(package));
-        snapshot::files(&mut plan, Action::Install, package);
+        snapshot::files(&mut plan, Action::Install, package, &installation);
     }
     installation.packages.extend(incoming);
     let after = snapshot.after(Some(installation), prefix)?;
@@ -143,6 +194,7 @@ fn plan_with_limits(
     if plan.ready() {
         let changes = ChangeSet {
             prefix: prefix.into(),
+            resources: plan.resources.clone(),
             database_before: snapshot.before.clone(),
             database_after: after,
             installation_id,
@@ -178,7 +230,7 @@ fn ownership(
     for installation in installations {
         for installed in &installation.packages {
             for path in installed.files.keys() {
-                let owned = installation.prefix.join(path);
+                let owned = installation.file_path(path);
                 if owned == target || owned.starts_with(target) || target.starts_with(&owned) {
                     plan.problem(
                         "file_owner",

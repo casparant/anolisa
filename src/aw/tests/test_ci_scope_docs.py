@@ -1,10 +1,9 @@
 """Keep documented split package operations on the explicitly selected database."""
 
-from pathlib import Path
 import re
 import shlex
 import unittest
-
+from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 GUIDES = (
@@ -73,10 +72,12 @@ class ScopeDocumentationTests(unittest.TestCase):
             self.assertEqual(len(removals), 1)
             commands.extend(removals)
             with self.subTest(language=language):
-                self.assertEqual([option(command, "--scope") for command in commands],
-                                 ["system"] * 4)
-                self.assertEqual([option(command, "--prefix") for command in commands],
-                                 ["$AW_PREFIX"] * 4)
+                self.assertEqual(
+                    [option(command, "--scope") for command in commands], ["system"] * 4
+                )
+                self.assertEqual(
+                    [option(command, "--prefix") for command in commands], ["$AW_PREFIX"] * 4
+                )
                 self.assertIn("--bundle", commands[0])
                 self.assertIn("$AW_SEC_BUNDLE/aw", commands[1][1])
                 self.assertIn("$AW_TOKENLESS_BUNDLE/aw", commands[2][1])
@@ -84,17 +85,49 @@ class ScopeDocumentationTests(unittest.TestCase):
 
     def test_developer_core_extension_and_uninstall_keep_the_same_scope(self) -> None:
         for language in ("en", "zh"):
-            commands = validate_system_commands(self.guide(GUIDES[3], language))
+            commands = [
+                command
+                for command in validate_system_commands(self.guide(GUIDES[3], language))
+                if option(command, "--prefix") == "$AW_PREVIEW_PREFIX"
+            ]
             with self.subTest(language=language):
-                self.assertEqual([command[2] for command in commands],
-                                 ["install", "install", "uninstall"])
-                self.assertEqual([option(command, "--scope") for command in commands],
-                                 ["system"] * 3)
-                self.assertEqual([option(command, "--prefix") for command in commands],
-                                 ["$AW_PREVIEW_PREFIX"] * 3)
+                self.assertEqual(
+                    [command[2] for command in commands], ["install", "install", "uninstall"]
+                )
+                self.assertEqual(
+                    [option(command, "--scope") for command in commands], ["system"] * 3
+                )
+                self.assertEqual(
+                    [option(command, "--prefix") for command in commands],
+                    ["$AW_PREVIEW_PREFIX"] * 3,
+                )
+
+    def test_resource_example_keeps_user_scope_and_reuses_the_recorded_layout(self) -> None:
+        for language in ("en", "zh"):
+            commands = [
+                command
+                for command in validate_system_commands(self.guide(GUIDES[3], language))
+                if option(command, "--prefix") == "$AW_EXAMPLE_PREFIX"
+            ]
+            with self.subTest(language=language):
+                self.assertEqual(
+                    [command[1] for command in commands], ["install", "install", "uninstall"]
+                )
+                self.assertEqual([command.count("--scope") for command in commands], [1] * 3)
+                self.assertEqual([option(command, "--scope") for command in commands], ["user"] * 3)
+                self.assertEqual(
+                    [command.count("--resources-dir") for command in commands[:2]], [1] * 2
+                )
+                self.assertEqual(
+                    [option(command, "--resources-dir") for command in commands[:2]],
+                    ["$AW_EXAMPLE_RESOURCES"] * 2,
+                )
+                self.assertNotIn("--resources-dir", commands[2])
 
     def test_missing_wrong_and_duplicate_scope_in_root_examples_are_rejected(self) -> None:
-        template = '```bash\nsudo "./bundle/aw" install {scope} --bundle /bundle --prefix /prefix\n```'
+        template = (
+            '```bash\nsudo "./bundle/aw" install {scope} --bundle /bundle --prefix /prefix\n```'
+        )
         for scope in ("", "--scope user", "--scope system --scope system"):
             with self.subTest(scope=scope), self.assertRaisesRegex(ValueError, "explicit system"):
                 validate_system_commands(template.format(scope=scope))

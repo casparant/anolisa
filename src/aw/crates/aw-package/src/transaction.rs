@@ -6,6 +6,7 @@ mod fs;
 mod journal;
 mod prepare;
 mod replay;
+mod resources;
 #[cfg(test)]
 mod tests;
 
@@ -27,6 +28,7 @@ pub(crate) struct SourceFile {
 #[derive(Clone, Debug)]
 pub(crate) struct ChangeSet {
     pub prefix: PathBuf,
+    pub resources: Option<PathBuf>,
     pub database_before: Option<Vec<u8>>,
     pub database_after: InstalledDatabase,
     pub installation_id: String,
@@ -37,6 +39,12 @@ pub(crate) struct ChangeSet {
     pub marker_before: Option<Vec<u8>>,
     pub marker_after: Option<Vec<u8>>,
     pub source_records: BTreeMap<PathBuf, Vec<u8>>,
+}
+
+impl ChangeSet {
+    fn file_path(&self, name: &str) -> PathBuf {
+        crate::database::payload_path(&self.prefix, self.resources.as_deref(), name)
+    }
 }
 
 /// Result of explicit replay; a committed database is never rolled back.

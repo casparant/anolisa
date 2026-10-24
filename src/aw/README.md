@@ -32,6 +32,16 @@ interrupted operation. User scope is the default. Root-managed raw installs
 require `sudo aw install ... --scope system`; privileges never select that scope
 implicitly. RPM/DEB support remains separate.
 
+To keep packaged resources separate from programs, choose an absolute
+`--resources-dir` on the first install:
+`aw install --prefix ABS_PROGRAM_DIR --resources-dir ABS_RESOURCE_DIR --bundle ABS_BUNDLE`.
+Files under `share/` go directly below that resource directory; `bin/` and
+`libexec/` remain below the program prefix. Subsequent installs can omit the
+option and reuse its recorded location. Existing installations without it keep
+their combined layout. The two directories may be on different filesystems;
+see the [resource layout contract](../../docs/user-guide/en/aw/packages.md#separate-resources-from-programs)
+for parent-directory requirements, verification and removal.
+
 Canonical removal asks for confirmation only with interactive stdin and stderr.
 Scripts and JSON output must use `aw uninstall --prefix ABS_DIR --yes` (or `-y`).
 Confirmation never overrides package checks or system permissions.

@@ -140,6 +140,10 @@ impl Snapshot {
             format: 1,
             action,
             prefix: prefix.into(),
+            resources: self
+                .selected
+                .as_ref()
+                .and_then(|installation| installation.resources.clone()),
             scope: paths.scope(),
             expected_generation: self.before.as_ref().map(|_| self.database.generation),
             installation_id: self
@@ -162,6 +166,7 @@ impl Snapshot {
         let mut installation = self.selected.clone().unwrap_or_else(|| Installation {
             installation_id: stable_id(paths, prefix),
             prefix: prefix.into(),
+            resources: None,
             // SAFETY: geteuid only reads process identity.
             owner_uid: if paths.scope() == Scope::System {
                 0
@@ -228,11 +233,17 @@ pub(super) fn summary(package: &database::InstalledPackage) -> PackageSummary {
     }
 }
 
-pub(super) fn files(plan: &mut PackagePlan, action: Action, package: &database::InstalledPackage) {
+pub(super) fn files(
+    plan: &mut PackagePlan,
+    action: Action,
+    package: &database::InstalledPackage,
+    installation: &Installation,
+) {
     for (path, payload) in &package.files {
         plan.files.push(FileChange {
             action,
             path: path.clone(),
+            destination: installation.file_path(path),
             sha256: payload.sha256.clone(),
             mode: payload.mode,
         });
@@ -245,6 +256,14 @@ pub(super) fn verify(
 ) -> (BTreeMap<String, Payload>, u64) {
     let mut verify = BTreeMap::new();
     let mut budget = crate::open_bundle::MAX_PAYLOAD_BYTES;
+    if let Err(error) = database::resources::check(installation) {
+        plan.problem(
+            "resource_root",
+            error.to_string(),
+            None,
+            installation.resources.clone(),
+        );
+    }
     if installation.manager != Manager::Raw {
         plan.problem(
             "native_manager",
@@ -255,7 +274,7 @@ pub(super) fn verify(
     }
     for package in &installation.packages {
         for (name, metadata) in &package.files {
-            let path = installation.prefix.join(name);
+            let path = installation.file_path(name);
             if let Err(error) = crate::open_bundle::verify(&path, metadata, &mut budget) {
                 plan.problem(
                     "file_changed",

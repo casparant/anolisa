@@ -204,3 +204,181 @@ fn symbolic_parent_components_follow_filesystem_resolution() {
     drop(lease);
     Fixture::lock(&prefix).try_lock().unwrap();
 }
+
+impl Fixture {
+    fn resources(&self, prefix: &Path, name: &str) -> PathBuf {
+        let resources = self.0.join(name);
+        fs::create_dir_all(resources.join("aw/native")).unwrap();
+        for directory in [
+            &resources,
+            &resources.join("aw"),
+            &resources.join("aw/native"),
+        ] {
+            fs::set_permissions(directory, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        fs::write(resources.join("aw/native/hook.mjs"), b"export {};\n").unwrap();
+        Self::pointer(&resources.join(".aw-installation-prefix"), prefix);
+        Self::pointer(&prefix.join(".aw-resources-dir"), &resources);
+        resources
+    }
+
+    fn pointer(path: &Path, target: &Path) {
+        use std::os::unix::ffi::OsStrExt;
+        fs::write(path, target.as_os_str().as_bytes()).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o644)).unwrap();
+    }
+}
+
+#[test]
+fn external_resources_and_their_aliases_hold_the_program_prefix_lock() {
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let resources = fixture.resources(&prefix, "portable-data");
+    let alias = fixture.0.join("resource-alias");
+    symlink(&resources, &alias).unwrap();
+    symlink(&resources, prefix.join("share")).unwrap();
+    for path in [
+        resources.join("aw/native/hook.mjs"),
+        alias.join("aw/native/hook.mjs"),
+        alias.join("aw/not-yet-created/file"),
+        prefix.join("share/aw/native/hook.mjs"),
+    ] {
+        let lease = PackageLeases::for_paths([path]).unwrap();
+        assert!(Fixture::lock(&prefix).try_lock().is_err());
+        drop(lease);
+        Fixture::lock(&prefix).try_lock().unwrap();
+    }
+}
+
+#[test]
+fn external_resource_arguments_share_the_existing_nonblocking_busy_gate() {
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let resources = fixture.resources(&prefix, "resources");
+    let mut command = CommandSpec {
+        program: "/bin/sh".into(),
+        args: vec![format!(
+            "--loader={}",
+            resources.join("aw/native/hook.mjs").display()
+        )
+        .into()],
+        cwd: fixture.0.clone(),
+        environment: BTreeMap::new(),
+    };
+    let writer = Fixture::lock(&prefix);
+    writer.try_lock().unwrap();
+    assert!(matches!(
+        PackageLeases::acquire([&mut command]),
+        Err(LeaseError::Busy(path)) if path == prefix
+    ));
+    drop(writer);
+    let lease = PackageLeases::acquire([&mut command]).unwrap();
+    assert!(Fixture::lock(&prefix).try_lock().is_err());
+    drop(lease);
+    Fixture::lock(&prefix).try_lock().unwrap();
+}
+
+#[test]
+fn external_resource_pointers_must_agree_in_both_directions() {
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let other = fixture.prefix("other-program");
+    let resources = fixture.resources(&prefix, "resources");
+    let path = resources.join("aw/native/hook.mjs");
+    Fixture::pointer(&resources.join(".aw-installation-prefix"), &other);
+    assert!(PackageLeases::for_paths([path.clone()]).is_err());
+    Fixture::pointer(&other.join(".aw-resources-dir"), &resources);
+    assert!(PackageLeases::for_paths([prefix.join("bin/runtime")]).is_err());
+    Fixture::pointer(&resources.join(".aw-installation-prefix"), &prefix);
+    PackageLeases::for_paths([path]).unwrap();
+}
+
+#[test]
+fn missing_external_resource_pointers_fail_when_either_binding_is_discoverable() {
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let resources = fixture.resources(&prefix, "resources");
+    let forward = resources.join(".aw-installation-prefix");
+    let reverse = prefix.join(".aw-resources-dir");
+    fs::remove_file(&reverse).unwrap();
+    assert!(PackageLeases::for_paths([resources.join("aw/native/hook.mjs")]).is_err());
+    Fixture::pointer(&reverse, &resources);
+    fs::remove_file(&forward).unwrap();
+    assert!(PackageLeases::for_paths([prefix.join("bin/runtime")]).is_err());
+    symlink(&resources, prefix.join("share")).unwrap();
+    assert!(PackageLeases::for_paths([prefix.join("share/aw/native/hook.mjs")]).is_err());
+    Fixture::pointer(&forward, &prefix);
+    fs::remove_file(prefix.join(".aw-install.lock")).unwrap();
+    assert!(PackageLeases::for_paths([resources.join("aw/native/hook.mjs")]).is_err());
+}
+
+#[test]
+fn external_resource_markers_reject_symbolic_hardlinked_and_writable_files() {
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let resources = fixture.resources(&prefix, "resources");
+    let path = resources.join("aw/native/hook.mjs");
+    for (marker, target) in [
+        (resources.join(".aw-installation-prefix"), prefix.clone()),
+        (prefix.join(".aw-resources-dir"), resources.clone()),
+    ] {
+        fs::set_permissions(&marker, fs::Permissions::from_mode(0o666)).unwrap();
+        assert!(PackageLeases::for_paths([path.clone()]).is_err());
+        fs::set_permissions(&marker, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(PackageLeases::for_paths([path.clone()]).is_err());
+        fs::remove_file(&marker).unwrap();
+        let outside = fixture.0.join("outside-marker");
+        Fixture::pointer(&outside, &target);
+        symlink(&outside, &marker).unwrap();
+        assert!(PackageLeases::for_paths([path.clone()]).is_err());
+        fs::remove_file(&marker).unwrap();
+        fs::hard_link(&outside, &marker).unwrap();
+        assert!(PackageLeases::for_paths([path.clone()]).is_err());
+        fs::remove_file(&marker).unwrap();
+        fs::remove_file(&outside).unwrap();
+        Fixture::pointer(&marker, &target);
+    }
+    fs::set_permissions(&resources, fs::Permissions::from_mode(0o777)).unwrap();
+    assert!(PackageLeases::for_paths([path]).is_err());
+}
+
+#[test]
+fn external_resource_markers_reject_unbounded_and_noncanonical_targets() {
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let resources = fixture.resources(&prefix, "resources");
+    let forward = resources.join(".aw-installation-prefix");
+    let alias = fixture.0.join("program-alias");
+    symlink(&prefix, &alias).unwrap();
+    use std::os::unix::ffi::OsStrExt;
+    for bytes in [
+        Vec::new(),
+        vec![b'a'; 4097],
+        b"relative/program".to_vec(),
+        prefix.join(".").as_os_str().as_bytes().to_vec(),
+        prefix.join("bin/..").as_os_str().as_bytes().to_vec(),
+        alias.as_os_str().as_bytes().to_vec(),
+    ] {
+        fs::write(&forward, bytes).unwrap();
+        assert!(PackageLeases::for_paths([resources.join("aw/native/hook.mjs")]).is_err());
+    }
+    Fixture::pointer(&forward, &prefix);
+    PackageLeases::for_paths([resources.join("aw/native/hook.mjs")]).unwrap();
+}
+
+#[test]
+fn external_resource_bindings_preserve_raw_non_utf8_path_bytes() {
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+    let fixture = Fixture::new();
+    let prefix = fixture.prefix("program");
+    let resources = fixture.resources(&prefix, "resources");
+    let non_utf8 = fixture
+        .0
+        .join(OsString::from_vec(b"resources-\xff".to_vec()));
+    fs::rename(&resources, &non_utf8).unwrap();
+    Fixture::pointer(&prefix.join(".aw-resources-dir"), &non_utf8);
+    let lease = PackageLeases::for_paths([non_utf8.join("aw/native/hook.mjs")]).unwrap();
+    assert!(Fixture::lock(&prefix).try_lock().is_err());
+    drop(lease);
+    Fixture::lock(&prefix).try_lock().unwrap();
+}

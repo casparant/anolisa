@@ -26,6 +26,13 @@ Rust 库保留。每个 bundle 根目录携带 `aw` 用于首次安装，必须�
 尚未提交的操作。默认使用当前用户的数据库。root 管理的 raw 安装必须显式使用
 `sudo aw install ... --scope system`，权限不会自动选择 system。RPM/DEB 暂未接入。
 
+需要将包内资源与程序分开存放时，在首次安装选择绝对路径 `--resources-dir`：
+`aw install --prefix ABS_PROGRAM_DIR --resources-dir ABS_RESOURCE_DIR --bundle ABS_BUNDLE`。
+`share/` 下的文件去掉该前缀后直接安装到资源目录，`bin/` 和 `libexec/` 仍放在
+程序目录下。后续安装可省略此选项，沿用已记录的位置；未使用此选项的已有安装
+继续使用合并布局。两个目录可以位于不同文件系统。父目录要求、验证和卸载说明见
+[资源目录合同](../../docs/user-guide/zh/aw/packages.md#将资源与程序分开存放)。
+
 新卸载入口仅在 stdin 和 stderr 都是交互终端时询问确认。
 脚本或 JSON 输出必须使用 `aw uninstall --prefix ABS_DIR --yes`（或 `-y`）。
 确认不覆盖包检查或系统权限。

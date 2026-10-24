@@ -94,6 +94,19 @@ pub(super) fn check(inventory: &Inventory) -> Result<DoctorReport> {
     let mut budget = MAX_TOTAL_BYTES;
     for installation in &inventory.installations {
         report.installations_checked += 1;
+        if let Err(error) = super::resources::check(installation) {
+            issue(
+                &mut report,
+                installation,
+                None,
+                installation
+                    .resources
+                    .as_deref()
+                    .unwrap_or(&installation.prefix),
+                DoctorIssueCode::Directory,
+                error.to_string(),
+            );
+        }
         let root_issue = match paths::directory(&installation.prefix) {
             Ok(root) => {
                 let metadata = root.metadata()?;
@@ -150,7 +163,7 @@ pub(super) fn check(inventory: &Inventory) -> Result<DoctorReport> {
             }
             for (name, expected) in &package.files {
                 report.files_checked += 1;
-                let path = installation.prefix.join(name);
+                let path = installation.file_path(name);
                 match file(&path, expected, &mut budget) {
                     Ok(findings) => {
                         for (code, message) in findings {

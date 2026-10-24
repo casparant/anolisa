@@ -14,6 +14,8 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+mod resources;
+
 type Result<T> = std::result::Result<T, LeaseError>;
 
 fn io(path: &Path, source: io::Error) -> LeaseError {
@@ -110,16 +112,19 @@ pub(super) fn commands<'a>(
 
 pub(super) fn paths(paths: impl IntoIterator<Item = PathBuf>) -> Result<PackageLeases> {
     let mut candidates = BTreeSet::new();
+    let mut references = Vec::new();
     for path in paths {
-        discover(&absolute(&path)?, &mut candidates)?;
+        discover(&absolute(&path)?, &mut candidates, &mut references)?;
         let resolved = existing_ancestor(&path)?;
         if resolved != path {
-            discover(&resolved, &mut candidates)?;
+            discover(&resolved, &mut candidates, &mut references)?;
         }
     }
     let mut held = Vec::new();
     for prefix in candidates {
-        held.push(acquire(&prefix)?);
+        let lock = acquire(&prefix)?;
+        resources::verify(&prefix, &references)?;
+        held.push(lock);
     }
     Ok(PackageLeases { _held: held })
 }
@@ -153,10 +158,22 @@ fn exists(path: &Path) -> Result<bool> {
     }
 }
 
-fn discover(path: &Path, prefixes: &mut BTreeSet<PathBuf>) -> Result<()> {
+fn discover(
+    path: &Path,
+    prefixes: &mut BTreeSet<PathBuf>,
+    references: &mut Vec<resources::Reference>,
+) -> Result<()> {
     for prefix in path.ancestors() {
-        if exists(&prefix.join(".aw-packages"))? || exists(&prefix.join(".aw-install.lock"))? {
+        if exists(&prefix.join(".aw-packages"))?
+            || exists(&prefix.join(".aw-install.lock"))?
+            || exists(&prefix.join(".aw-resources-dir"))?
+        {
             prefixes.insert(fs::canonicalize(prefix).map_err(|error| io(prefix, error))?);
+        }
+        if exists(&prefix.join(".aw-installation-prefix"))? {
+            let reference = resources::discover(prefix)?;
+            prefixes.insert(reference.prefix().to_owned());
+            references.push(reference);
         }
     }
     Ok(())

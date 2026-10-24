@@ -55,6 +55,39 @@ fn install_limit(
 }
 
 #[test]
+fn mapped_locator_actions_are_admitted_within_the_same_transaction_limit() {
+    let temporary = root();
+    let root = temporary.path();
+    let paths = DatabasePaths::user(Some(root), None).unwrap();
+    let prefix = root.join("installed");
+    let resources = root.join("resources");
+    let bundle = bundle_files(root, "schema", &["share/schema.json"]);
+    let limits = Limits {
+        actions: 3,
+        directories: 32,
+    };
+    let old_layout = install_limit(&paths, &bundle, &prefix, limits);
+    assert!(old_layout.ready(), "{:?}", old_layout.problems);
+    let before = snapshot(root);
+    let mapped = plan_with_resources(
+        &paths,
+        &bundle,
+        &prefix,
+        open_bundle::MAX_PAYLOAD_BYTES,
+        limits,
+        Some(&resources),
+    )
+    .unwrap();
+    assert!(!mapped.ready());
+    assert!(mapped
+        .problems
+        .iter()
+        .any(|problem| problem.code == "transaction_limit"));
+    assert!(crate::plan::execute(&paths, &mapped, &AtomicBool::new(false)).is_err());
+    assert_eq!(before, snapshot(root));
+}
+
+#[test]
 fn aggregate_journal_admission_keeps_whole_prefix_removal_possible() {
     let temporary = root();
     let root = temporary.path();

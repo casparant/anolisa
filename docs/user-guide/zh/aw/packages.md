@@ -10,8 +10,8 @@
 `aw config validate` 沿用 `aw validate` 的相对路径与 `--against` 语义。
 原独立命令的编辑器验证已移除，没有提供相同所有权检查的 CLI 替代入口；Rust 编辑器 API 保留这些检查。
 原生 Hook 注册使用 `aw agent connect`；旧的 `aw install --config ... --agent ...`
-仍兼容，但不能混用软件安装选项。安装仍只接受解压后的本地 Preview 包，不接受
-URL 或任意组件名称。
+仍兼容，但不能混用软件安装选项。安装接受解压后的本地 bundle，包括 Preview 包；
+不解析 URL 或任意组件名称。
 
 只安装 AW core 即可运行已有的 Qoder 或 OpenClaw，无需 Provider。按需添加 sec-core 或自定义布尔判断脚本，使用同一份 AW 配置。AW 和 sec-core 的构建、安装及运行使用 Rust 二进制，不依赖 Python；用户脚本自行承担其运行依赖。OpenClaw 仍需 Node.js，各 Agent 的模型账户由其原生配置管理。
 
@@ -52,6 +52,60 @@ XDG/HOME 下的数据库。普通用户执行 `aw config init` 会跟随前缀�
 默认构建只生成 core；`--component all` 生成四个包。`aw-core` 安装 `bin/aw`；`aw-provider-sec-core` 包含 Provider 和 Rust V2 sec-core CLI/daemon；`aw-provider-tokenless` 包含桥接、Tokenless CLI 和固定版本带补丁的 RTK；`aw-all-in-one` 包含完全相同的三个组件。每个归档根目录另带 `aw` 用于引导，Provider-only 归档也包含它。分包安装时，分别解压 core 和 Provider，依次用 `sudo` 和包内 `aw install --scope system --bundle ABS_BUNDLE --prefix ABS_PREFIX` 安装到同一个新前缀，**先装 core**。两包须使用同一个 scope，之后不要再往该前缀安装 all-in-one。
 
 安装器校验哈希、权限、架构、版本及源码提交，拒绝覆盖，并在 `.aw-packages` 记录文件归属。安装过程中收到 Ctrl-C（SIGINT）或 SIGTERM 会回滚本次写入，随后可重试；强制终止（SIGKILL）不在自动回滚范围内。校验和用于发现损坏，不是发布者签名。安装父目录须归安装用户所有，且不可被其他用户写入。系统后端的安装由 root 管理；若连接已有后端，也支持普通用户安装到自己的目录。
+
+## 将资源与程序分开存放
+
+本地安装需要分别放置程序和资源时，使用 `--resources-dir ABS_DIR`。包描述和
+解包后的 bundle 保留原有逻辑路径；安装器将所选资源目录写入安装记录的可选
+`resources` 字段，并按以下规则确定实际位置。
+
+| 包内逻辑路径 | 安装位置 |
+| --- | --- |
+| `bin/example` | `PREFIX/bin/example` |
+| `libexec/example/helper` | `PREFIX/libexec/example/helper` |
+| `share/example/schema.json` | `RESOURCES_DIR/example/schema.json` |
+
+`share/` 前缀会被去掉，不会再创建 `RESOURCES_DIR/share/`。新安装省略此选项时，
+`share/` 仍位于 prefix 下；没有 `resources` 字段的旧数据库记录保留此布局。
+向已经记录资源目录的安装追加包时，可省略此选项，沿用原位置。显式传入其他目录
+会被拒绝；此选项不迁移已有的合并或分离布局。
+
+请选择两个全新、互相独立且专用于该应用的目录。首次安装时资源根目录必须不存在，
+其父目录由你预先准备。父目录必须属于安装用户，不允许 group/world 写入，也不能
+经过符号链接。资源根不能与程序 prefix、包数据库或该数据库中其他安装的程序/资源根
+相等，也不能互为祖先目录。下面路径由用户自行选择，不代表产品默认目录。
+
+```bash
+AW_EXAMPLE_PREFIX="$HOME/.local/lib/aw-example/1"
+AW_EXAMPLE_RESOURCES="$HOME/.local/share/aw-example/1"
+install -d -m 755 "$HOME/.local/lib/aw-example" "$HOME/.local/share/aw-example"
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle \
+  --dry-run --json
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle
+aw doctor --prefix "$AW_EXAMPLE_PREFIX" --json
+aw uninstall --scope user --prefix "$AW_EXAMPLE_PREFIX" --dry-run --json
+```
+
+`--dry-run` 使用相同安装计划器，不创建安装记录、目录或锁。输出的文件变更同时
+包含逻辑 `path` 和实际绝对 `destination`。`aw list --installed --json` 返回记录中的
+`resources`；`doctor`、卸载和 `aw config init` 按该记录定位文件，不需要再次
+提供资源参数。完整性错误会指出实际资源路径。可变配置、state 和凭据应放在
+这两个包属目录之外。
+
+AW 写入两个普通元数据文件：`PREFIX/.aw-resources-dir` 指向资源根，
+`RESOURCES_DIR/.aw-installation-prefix` 指回程序 prefix。即使首个包没有
+`share/` 文件，也会建立这两个文件。不要移动已经登记的目录或编辑这些文件；
+校验会检测元数据缺失或冲突。显式命令或绝对参数引用资源时，运行时包读锁会
+通过资源侧的位置文件，找到相同的 prefix 锁。
+
+程序和资源根可以位于不同设备。两个文件系统各自暂存 payload 和备份，使用同一
+持久事务，数据库提交仍是唯一提交点。两个文件系统都须支持 Linux `O_TMPFILE`、
+硬链接、目录 fsync 和所需的 `renameat2` 操作；不支持时明确失败，不退回不安全的
+暂存方式。卸载只从实际位置删除所选包已校验的文件，未知文件保留。最后一个包
+卸载后，两个根目录、双向位置元数据及空安装登记仍然保留，可在同一记录布局中
+继续安装。跨两个根目录的操作中断后，`aw recover` 按保留的事务记录恢复。
 
 ## 无 Provider 使用 core
 

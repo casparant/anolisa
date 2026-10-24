@@ -22,6 +22,28 @@ pub(crate) fn database(database: &InstalledDatabase, scope: Scope) -> Result<()>
     for installation in &database.installations {
         identifier(&installation.installation_id)?;
         paths::absolute(&installation.prefix)?;
+        if let Some(resources) = &installation.resources {
+            super::resources::validate(&installation.prefix, resources)?;
+            require(
+                installation.manager == super::Manager::Raw,
+                "external resource mapping requires raw package management",
+            )?;
+            for other in &database.installations {
+                require(
+                    !other.prefix.starts_with(resources) && !resources.starts_with(&other.prefix),
+                    "resource root overlaps an installation prefix",
+                )?;
+                if other.installation_id != installation.installation_id {
+                    if let Some(other_resources) = &other.resources {
+                        require(
+                            !other_resources.starts_with(resources)
+                                && !resources.starts_with(other_resources),
+                            "resource roots of different installations overlap",
+                        )?;
+                    }
+                }
+            }
+        }
         require(
             ids.insert(&installation.installation_id) && prefixes.insert(&installation.prefix),
             "duplicate installation ID or prefix",
@@ -92,7 +114,11 @@ pub(crate) fn database(database: &InstalledDatabase, scope: Scope) -> Result<()>
             }
             for path in package.files.keys() {
                 require(
-                    owned.insert(installation.prefix.join(path)),
+                    path != super::resources::LOGICAL_LOCATOR,
+                    "payload overlaps the resource installation locator",
+                )?;
+                require(
+                    owned.insert(installation.file_path(path)),
                     format!("overlapping installed file ownership: {path}"),
                 )?;
             }

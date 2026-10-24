@@ -10,6 +10,7 @@ use std::{collections::BTreeMap, path::Path};
 
 pub(super) struct Selection {
     pub packages: BTreeMap<String, InstalledPackage>,
+    resources: Option<std::path::PathBuf>,
     _inventory: Option<Inventory>,
     _prefix_lock: PackageLock,
 }
@@ -35,8 +36,11 @@ impl Selection {
                 .filter(|package| names.contains(&package.package_id.as_str()))
                 .map(|package| (package.package_id.clone(), package.clone()))
                 .collect();
+            let resources = installation.resources.clone();
+            crate::database::resources::check(installation)?;
             Ok(Self {
                 packages,
+                resources,
                 _inventory: Some(inventory),
                 _prefix_lock: lock,
             })
@@ -71,6 +75,7 @@ impl Selection {
                 .collect();
             Ok(Self {
                 packages,
+                resources: None,
                 _inventory: None,
                 _prefix_lock: lock,
             })
@@ -81,7 +86,7 @@ impl Selection {
         let mut budget = 4 * 1024 * 1024 * 1024;
         for package in self.packages.values() {
             for (name, metadata) in &package.files {
-                let path = prefix.join(name);
+                let path = crate::database::payload_path(prefix, self.resources.as_deref(), name);
                 crate::open_bundle::verify(&path, metadata, &mut budget).map_err(|error| {
                     crate::Error::Invalid(format!(
                         "installed file modified or missing: {} (package {}): {error}",

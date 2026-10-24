@@ -41,8 +41,10 @@ pub struct PackageSummary {
 pub struct FileChange {
     /// Add or remove operation for this relative file.
     pub action: Action,
-    /// Path relative to the selected prefix.
+    /// Logical payload path, independent of the selected resource directory.
     pub path: String,
+    /// Actual absolute destination after applying the installation's persisted layout.
+    pub destination: PathBuf,
     /// Expected content digest.
     pub sha256: String,
     /// Expected Unix permission bits.
@@ -85,6 +87,8 @@ pub struct PackagePlan {
     pub action: Action,
     /// Explicit absolute payload directory.
     pub prefix: PathBuf,
+    /// External `share/` payload directory, if selected for this installation.
+    pub resources: Option<PathBuf>,
     /// Explicit database privilege boundary.
     pub scope: Scope,
     /// Snapshot generation, absent for a database that does not yet exist.
@@ -136,7 +140,20 @@ impl PackagePlan {
 /// # Errors
 /// Rejects malformed input, unsafe paths and inconsistent database records.
 pub fn install(paths: &DatabasePaths, bundle: &Path, prefix: &Path) -> Result<PackagePlan> {
-    install::plan(paths, bundle, prefix)
+    install_with_resources(paths, bundle, prefix, None)
+}
+
+/// Install using an explicit external resource directory, or reuse the recorded layout.
+///
+/// # Errors
+/// Rejects unsafe or overlapping roots and attempts to change an existing installation's layout.
+pub fn install_with_resources(
+    paths: &DatabasePaths,
+    bundle: &Path,
+    prefix: &Path,
+    resources: Option<&Path>,
+) -> Result<PackagePlan> {
+    install::plan(paths, bundle, prefix, resources)
 }
 
 /// Derive a selective removal plan; an empty ID list selects the whole prefix.
