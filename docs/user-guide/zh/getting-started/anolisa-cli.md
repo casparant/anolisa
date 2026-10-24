@@ -1,8 +1,8 @@
 # anolisa CLI
 
-`anolisa` CLI 是 ANOLISA 组件的统一生命周期入口。它负责解析组件来源、
-维护按 scope 隔离的安装记录、将 RPM transaction 委托给 native package
-manager，并诊断或修复状态漂移。
+`anolisa` CLI 用于安装完整 ANOLISA 产品发行及管理独立组件。完整 Linux
+发行使用 AW 包记录和按版本分开的程序目录。已有组件命令解析 raw/RPM 来源，
+维护按 scope 隔离的记录，并诊断或修复状态漂移。
 
 ---
 
@@ -13,6 +13,11 @@ manager，并诊断或修复状态漂移。
 ```bash
 curl -fsSL https://get.agentic-os.sh | bash
 ```
+
+在 GNU/Linux x86_64 或 aarch64 上，此命令将完整产品安装到 user scope，
+下载和解包需要 Python 3.6 或更新版本。在 macOS 上，它安装独立 CLI。Linux 用户可以通过
+`--cli-only` 选择独立 CLI 渠道。版本选择、归档安装、文件位置、已有入口冲突和
+旧参数说明见[安装指南](installation.md)。
 
 ### 方式 B：YUM（Alinux）
 
@@ -28,7 +33,40 @@ anolisa --version
 
 ---
 
-## Scope 与可见性
+## 完整产品发行命令
+
+这些命令使用已经校验并解包的 Linux 产品归档。`--bundle` 必须是其真实目录
+的绝对路径；首次安装使用归档内的准确 CLI。
+
+```bash
+./packages/anolisa-cli/payload/bin/anolisa release inspect --bundle "$PWD" --json
+./packages/anolisa-cli/payload/bin/anolisa release install --bundle "$PWD" --scope user --dry-run --json
+./packages/anolisa-cli/payload/bin/anolisa release install --bundle "$PWD" --scope user --json
+./packages/anolisa-cli/payload/bin/anolisa release status --bundle "$PWD" --scope user --json
+```
+
+`release inspect` 校验归档描述和文件内容，不调用 AW 或写入安装状态。
+`release install --dry-run` 预览所选发行并检查冲突，不安装包或修改公共命令。
+`release status` 读取持久化产品进度和实际的当前版本引用，不报告服务健康状态。
+
+产品的 `--scope` 默认值始终为 `user`，包括 root 执行时。system 安装必须
+显式选择 `--scope system` 并以 root 执行，不会自动调用 `sudo`。不要将
+release 命令与旧的 `--install-mode` 或 `--prefix` 混用。按版本分开的程序
+目录和外置配置、数据目录见[安装指南](installation.md#程序配置与包数据库的位置)。
+
+安装会记录每个 AW 包的提交，全部包通过验证后才选择新发行。中断后请保留
+归档和输出中的产品记录；使用同一归档、相同 scope 再次安装可以继续该操作。
+已提交的包仍记录在案，不会被描述为整次发行已经回滚。无法确认归属的已有命令
+入口和编辑过的配置会被保留并报告冲突。旧独立 CLI 记录与组件数据不会自动迁移。
+
+安装会准备处于禁用状态的 Provider 模板，固定程序和资源路径。必须按实际调用
+用户的目录渲染运行参数；模板不是可直接执行的 AW transport 定义，AW 不在 argv
+中展开 shell 变量。系统安装不会将用户数据或会话 socket 绑定到 root 安装者的
+环境。启用 Provider、连接原生 Agent、
+创建服务用户、应用 capability 和启动服务需要另行配置。`anolisa status`、
+`anolisa update all` 及下文其他组件命令不管理 AW 产品发行的生命周期。
+
+## 已有组件的 scope 与可见性
 
 `--install-mode user` 写入当前用户目录，`--install-mode system` 写入
 system state，通常需要 root。未指定时，root 默认使用 system mode，普通
@@ -40,7 +78,7 @@ system state，通常需要 root。未指定时，root 默认使用 system mode�
 
 ---
 
-## 命令
+## 已有组件命令
 
 ### install
 
@@ -95,6 +133,9 @@ anolisa update --check
 
 `update all` 不更新 CLI 本身。delegated 成员会在可行时合并成一次 native
 transaction，但每个组件仍保留独立的 recovery journal 和 record。
+
+`update self` 拒绝直接替换 AW 管理的产品 CLI，应通过已校验的产品发行更新
+该 CLI。独立 CLI 保留原有自更新流程；RPM 管理的 CLI 仍由原生包管理器更新。
 
 ### list 与 status
 
@@ -322,8 +363,8 @@ journal 会有意保持 pending，等待人工检查。
 
 | 选项 | 说明 |
 |------|------|
-| `--install-mode user\|system` | 选择修改 scope |
-| `--prefix <PATH>` | 覆盖所选 scope 的安装前缀 |
+| `--install-mode user\|system` | 选择已有组件命令的修改 scope |
+| `--prefix <PATH>` | 覆盖已有组件命令的安装前缀 |
 | `--dry-run` | 输出计划但不执行 |
 | `--json` | 输出机器可读的 JSON |
 | `-v, --verbose` | 增加详细程度 |
@@ -334,13 +375,13 @@ journal 会有意保持 pending，等待人工检查。
 
 ---
 
-## 示例流程
+## 已有组件流程示例
 
 先安装需要使用的 Agent，再扫描它的 adapter，并用扫描结果中的名称替换
 `<framework>`：
 
 ```bash
-curl -fsSL https://get.agentic-os.sh | bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --cli-only
 anolisa env
 anolisa install tokenless
 anolisa adapter scan

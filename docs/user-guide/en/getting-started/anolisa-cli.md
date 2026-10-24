@@ -1,8 +1,9 @@
 # anolisa CLI
 
-The `anolisa` CLI is the unified lifecycle entry point for ANOLISA components.
-It resolves component sources, keeps scoped installation records, delegates RPM
-transactions to the native package manager, and diagnoses or repairs drift.
+The `anolisa` CLI installs complete ANOLISA product releases and manages
+individual components. Complete Linux releases use AW package records and
+versioned program directories. The existing component commands resolve raw/RPM
+sources, maintain scoped records, and diagnose or repair drift.
 
 ---
 
@@ -13,6 +14,12 @@ transactions to the native package manager, and diagnoses or repairs drift.
 ```bash
 curl -fsSL https://get.agentic-os.sh | bash
 ```
+
+On GNU/Linux x86_64 or aarch64 this installs the complete product in user scope
+and requires Python 3.6 or newer for download and extraction. On macOS it installs the
+standalone CLI. Use `--cli-only` on Linux to select the standalone CLI channel.
+See the [installation guide](installation.md) for version selection, archive
+installation, file locations, existing-entry conflicts, and legacy overrides.
 
 ### Option B: YUM (Alinux)
 
@@ -28,7 +35,50 @@ anolisa --version
 
 ---
 
-## Scope And Visibility
+## Complete product release commands
+
+These commands use a verified, already unpacked Linux product archive. `--bundle`
+must name its absolute real directory; use the exact binary shipped in that
+archive for initial installation:
+
+```bash
+./packages/anolisa-cli/payload/bin/anolisa release inspect --bundle "$PWD" --json
+./packages/anolisa-cli/payload/bin/anolisa release install --bundle "$PWD" --scope user --dry-run --json
+./packages/anolisa-cli/payload/bin/anolisa release install --bundle "$PWD" --scope user --json
+./packages/anolisa-cli/payload/bin/anolisa release status --bundle "$PWD" --scope user --json
+```
+
+`release inspect` verifies the bundle's descriptors and payloads without invoking
+AW or writing installation state. `release install --dry-run` previews the
+selected release and checks for conflicts without installing packages or
+changing public commands. `release status` reads durable product progress and
+the actual current-version reference; it does not report service health.
+
+Product `--scope` defaults to `user` even when run as root. System installation
+requires `--scope system` and root; it never invokes `sudo` automatically.
+Do not combine release commands with legacy `--install-mode` or `--prefix`.
+The product's versioned program directories and external configuration/data
+roots are listed in the [installation guide](installation.md#program-configuration-and-package-database-locations).
+
+Installation records each AW package commit and verifies all packages before
+selecting the new release. If it stops, keep the bundle and reported product
+record; repeating installation for the identical bundle and scope resumes the
+operation. Partial package commits remain recorded rather than being presented
+as a release-wide rollback. Existing unrecognized command entries and edited
+configuration are preserved and reported as conflicts. Old standalone CLI
+records and component data are not automatically migrated.
+
+Installation prepares disabled Provider templates with fixed program/resource
+paths. Render their user-directory arguments for the actual invoking user;
+these templates are not executable AW transport definitions and AW does not
+expand shell variables in argv. System installation does not bind user data or
+session sockets to the root installer's environment. Enabling a Provider,
+connecting a native Agent, creating service users, applying capabilities, and
+starting services require separate configuration. `anolisa status`,
+`anolisa update all`, and the other component commands below do not manage the
+AW product release lifecycle.
+
+## Existing component scope and visibility
 
 `--install-mode user` writes under the current user's roots, while
 `--install-mode system` writes system state and normally requires root. When
@@ -43,7 +93,7 @@ installation of the same component.
 
 ---
 
-## Commands
+## Existing component commands
 
 ### install
 
@@ -104,6 +154,10 @@ anolisa update --check
 `update all` does not update the CLI binary. Delegated members are merged into
 one native transaction where possible; each component keeps its own recovery
 journal and record.
+
+`update self` refuses to directly replace an AW-managed product CLI. Install a
+verified product release to replace that CLI. A standalone CLI retains its
+self-update flow; an RPM-owned CLI delegates to the native package manager.
 
 ### list and status
 
@@ -362,8 +416,8 @@ inspection.
 
 | Option | Description |
 |--------|-------------|
-| `--install-mode user\|system` | Select the mutation scope |
-| `--prefix <PATH>` | Override the selected scope's install prefix |
+| `--install-mode user\|system` | Select the existing component command's mutation scope |
+| `--prefix <PATH>` | Override the existing component command's install prefix |
 | `--dry-run` | Print the plan without executing it |
 | `--json` | Emit machine-readable JSON |
 | `-v, --verbose` | Increase verbosity |
@@ -374,13 +428,13 @@ inspection.
 
 ---
 
-## Example Workflow
+## Existing component workflow example
 
 With your Agent already installed, scan for its adapter and use the reported
 name in place of `<framework>`:
 
 ```bash
-curl -fsSL https://get.agentic-os.sh | bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --cli-only
 anolisa env
 anolisa install tokenless
 anolisa adapter scan

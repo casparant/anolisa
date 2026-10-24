@@ -2,27 +2,44 @@
 
 [English](README.md)
 
-ANOLISA 统一 CLI 网关——管理组件生命周期、框架适配器、OS 基础层和系统服务。anolisa 是 [ANOLISA](../../README_zh.md) 项目的主用户入口，通过一条命令完成所有组件的安装、更新、诊断和编排。
+ANOLISA 产品安装和组件管理的统一 CLI 网关。CLI 通过 AW 安装经过校验的完整
+Linux 发行，同时保留已有 raw/RPM 组件和 adapter 流程。
+它是 [ANOLISA](../../README_zh.md) 项目的主要用户入口。
 
 ## 快速开始
 
 ```bash
-# 列出可用组件
-anolisa list
-
-# 安装组件
-anolisa install agent-memory
-
-# 检查组件健康
-anolisa status agent-memory
-
-# 更新所有
-anolisa update all
+curl -fsSL https://get.agentic-os.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+anolisa --version
 ```
+
+GNU/Linux x86_64 和 aarch64 默认将完整产品安装到 user scope，下载引导需要
+Python 3.6 或更新版本。macOS 安装独立 CLI；Linux 也可用 `--cli-only` 选择独立 CLI。
+已下载完整归档时，执行其中的 `./install.sh --scope user`，或以 root 执行
+`./install.sh --scope system`。安装不会启用 Provider 或服务。已有独立命令
+入口会被保留，需要明确处理冲突后才能激活产品。
+
+系统 tarball 安装将公共命令放入 `/usr/local/bin`，私有程序放入
+`/usr/local/lib/anolisa`，静态资源放入 `/usr/local/share/anolisa`。用户安装
+将私有程序与 XDG 资源分开，AW 同时登记两处位置。禁用的 Provider 模板固定
+同版程序路径；运行数据与 socket 必须按实际运行用户解析，与软件安装范围分别决定。
+
+`--release-version`、`--release-url`、目录、兼容性和离线安装说明见
+[安装指南](../../docs/user-guide/zh/getting-started/installation.md)。
+`release inspect`、`release install` 和 `release status` 见
+[CLI 参考](../../docs/user-guide/zh/getting-started/anolisa-cli.md#完整产品发行命令)。
 
 ## 命令概览
 
-### 一级命令 — 组件生命周期
+### 完整产品发行
+
+`anolisa release install --bundle ABS_DIRECTORY --scope user|system` 安装或
+继续已校验的解包发行，添加 `--dry-run --json` 可预览。
+`release status` 读取其产品进度。产品 scope 默认 user，即使以 root 执行
+也一样；它与下文旧的 `--install-mode` 选项分开。
+
+### 一级命令 — 已有组件生命周期
 
 | 命令 | 说明 |
 |------|------|
@@ -72,7 +89,7 @@ ANOLISA 管理插件链接；启用或禁用后需重启 OpenCode。
 `anolisa adapter enable tokenless qwenwork` 接入 Tokenless。完成后重启应用并在应用内
 检查激活状态；CLI 验证文件，但激活状态为 `unknown`。已有脚本安装需先卸载再通过 CLI 启用。
 
-## 安装模式
+## 已有组件安装模式
 
 | 模式 | 前缀 | 使用场景 |
 |------|------|----------|
@@ -80,6 +97,9 @@ ANOLISA 管理插件链接；启用或禁用后需重启 OpenCode。
 | `user` | `~/.local` | 普通用户运行时的默认值 |
 
 可通过 `--install-mode user|system` 显式选择。
+这些模式用于已有组件命令，完整产品发行使用 `--scope` 和按版本分开的目录。
+`update all` 不更新 AW 产品发行；`update self` 拒绝直接替换 AW 管理的产品
+CLI。RPM 管理的 CLI 自更新仍由原生包管理器完成。
 
 只读发现范围比修改范围更广：普通用户可以列出、检查和诊断可见的
 system 安装，也可以让 adapter 识别它；生命周期修改仍然只作用于所选

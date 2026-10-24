@@ -136,6 +136,19 @@ pub(super) fn run(
     ctx: &CliContext,
     on_progress: Option<&ProgressFn>,
 ) -> Result<SelfUpdateApplicationOutcome, Box<SelfUpdateApplicationError>> {
+    // Product-managed binaries must not use the standalone manifest, even
+    // for preview: its advertised CLI version is not the product version.
+    core_self_update::resolve_current_exe()
+        .and_then(|path| core_self_update::ensure_standalone_executable(&path))
+        .map_err(|error| {
+            Box::new(SelfUpdateApplicationError {
+                error: CliError::Runtime {
+                    command: "update self".to_string(),
+                    reason: error.to_string(),
+                },
+                warnings: Vec::new(),
+            })
+        })?;
     let ops = SystemSelfUpdateOps;
     let query = RpmPackageQuery::system();
     let txn = RpmTransaction::system();

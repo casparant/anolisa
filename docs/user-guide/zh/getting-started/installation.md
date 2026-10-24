@@ -2,18 +2,126 @@
 
 [English](../../en/getting-started/installation.md)
 
-本指南介绍如何安装 ANOLISA CLI、所需组件和适配器。
+在 GNU/Linux 上安装完整 ANOLISA 产品，再配置需要的 Agent 集成和服务。
+macOS 及已有的组件安装流程继续使用下文介绍的独立 CLI 渠道。
+
+## 在 Linux 上安装完整产品
+
+在 GNU/Linux x86_64 或 aarch64 上，默认安装脚本下载完整产品归档，校验索引
+声明的字节数和 SHA-256，再执行归档内的本地安装器。下载和安全解包需要
+Python 3.6 或更新版本。完整产品不支持 macOS 或 musl Linux。
+
+```bash
+curl -fsSL https://get.agentic-os.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+anolisa --version
+```
+
+默认使用 `--scope user`，即使当前用户是 root 也一样。可以选择已发布的产品
+版本或独立的发行索引。
+
+```bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --release-version 1.2.3 --scope user
+curl -fsSL https://get.agentic-os.sh | bash -s -- --release-version 1.2.3 --release-url https://example.org/anolisa/release-index.json --scope user
+```
+
+请将 `1.2.3` 替换为可用的产品版本。`--release-version` 接受 `stable` 或
+SemVer 版本。`ANOLISA_RELEASE_VERSION` 和 `ANOLISA_RELEASE_URL` 可以向
+执行安装脚本的 shell 提供相同设置。默认 stable 索引为
+`https://anolisa.oss-cn-hangzhou.aliyuncs.com/anolisa-releases/anolisa/v1/product/release-index.json`。
+指定具体版本且未提供 `--release-url` 时，索引使用同一仓库根目录下的
+`v1/product/releases/<version>/release-index.json`。指定版本必须与所选 JSON
+索引中的 `product_version` 一致。产品流程失败时直接停止，不会转去安装独立 CLI。
+
+system 安装必须显式选择 `--scope system`，并由已有权限的进程执行。
+产品安装器不会代为调用 `sudo`。请先下载、检查脚本或归档，再自行选择执行权限。
+
+### 安装已下载的归档
+
+从发行方下载匹配的 `anolisa-VERSION-linux-ARCH-gnu.tar.gz` 及其 `.sha256`
+文件，校验后解包，再执行归档中的安装器。归档中只有一个顶层目录，名称为
+`anolisa-RELEASE_ID-linux-ARCH`；请使用该次发行的实际名称。
+
+```bash
+sha256sum -c anolisa-VERSION-linux-x86_64-gnu.tar.gz.sha256
+tar -xzf anolisa-VERSION-linux-x86_64-gnu.tar.gz
+cd anolisa-RELEASE_ID-linux-x86_64
+./install.sh --scope user
+```
+
+system 安装请在 root shell 中执行 `./install.sh --scope system`。本地安装
+不需要 Python 或网络下载，会调用归档内的准确 CLI。可以使用该二进制预览、
+检查归档或读取进度；`--bundle` 必须使用解包目录的绝对路径。
+
+```bash
+./packages/anolisa-cli/payload/bin/anolisa release inspect --bundle "$PWD" --json
+./packages/anolisa-cli/payload/bin/anolisa release install --bundle "$PWD" --scope user --dry-run --json
+./packages/anolisa-cli/payload/bin/anolisa release status --bundle "$PWD" --scope user --json
+```
+
+安装中断时请保留归档。以相同 scope 重复安装同一发行，会先核验已安装的包，
+再继续已有进度。失败时可能已经有部分包在 AW 中提交；请保留输出中的安装记录
+和恢复信息。全部包验证通过后，安装器才会选择新发行。安装不会启用 Provider、
+连接原生 Agent、启动 daemon 或激活 systemd unit。
+
+### 程序、配置与包数据库的位置
+
+以下 `ARCH` 为 `x86_64` 或 `aarch64`。`RELEASE_ID` 标识包含源码版本的
+不可变发行，可以与产品版本不同。
+
+| 内容 | user scope | system scope |
+|------|------------|--------------|
+| 私有程序 | `~/.local/lib/ARCH-linux-gnu/anolisa/releases/RELEASE_ID/` | `/usr/local/lib/anolisa/releases/RELEASE_ID/` |
+| 静态资源 | `${XDG_DATA_HOME:-~/.local/share}/anolisa/resources/releases/ARCH-linux-gnu/RELEASE_ID/` | `/usr/local/share/anolisa/releases/RELEASE_ID/` |
+| 当前版本引用 | `~/.local/lib/ARCH-linux-gnu/anolisa/current` | `/usr/local/lib/anolisa/current` |
+| 公共命令 | `~/.local/bin/` | `/usr/local/bin/` |
+| 产品配置模板 | `${XDG_CONFIG_HOME:-~/.config}/anolisa/` | `/usr/local/etc/anolisa/` |
+| 产品进度和入口记录 | `${XDG_STATE_HOME:-~/.local/state}/anolisa/` | `/var/lib/anolisa/` |
+| 产品下载缓存 | `${XDG_CACHE_HOME:-~/.cache}/anolisa/` | `/var/cache/anolisa/` |
+| AW 包数据库 | `${XDG_STATE_HOME:-~/.local/state}/aw/packages/` | `/var/lib/aw/packages/` |
+
+AW 同时记录私有程序目录和独立资源目录。私有程序目录中受控的 `share` 链接指向
+同一发行的资源，保留组件启动器的资源查找路径。程序与资源可以位于不同的受支持
+文件系统。请勿手工复制、重命名已登记的目录或修改该链接。
+
+系统安装软件不会替普通用户选择共享的运行身份。每位普通用户仍使用自己的 XDG
+配置、数据、状态、缓存和会话运行目录，不会将 root 的 HOME 或 XDG 路径写进其他
+用户的 Provider 调用。禁用的 Provider 模板需要按调用用户的目录明确渲染，才能
+用于 AW 配置。单独配置的系统服务使用服务身份及其 `/var/lib`、`/var/cache`、
+`/run` 目录。
+
+tarball 使用管理员的 `/usr/local` 层级。原生 RPM/DEB 打包另按 `/usr` 和 `/etc`
+规则处理；tarball 安装器不创建原生包记录，也不接管原生包拥有的命令。
+
+如果新公共命令的位置已有独立 CLI 或其他工具，安装器会报告冲突并保留原文件。
+本次发行不会自动迁移旧 CLI 记录、组件安装或配置。请检查报告的路径，保留所需
+数据，通过原安装渠道明确处理冲突后再重试。
+
+## 已有 CLI 与组件安装流程
+
+macOS 默认仍然只安装 CLI。在 Linux 上可以用 `--cli-only` 选择此渠道，
+不需要 Python 3。
+
+`--component`、`--cosh-ng`、`--backend`、`--upgrade`、`--uninstall` 和
+`--install-mode` 保留原有含义并选择此渠道。`ANOLISA_VERSION`（CLI 版本）、
+`ANOLISA_UPDATE_URL`（CLI TOML 索引）、`ANOLISA_INSTALL_DIR`（CLI 目录）、
+`ANOLISA_MIRROR`（仓库根地址）同样如此，包括显式设为空值的旧环境变量。
+不要将这些设置或 `--cli-only` 与产品发行参数或 `--scope` 混用，否则脚本会在
+下载前拒绝执行。
+
+下文的组件、adapter、服务、status 和 update 示例属于已有组件渠道，不管理
+完整的 AW 产品发行。
 
 ---
 
-## 第一步 安装 ANOLISA CLI
+## 第一步 安装独立 ANOLISA CLI
 
 `anolisa` CLI 是管理所有 ANOLISA 组件的统一入口。
 
 ### 方式 A 安装脚本（推荐）
 
 ```bash
-curl -fsSL https://get.agentic-os.sh | bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --cli-only
 ```
 
 同一个脚本准备好 CLI 后，可以立即管理一个已发布组件。参数使用 ANOLISA
@@ -31,6 +139,7 @@ CLI 负责，安装脚本不维护第二份组件白名单。显式使用 system
 组件操作调用 `sudo`，CLI 仍安装在当前用户目录。未指定 `--install-mode` 时，
 范围沿用 ANOLISA 的 euid 默认规则。
 
+此流程拒绝覆盖 AW 或原生包管理器管理的 CLI。
 脚本默认把 CLI 安装到 `~/.local/bin`，但 shell 会运行 `PATH` 中最先出现的
 `anolisa`。如果旧的 npm 或 Homebrew 安装排在前面，安装器会同时报告两个
 路径和版本，并且不会输出 `done`。脚本不会删除其他渠道的文件。可以把独立
@@ -70,6 +179,9 @@ sudo anolisa update self
 
 AgentSecCore 要求 `anolisa` 0.2.17 或更高版本。CLI 无法安全读取契约时，
 会先给出更新提示并停止安装，不会改动主机。
+
+AW 管理的产品 CLI 会拒绝 `anolisa update self`，保护已安装的发行。
+请改用已校验的产品发行安装器；RPM 管理的 CLI 自更新仍由原生包管理器完成。
 
 ---
 

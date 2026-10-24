@@ -20,6 +20,9 @@ use tar::Archive;
 
 use crate::lock::{InstallLock, LockError};
 
+mod ownership;
+pub use ownership::ensure_standalone_executable;
+
 const DEFAULT_UPDATE_URL: &str = "https://anolisa.oss-cn-hangzhou.aliyuncs.com/anolisa-releases/anolisa/v1/cli/release-manifest.toml";
 const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const HTTP_READ_TIMEOUT: Duration = Duration::from_secs(60);
@@ -104,6 +107,17 @@ pub enum SelfUpdateError {
     /// The running executable path could not be resolved safely.
     #[error("cannot determine current executable path: {0}")]
     CurrentExe(String),
+
+    /// AW owns the executable and must retain its recorded bytes.
+    #[error(
+        "executable {executable} belongs to the AW installation at {prefix}; use the ANOLISA product release installer instead of `anolisa update self`"
+    )]
+    ManagedExecutable {
+        /// Executable whose direct replacement was refused.
+        executable: PathBuf,
+        /// Prefix containing AW installation evidence.
+        prefix: PathBuf,
+    },
 
     /// A filesystem operation failed.
     #[error("io error at {path}: {source}")]
@@ -457,7 +471,8 @@ pub fn download_with_progress(
 ///
 /// # Errors
 ///
-/// Returns download, lock, permission, backup, replacement, or rollback
+/// Rejects AW-managed executables before any writes. Returns download,
+/// lock, permission, backup, replacement, or rollback
 /// failures. When replacement fails after a backup is created, the function
 /// attempts to restore the previous binary before returning.
 pub fn perform_update(
@@ -465,6 +480,7 @@ pub fn perform_update(
     current_exe: &Path,
     on_progress: Option<&ProgressFn>,
 ) -> Result<(), SelfUpdateError> {
+    ensure_standalone_executable(current_exe)?;
     let lock_path = self_update_lock_path(current_exe);
     let _lock = acquire_lock(&lock_path)?;
 

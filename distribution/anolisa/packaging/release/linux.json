@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "package_id": "aw-core",
+      "source": "src/aw",
+      "version_file": "src/aw/crates/aw-cli/Cargo.toml",
+      "version_key": "package.version",
+      "builder": "cargo",
+      "binary": "aw",
+      "dependencies": [],
+      "entrypoints": {
+        "aw": "bin/aw"
+      },
+      "required": [
+        "bin/aw",
+        "share/aw/schemas/aw-config/configuration-v1alpha1.schema.json",
+        "share/aw/native/openclaw/index.mjs"
+      ]
+    },
+    {
+      "package_id": "anolisa-cli",
+      "source": "distribution/anolisa",
+      "version_file": "distribution/anolisa/Cargo.toml",
+      "version_key": "workspace.package.version",
+      "builder": "anolisa",
+      "profile": "gnu2.17",
+      "dependencies": [
+        "aw-core"
+      ],
+      "entrypoints": {
+        "anolisa": "bin/anolisa"
+      },
+      "required": [
+        "bin/anolisa",
+        "share/anolisa/templates/repo.toml",
+        "share/anolisa/manifests/repo.toml"
+      ]
+    },
+    {
+      "package_id": "cosh-ng",
+      "source": "src/cosh-ng",
+      "version_file": "src/cosh-ng/Cargo.toml",
+      "version_key": "workspace.package.version",
+      "builder": "cosh-ng",
+      "profile": "gnu2.28",
+      "dependencies": [],
+      "entrypoints": {
+        "cosh": "bin/cosh",
+        "cosh-cli": "bin/cosh-cli",
+        "cosh-switch": "bin/cosh-switch"
+      },
+      "required": [
+        "bin/cosh",
+        "bin/cosh-cli",
+        "bin/cosh-switch",
+        "libexec/anolisa/cosh-ng/cosh-core",
+        "libexec/anolisa/cosh-ng/cosh-gateway",
+        "libexec/anolisa/cosh-ng/cosh-shell",
+        "share/anolisa/cosh-ng/cosh-gateway@.service.in"
+      ]
+    },
+    {
+      "package_id": "tokenless",
+      "source": "src/tokenless",
+      "version_file": "src/tokenless/Cargo.toml",
+      "version_key": "workspace.package.version",
+      "builder": "tokenless",
+      "profile": "gnu2.17",
+      "dependencies": [],
+      "entrypoints": {
+        "tokenless": "bin/tokenless",
+        "rtk": "bin/rtk"
+      },
+      "required": [
+        "bin/tokenless",
+        "bin/rtk",
+        "libexec/anolisa/tokenless/rtk",
+        "share/anolisa/adapters/tokenless/manifest.json",
+        "share/anolisa/adapters/tokenless/openclaw/dist/index.js",
+        "share/anolisa/extensions/tokenless/cosh-extension.json",
+        "libexec/anolisa/tokenless/tokenless",
+        "share/anolisa/adapters/tokenless/common/tool-ready-spec.json",
+        "share/anolisa/adapters/tokenless/common/tokenless-env-fix.sh"
+      ]
+    },
+    {
+      "package_id": "aw-provider-tokenless",
+      "source": "providers/tokenless",
+      "version_file": "providers/tokenless/Cargo.toml",
+      "version_key": "package.version",
+      "builder": "cargo",
+      "binary": "aw-provider-tokenless",
+      "dependencies": [
+        "aw-core",
+        "tokenless"
+      ],
+      "provider": true,
+      "entrypoints": {},
+      "required": [
+        "libexec/aw/providers/tokenless/aw-provider-tokenless",
+        "share/aw/providers/tokenless/examples/aw.yaml"
+      ]
+    },
+    {
+      "package_id": "sec-core",
+      "source": "src/agent-sec-core",
+      "version_file": "src/agent-sec-core/.anolisa/component.toml",
+      "version_key": "component.version",
+      "builder": "sec-core",
+      "profile": "gnu2.28",
+      "dependencies": [],
+      "entrypoints": {
+        "agent-sec-cli": "bin/agent-sec-cli",
+        "agent-sec-daemon": "bin/agent-sec-daemon",
+        "agent-sec-daemon-health": "bin/agent-sec-daemon-health",
+        "agent-sec-python": "bin/agent-sec-python",
+        "linux-sandbox": "bin/linux-sandbox"
+      },
+      "required": [
+        "bin/agent-sec-cli",
+        "bin/agent-sec-daemon",
+        "bin/agent-sec-daemon-health",
+        "bin/agent-sec-python",
+        "bin/linux-sandbox",
+        "libexec/anolisa/sec-core/python3.11/runtime/bin/python3.11",
+        "share/anolisa/adapters/sec-core/openclaw/package.json",
+        "share/anolisa/sec-core/agent-sec-core.service.in"
+      ]
+    },
+    {
+      "package_id": "aw-provider-sec-core",
+      "source": "providers/agent-sec-core",
+      "version_file": "providers/agent-sec-core/Cargo.toml",
+      "version_key": "package.version",
+      "builder": "cargo",
+      "binary": "aw-provider-sec-core",
+      "dependencies": [
+        "aw-core",
+        "sec-core"
+      ],
+      "provider": true,
+      "entrypoints": {},
+      "required": [
+        "libexec/aw/providers/sec-core/aw-provider-sec-core",
+        "share/aw/providers/sec-core/schemas/health-v1alpha1.schema.json",
+        "share/aw/providers/sec-core/examples/aw.yaml",
+        "share/aw/providers/sec-core/agent-sec-core-v2.service.in",
+        "share/aw/providers/sec-core/skillsec.json"
+      ]
+    },
+    {
+      "package_id": "agentsight",
+      "source": "src/agentsight",
+      "version_file": "src/agentsight/Cargo.toml",
+      "version_key": "package.version",
+      "builder": "agentsight",
+      "profile": "gnu2.28",
+      "dependencies": [],
+      "entrypoints": {
+        "agentsight": "bin/agentsight",
+        "agentsight-start": "bin/agentsight-start",
+        "agentsight-enforcer": "bin/agentsight-enforcer"
+      },
+      "required": [
+        "bin/agentsight",
+        "bin/agentsight-start",
+        "bin/agentsight-enforcer",
+        "share/anolisa/agentsight/agentsight.service",
+        "share/anolisa/agentsight/agentsight-enforcer.service"
+      ]
+    },
+    {
+      "package_id": "agent-memory",
+      "source": "src/agent-memory",
+      "version_file": "src/agent-memory/Cargo.toml",
+      "version_key": "package.version",
+      "builder": "agent-memory",
+      "profile": "gnu2.28",
+      "dependencies": [],
+      "entrypoints": {
+        "agent-memory": "bin/agent-memory"
+      },
+      "required": [
+        "bin/agent-memory",
+        "share/anolisa/adapters/agent-memory/manifest.json",
+        "share/anolisa/adapters/agent-memory/openclaw/dist/index.js",
+        "share/anolisa/agent-memory/default.toml",
+        "share/anolisa/agent-memory/anolisa-memory@.service"
+      ]
+    },
+    {
+      "package_id": "ws-ckpt",
+      "source": "src/ws-ckpt",
+      "version_file": "src/ws-ckpt/.anolisa/component.toml",
+      "version_key": "component.version",
+      "builder": "ws-ckpt",
+      "profile": "gnu2.28",
+      "dependencies": [],
+      "entrypoints": {
+        "ws-ckpt": "bin/ws-ckpt"
+      },
+      "required": [
+        "bin/ws-ckpt",
+        "share/anolisa/ws-ckpt/ws-ckpt.service",
+        "share/anolisa/adapters/ws-ckpt/manifest.json",
+        "share/anolisa/runtime/ws-ckpt/plugins/openclaw/openclaw.plugin.json",
+        "share/anolisa/runtime/ws-ckpt/plugins/openclaw/dist/src/index.js",
+        "share/anolisa/runtime/ws-ckpt/plugins/hermes/plugin.yaml",
+        "share/anolisa/runtime/skills/ws-ckpt/SKILL.md"
+      ]
+    },
+    {
+      "package_id": "skillfs",
+      "source": "src/skillfs",
+      "version_file": "src/skillfs/Cargo.toml",
+      "version_key": "workspace.package.version",
+      "builder": "skillfs",
+      "profile": "gnu2.28",
+      "dependencies": [],
+      "entrypoints": {
+        "skillfs": "bin/skillfs"
+      },
+      "required": [
+        "bin/skillfs",
+        "share/anolisa/runtime/skills/skillfs/SKILL.md"
+      ]
+    },
+    {
+      "package_id": "ktuner",
+      "source": "src/ktuner",
+      "version_file": "src/ktuner/Cargo.toml",
+      "version_key": "package.version",
+      "builder": "cargo",
+      "binary": "ktuner",
+      "dependencies": [],
+      "entrypoints": {
+        "ktuner": "bin/ktuner"
+      },
+      "required": [
+        "bin/ktuner"
+      ]
+    },
+    {
+      "package_id": "os-skills",
+      "source": "src/os-skills",
+      "version_file": "src/os-skills/component.toml",
+      "version_key": "component.version",
+      "builder": "os-skills",
+      "profile": "static-linux",
+      "dependencies": [],
+      "entrypoints": {},
+      "required": [
+        "share/anolisa/skills/anolisa-guide/SKILL.md"
+      ]
+    }
+  ]
+}

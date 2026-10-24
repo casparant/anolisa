@@ -517,4 +517,7 @@ expect_rejected unknown-argument \
   "unknown argument: --unknown" \
   --unknown
 
+echo "legacy installer tests passed"
+command -v python3 >/dev/null 2>&1 || fail "Python 3 is required for product bootstrap tests"
+python3 "${SCRIPT_DIR}/test-release-install.py"
 echo "installer tests passed"

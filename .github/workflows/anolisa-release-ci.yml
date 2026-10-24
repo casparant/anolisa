@@ -1,0 +1,122 @@
+name: CI / ANOLISA release bundle
+
+on:
+  push:
+    branches: [main, 'release/**', 'feature/anolisa/**']
+    paths:
+      - 'distribution/anolisa/**'
+      - 'src/aw/**'
+      - 'website/static/install.sh'
+      - 'website/scripts/test-install*'
+      - 'website/scripts/test-release-install.py'
+      - '.github/workflows/anolisa-release-ci.yml'
+  pull_request:
+    paths:
+      - 'distribution/anolisa/**'
+      - 'src/aw/**'
+      - 'website/static/install.sh'
+      - 'website/scripts/test-install*'
+      - 'website/scripts/test-release-install.py'
+      - '.github/workflows/anolisa-release-ci.yml'
+  workflow_dispatch:
+    inputs:
+      full_build:
+        description: Build the complete composition on the prepared release runner
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anolisa-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUSTUP_DIST_SERVER: https://static.rust-lang.org
+  RUSTUP_UPDATE_ROOT: https://static.rust-lang.org/rustup
+
+jobs:
+  contracts:
+    name: Release contracts and Linux installation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            distribution/anolisa
+            src/aw
+      - name: Check release assembly and downloader contracts
+        run: |
+          python3 -m unittest discover -s distribution/anolisa/packaging/release/tests -p 'test_*.py'
+          bash website/scripts/test-install.sh
+      - name: Check the ANOLISA workspace
+        working-directory: distribution/anolisa
+        run: |
+          cargo fmt --all -- --check
+          cargo check --locked
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+          cargo doc --workspace --no-deps --locked
+          cargo build --locked --bin anolisa
+      - name: Build the real Linux AW installer
+        working-directory: src/aw
+        run: cargo build --locked --bin aw
+      - name: Prepare the disposable system installation root
+        run: |
+          # Hosted runners allow tool provisioning in local directories. Model
+          # root-owned FHS parents without relaxing installer ownership checks.
+          sudo install -d -o root -g root -m 0755 \
+            /usr/local/bin /usr/local/lib /usr/local/share /usr/local/etc
+      - name: Exercise real AW package transactions
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          python3 distribution/anolisa/tests/release-linux.py \
+            --anolisa distribution/anolisa/target/debug/anolisa \
+            --aw src/aw/target/debug/aw --source-commit "$CANDIDATE_SHA" \
+            --cross-device
+          sudo python3 distribution/anolisa/tests/release-linux.py \
+            --anolisa distribution/anolisa/target/debug/anolisa \
+            --aw src/aw/target/debug/aw --source-commit "$CANDIDATE_SHA" \
+            --system --reader-uid "$(id -u)"
+
+  full-build:
+    name: Build the complete Linux x86_64 product
+    needs: contracts
+    if: >-
+      github.repository == 'agentic-os-org/ANOLISA' &&
+      github.event_name == 'workflow_dispatch' && inputs.full_build
+    runs-on: [self-hosted, Linux, X64, anolisa-release-cross-x64]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build the complete product from the fixed checkout
+        run: |
+          distribution/anolisa/packaging/release/build.sh \
+            --output-dir "$RUNNER_TEMP/anolisa-product"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anolisa-complete-linux-x86_64
+          path: ${{ runner.temp }}/anolisa-product/
+          if-no-files-found: error

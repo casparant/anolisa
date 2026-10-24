@@ -2,18 +2,144 @@
 
 [中文版](../../zh/getting-started/installation.md)
 
-This guide covers the progressive installation of ANOLISA — from the CLI tool to individual components and adapter setup.
+Install the complete ANOLISA product on GNU/Linux, then configure the Agent
+integrations and services you need. macOS and existing component workflows use
+the standalone CLI channel described below.
+
+## Install the complete product on Linux
+
+On GNU/Linux x86_64 or aarch64, the default installer downloads the complete
+product archive, verifies its declared byte size and SHA-256, and runs its local
+installer. Python 3.6 or newer is required for this download and safe extraction step.
+The complete product does not support macOS or musl Linux.
+
+```bash
+curl -fsSL https://get.agentic-os.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+anolisa --version
+```
+
+The default is `--scope user`, including when the invoking user is root. Select
+an available product version or an independent release index with:
+
+```bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --release-version 1.2.3 --scope user
+curl -fsSL https://get.agentic-os.sh | bash -s -- --release-version 1.2.3 --release-url https://example.org/anolisa/release-index.json --scope user
+```
+
+Replace `1.2.3` with an available product version. `--release-version` accepts
+`stable` or a SemVer version. `ANOLISA_RELEASE_VERSION` and
+`ANOLISA_RELEASE_URL` provide the same settings to the shell running the
+installer. The default stable index is
+`https://anolisa.oss-cn-hangzhou.aliyuncs.com/anolisa-releases/anolisa/v1/product/release-index.json`.
+A concrete version uses `v1/product/releases/<version>/release-index.json`
+below the same repository root unless `--release-url` is supplied. An explicit
+version must match `product_version` in the selected JSON index. Product failure
+stops installation; it does not switch to the CLI channel.
+
+System installation requires explicit `--scope system` and an already
+privileged process. The product installer never invokes `sudo` for you.
+Download and inspect the script or archive first, then run it with the
+privileges you choose.
+
+### Install a downloaded archive
+
+Download the matching `anolisa-VERSION-linux-ARCH-gnu.tar.gz` and its `.sha256`
+file from the release publisher. Verify it, unpack it, and run its installer.
+The archive contains one directory named `anolisa-RELEASE_ID-linux-ARCH`;
+use the actual names from the release.
+
+```bash
+sha256sum -c anolisa-VERSION-linux-x86_64-gnu.tar.gz.sha256
+tar -xzf anolisa-VERSION-linux-x86_64-gnu.tar.gz
+cd anolisa-RELEASE_ID-linux-x86_64
+./install.sh --scope user
+```
+
+For system installation, run `./install.sh --scope system` from a root shell.
+Local installation needs no Python or network downloads. It invokes the exact
+CLI in the archive. Preview, inspect, or read progress with that binary, using
+an absolute path to the unpacked directory:
+
+```bash
+./packages/anolisa-cli/payload/bin/anolisa release inspect --bundle "$PWD" --json
+./packages/anolisa-cli/payload/bin/anolisa release install --bundle "$PWD" --scope user --dry-run --json
+./packages/anolisa-cli/payload/bin/anolisa release status --bundle "$PWD" --scope user --json
+```
+
+Keep the archive available if installation stops. Repeating the same release
+installation with the same scope verifies installed packages and resumes its
+recorded progress. A failure can leave packages committed in AW; preserve the
+reported record and recovery information. The new release is selected only
+after its packages pass verification. Installation does not enable Providers,
+connect native Agents, start daemons, or activate systemd units.
+
+### Program, configuration, and package database locations
+
+`ARCH` is `x86_64` or `aarch64`. `RELEASE_ID` identifies the immutable release,
+including its source revision, and can differ from the product version.
+
+| Content | User scope | System scope |
+|---------|------------|--------------|
+| Private programs | `~/.local/lib/ARCH-linux-gnu/anolisa/releases/RELEASE_ID/` | `/usr/local/lib/anolisa/releases/RELEASE_ID/` |
+| Static resources | `${XDG_DATA_HOME:-~/.local/share}/anolisa/resources/releases/ARCH-linux-gnu/RELEASE_ID/` | `/usr/local/share/anolisa/releases/RELEASE_ID/` |
+| Current-version reference | `~/.local/lib/ARCH-linux-gnu/anolisa/current` | `/usr/local/lib/anolisa/current` |
+| Public commands | `~/.local/bin/` | `/usr/local/bin/` |
+| Product configuration templates | `${XDG_CONFIG_HOME:-~/.config}/anolisa/` | `/usr/local/etc/anolisa/` |
+| Product progress and entry records | `${XDG_STATE_HOME:-~/.local/state}/anolisa/` | `/var/lib/anolisa/` |
+| Product download cache | `${XDG_CACHE_HOME:-~/.cache}/anolisa/` | `/var/cache/anolisa/` |
+| AW package database | `${XDG_STATE_HOME:-~/.local/state}/aw/packages/` | `/var/lib/aw/packages/` |
+
+AW records both the private program prefix and its independent resource root.
+The private prefix's controlled `share` link points to those same versioned
+resources so component launchers retain their resource lookup paths. Programs
+and resources may be on different supported filesystems. Do not copy or rename
+registered directories or change this link by hand.
+
+Installing software for the system does not choose a shared runtime identity.
+Each ordinary user still uses their own XDG configuration, data, state, cache
+and session runtime directories. Root's HOME or XDG values are never embedded
+in another user's Provider invocation. The disabled Provider templates require
+explicit rendering with the invoking user's directories before use in an AW
+configuration. A separately configured system service uses its own service
+identity and `/var/lib`, `/var/cache` and `/run` directories.
+
+The tarball uses the administrator's `/usr/local` hierarchy. Native RPM/DEB
+packaging has separate `/usr` and `/etc` rules; the tarball installer does not
+create native package records or take over native-owned commands.
+
+An existing standalone CLI or another tool at a new public command path causes
+a conflict and is preserved. This release does not automatically migrate old
+CLI records, component installations, or configuration. Inspect the reported
+path, retain needed data, and explicitly resolve it through its original
+installation channel before retrying.
+
+## Existing CLI and component installation
+
+On macOS the default script continues to install only the CLI. On Linux select
+that channel with `--cli-only`. It does not require Python 3.
+
+`--component`, `--cosh-ng`, `--backend`, `--upgrade`, `--uninstall`, and
+`--install-mode` retain their existing meanings and select this channel.
+The same applies to `ANOLISA_VERSION` (CLI version), `ANOLISA_UPDATE_URL`
+(CLI TOML index), `ANOLISA_INSTALL_DIR` (CLI directory), and `ANOLISA_MIRROR`
+(repository base), including explicitly empty legacy environment variables.
+Do not mix these settings or `--cli-only` with product release settings or
+`--scope`: the script rejects that combination before downloading.
+
+The remaining component, adapter, service, status, and update examples describe
+this existing component channel. They do not manage a complete AW product release.
 
 ---
 
-## Step 1: Install the ANOLISA CLI
+## Step 1: Install the standalone ANOLISA CLI
 
 The `anolisa` CLI is the unified entry point for managing all ANOLISA components.
 
 ### Option A: Install script (recommended)
 
 ```bash
-curl -fsSL https://get.agentic-os.sh | bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --cli-only
 ```
 
 The same installer can manage one published component immediately after it
@@ -32,7 +158,8 @@ second component allowlist. In explicit system mode, the script uses `sudo`
 only for the component action; the CLI remains in the current user directory.
 Without `--install-mode`, scope follows the normal ANOLISA euid default.
 
-The script installs the CLI to `~/.local/bin` by default, but the shell runs
+This workflow refuses to overwrite an AW-managed or native-package-owned CLI.
+It installs the CLI to `~/.local/bin` by default, but the shell runs
 the first `anolisa` found in `PATH`. If an older npm or Homebrew installation
 comes first, the installer reports both paths and versions and exits without
 printing `done`. It never removes another channel's files. Put the standalone
@@ -73,6 +200,10 @@ sudo anolisa update self
 AgentSecCore requires `anolisa` 0.2.17 or later. The CLI reports an update hint
 and stops before changing the host when it cannot safely read a package
 contract.
+
+An AW-managed product CLI rejects `anolisa update self` to protect the installed
+release. Use a verified product release installer instead. RPM-owned CLI
+self-update continues to use the native package manager.
 
 ---
 

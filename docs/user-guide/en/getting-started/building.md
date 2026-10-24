@@ -77,6 +77,43 @@ export UV_PYTHON_INSTALL_MIRROR="https://your-mirror.example/python-build-standa
 
 ## 4. Unified build script
 
+### Complete Linux release archive
+
+Use the release entrypoint to prepare the complete product tarball:
+
+```bash
+distribution/anolisa/packaging/release/build.sh --output-dir "$PWD/target/product-release"
+```
+
+Source mode currently requires Linux x86_64, Python 3.11+, a clean checkout,
+and the prepared environment used by component release builders: pinned Rust
+toolchains, Cross 0.2.5, Docker and verified GNU release images, cargo-sbom,
+Node.js 22.23.2/npm, make, just, uvx, patch and GNU packaging tools. It checks
+prerequisites, writes isolated component logs, and installs no dependencies or
+component files on the build host.
+
+The archive includes ANOLISA, AW, cosh-ng, backends, Provider bridges, schemas,
+adapters and resources from the checked-in composition. Internal component
+versions stay independent. The output directory must be new; existing outputs
+and other `target` files are preserved. `--product-version` selects a product
+version. `--artifact-base-url` takes an HTTPS publication directory and also
+generates the product download index.
+
+`--staged-input` assembles an already prepared complete package set; it requires
+explicit source revision and epoch inputs and does not compile components.
+See the [release contract](../../../../distribution/anolisa/docs/design/2026-10-24_all-in-one-release.md)
+and `build.sh --help` for format details. Installation is covered in
+[Installation](installation.md).
+
+For publication, upload immutable archives, checksums and the fixed-version
+index first. After verifying those URLs, update the stable product index.
+Deploy the new default website installer only after the product index is live;
+the downloader deliberately reports a missing index instead of changing to
+the legacy installer. The manual full-build workflow uploads Actions artifacts
+and does not publish the mirror or a GitHub Release automatically.
+
+### Development builds
+
 `scripts/build-all.sh` is a Linux convenience entry point, not a complete
 monorepo builder. Select the maintained components you need with repeated
 `--component` options: `skills`, `sec-core`, `tokenless`, `ws-ckpt`, `memory`,
