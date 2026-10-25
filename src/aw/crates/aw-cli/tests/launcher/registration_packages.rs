@@ -220,6 +220,7 @@ fn seed(
     Installation {
         installation_id: installation_id.into(),
         prefix: prefix.into(),
+        resources: None,
         owner_uid: fs::metadata(prefix).unwrap().uid(),
         scope: Scope::User,
         manager: Manager::Raw,

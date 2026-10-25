@@ -74,6 +74,7 @@ mod tests {
             transaction_id: "txn-1-2-3".into(),
             database_root: paths.root.clone(),
             prefix: "/tmp/aw-payload".into(),
+            resources: None,
             installation_id: "example".into(),
             before_database: Some(snapshot(0)),
             after_database: snapshot(1),

@@ -33,11 +33,22 @@ pub(super) struct Action {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+pub(super) struct ResourceRoot {
+    pub path: PathBuf,
+    pub created: bool,
+    pub identity: Option<Identity>,
+    pub workspace_identity: Option<Identity>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Journal {
     pub schema_version: u32,
     pub transaction_id: String,
     pub database_root: PathBuf,
     pub prefix: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resources: Option<ResourceRoot>,
     pub installation_id: String,
     #[serde(with = "snapshots::optional")]
     pub before_database: Option<Vec<u8>>,
@@ -70,6 +81,21 @@ impl Journal {
     }
     pub fn workspace(&self) -> PathBuf {
         self.prefix.join(format!(".aw-txn-{}", self.transaction_id))
+    }
+    pub fn file_path(&self, name: &str) -> PathBuf {
+        database::payload_path(
+            &self.prefix,
+            self.resources.as_ref().map(|root| root.path.as_path()),
+            name,
+        )
+    }
+    pub fn workspace_for(&self, name: &str) -> PathBuf {
+        if name.starts_with("share/") {
+            if let Some(root) = &self.resources {
+                return root.path.join(format!(".aw-txn-{}", self.transaction_id));
+            }
+        }
+        self.workspace()
     }
     pub fn path(&self) -> PathBuf {
         self.directory().join("journal.json")
@@ -112,6 +138,22 @@ impl Journal {
         )?;
         let after: database::InstalledDatabase = database::decode(&self.after_database)?;
         database::validate_database(&after, paths.scope())?;
+        if let Some(root) = &self.resources {
+            database::resources::validate(&self.prefix, &root.path)?;
+            require(
+                !root.path.starts_with(&paths.root) && !paths.root.starts_with(&root.path),
+                "resource root overlaps package database",
+            )?;
+        }
+        require(
+            after
+                .installations
+                .iter()
+                .find(|installation| installation.prefix == self.prefix)
+                .and_then(|installation| installation.resources.as_ref())
+                == self.resources.as_ref().map(|root| &root.path),
+            "transaction resource mapping differs from its committed installation",
+        )?;
         let before_generation = match &self.before_database {
             Some(bytes) => {
                 let before: database::InstalledDatabase = database::decode(bytes)?;
@@ -132,7 +174,12 @@ impl Journal {
                 paths_seen.insert(&action.path) || action.path == ".aw-packages/aw-core.json",
                 "duplicate transaction action path",
             )?;
-            if !action.path.starts_with(".aw-packages/") {
+            if action.path == database::resources::REVERSE_LOCATOR {
+                require(
+                    self.resources.is_some(),
+                    "resource locator without resource mapping",
+                )?;
+            } else if !action.path.starts_with(".aw-packages/") {
                 crate::filesystem::relative(&action.path)?;
             } else {
                 require(

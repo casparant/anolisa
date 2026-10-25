@@ -22,6 +22,7 @@ fn changes(root: &Path) -> (DatabasePaths, ChangeSet) {
         installations: vec![Installation {
             installation_id: installation_id.clone(),
             prefix: prefix.clone(),
+            resources: None,
             // SAFETY: geteuid only observes the fixture's identity.
             owner_uid: unsafe { libc::geteuid() },
             scope: Scope::User,
@@ -50,6 +51,7 @@ fn changes(root: &Path) -> (DatabasePaths, ChangeSet) {
     );
     let changes = ChangeSet {
         prefix,
+        resources: None,
         installation_id,
         database_before: None,
         database_after: after,

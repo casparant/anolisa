@@ -90,6 +90,7 @@ pub(super) fn begin(paths: &DatabasePaths, changes: &ChangeSet) -> Result<Prepar
         transaction_id: id,
         database_root: paths.root.clone(),
         prefix: changes.prefix.clone(),
+        resources: super::resources::prepare(changes)?,
         installation_id: changes.installation_id.clone(),
         before_database,
         after_database: serde_json::to_vec(&changes.database_after)?,
@@ -122,6 +123,10 @@ pub(super) fn begin(paths: &DatabasePaths, changes: &ChangeSet) -> Result<Prepar
                 .transpose()?,
         )?;
     }
+    if entry.resources.as_ref().is_some_and(|root| root.created) {
+        push(&mut entry, database::resources::LOGICAL_LOCATOR, None)?;
+        push(&mut entry, database::resources::REVERSE_LOCATOR, None)?;
+    }
     for name in changes
         .legacy
         .keys()
@@ -139,7 +144,7 @@ pub(super) fn begin(paths: &DatabasePaths, changes: &ChangeSet) -> Result<Prepar
         push(
             &mut entry,
             name,
-            Some(fs::identity(&changes.prefix.join(name))?),
+            Some(fs::identity(&changes.file_path(name))?),
         )?;
     }
     for name in changes.writes.keys() {
@@ -150,10 +155,10 @@ pub(super) fn begin(paths: &DatabasePaths, changes: &ChangeSet) -> Result<Prepar
         let before = changes
             .verify
             .get(name)
-            .map(|_| fs::identity(&changes.prefix.join(name)))
+            .map(|_| fs::identity(&changes.file_path(name)))
             .transpose()?;
         require(
-            before.is_some() || !fs::exists(&changes.prefix.join(name))?,
+            before.is_some() || !fs::exists(&changes.file_path(name))?,
             format!("unowned file conflicts with installation: {name}"),
         )?;
         push(&mut entry, name, before)?;
@@ -248,6 +253,18 @@ fn push(entry: &mut Journal, path: &str, before: Option<fs::Identity>) -> Result
 fn validate(paths: &DatabasePaths, changes: &ChangeSet) -> Result<()> {
     fs::absolute(&paths.root)?;
     fs::absolute(&changes.prefix)?;
+    if let Some(resources) = &changes.resources {
+        database::resources::validate(&changes.prefix, resources)?;
+        require(
+            !resources.starts_with(&paths.root) && !paths.root.starts_with(resources),
+            "resource root overlaps package database",
+        )?;
+        require(
+            changes.prefix.as_os_str().as_encoded_bytes().len() <= 4096
+                && resources.as_os_str().as_encoded_bytes().len() <= 4096,
+            "resource locator path exceeds 4096 bytes",
+        )?;
+    }
     require(
         !changes.prefix.starts_with(&paths.root) && !paths.root.starts_with(&changes.prefix),
         "package prefix overlaps database",
@@ -284,6 +301,7 @@ fn validate(paths: &DatabasePaths, changes: &ChangeSet) -> Result<()> {
 }
 
 pub(super) fn recheck(changes: &ChangeSet) -> Result<()> {
+    super::resources::recheck(changes)?;
     for (source, expected) in &changes.source_records {
         require(
             fs::read(source, crate::description::MAX_DESCRIPTION_BYTES)? == *expected,
@@ -297,7 +315,7 @@ pub(super) fn recheck(changes: &ChangeSet) -> Result<()> {
         fs::verify(&source.source, &source.metadata)?;
     }
     for (name, payload) in changes.verify.iter().chain(changes.removes.iter()) {
-        fs::verify(&changes.prefix.join(name), payload)?;
+        fs::verify(&changes.file_path(name), payload)?;
     }
     let directory = changes.prefix.join(".aw-packages");
     let entries = match fs::entries(&directory) {
@@ -358,7 +376,7 @@ pub(super) fn parents(entry: &mut Journal, relative: &Path) -> Result<()> {
         .collect::<Vec<_>>();
     paths.reverse();
     for path in paths {
-        let destination = entry.prefix.join(path);
+        let destination = entry.file_path(&path.to_string_lossy());
         match fs::directory(&destination) {
             Ok(_) => fs::owned(&destination)?,
             Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -394,7 +412,8 @@ pub(super) fn stage_source(
 ) -> Result<()> {
     let mut held = fs::regular(&source.source)?;
     let before = fs::verify(&source.source, &source.metadata)?;
-    let (file, identity) = fs::anonymous(&entry.workspace(), source.metadata.mode, |file| {
+    let workspace = entry.workspace_for(&entry.actions[index].path);
+    let (file, identity) = fs::anonymous(&workspace, source.metadata.mode, |file| {
         let count = std::io::copy(
             &mut std::io::Read::take(&mut held, fs::MAX_FILE_BYTES + 1),
             file,
@@ -410,12 +429,13 @@ pub(super) fn stage_source(
     )?;
     entry.actions[index].after = Some(identity);
     entry.write()?;
-    fs::publish(&file, &entry.workspace().join(&entry.actions[index].stage))
+    fs::publish(&file, &workspace.join(&entry.actions[index].stage))
 }
 
 pub(super) fn stage_bytes(entry: &mut Journal, index: usize, bytes: &[u8]) -> Result<()> {
-    let (file, identity) = fs::write_bytes(&entry.workspace(), bytes, 0o644)?;
+    let workspace = entry.workspace_for(&entry.actions[index].path);
+    let (file, identity) = fs::write_bytes(&workspace, bytes, 0o644)?;
     entry.actions[index].after = Some(identity);
     entry.write()?;
-    fs::publish(&file, &entry.workspace().join(&entry.actions[index].stage))
+    fs::publish(&file, &workspace.join(&entry.actions[index].stage))
 }

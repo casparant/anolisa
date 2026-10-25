@@ -3,6 +3,7 @@
 mod capacity;
 mod durability;
 mod locks;
+mod resources;
 
 use super::{fs, journal, prepare, ChangeSet, SourceFile};
 use crate::{
@@ -98,6 +99,7 @@ impl Fixture {
         };
         let mut changes = ChangeSet {
             prefix: self.prefix.clone(),
+            resources: None,
             database_before: None,
             database_after: InstalledDatabase {
                 schema_version: 1,
@@ -105,6 +107,7 @@ impl Fixture {
                 installations: vec![Installation {
                     installation_id: "install-one".into(),
                     prefix: self.prefix.clone(),
+                    resources: None,
                     // SAFETY: geteuid only queries the fixture process identity.
                     owner_uid: unsafe { libc::geteuid() },
                     scope: Scope::User,
@@ -166,6 +169,17 @@ impl Fixture {
                     },
                     provider: None,
                 });
+        }
+        if self.root.join(".fixture-resources").is_file() {
+            assert!(!legacy);
+            let root = self.root.join("resources");
+            let source = self.source("schema", b"resource bytes\n");
+            changes.resources = Some(root.clone());
+            changes.database_after.installations[0].resources = Some(root);
+            changes.database_after.installations[0].packages[0]
+                .files
+                .insert("share/schema.json".into(), source.metadata.clone());
+            changes.writes.insert("share/schema.json".into(), source);
         }
         changes
     }

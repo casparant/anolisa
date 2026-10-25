@@ -57,6 +57,7 @@ pub(super) fn service(fixture: &mut Fixture, root: &Path) {
         installations: vec![Installation {
             installation_id: installation_id.clone(),
             prefix: fixture.prefix.clone(),
+            resources: None,
             owner_uid: fs::metadata(&fixture.prefix).unwrap().uid(),
             scope: Scope::User,
             manager: Manager::Raw,

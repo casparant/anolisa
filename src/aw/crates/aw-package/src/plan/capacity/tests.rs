@@ -27,6 +27,7 @@ fn fixture(root: &std::path::Path) -> (DatabasePaths, ChangeSet, PackagePlan) {
         installations: vec![Installation {
             installation_id: installation_id.clone(),
             prefix: prefix.clone(),
+            resources: None,
             // SAFETY: geteuid only observes the fixture's identity.
             owner_uid: unsafe { libc::geteuid() },
             scope: Scope::User,
@@ -53,6 +54,7 @@ fn fixture(root: &std::path::Path) -> (DatabasePaths, ChangeSet, PackagePlan) {
     .unwrap();
     let changes = ChangeSet {
         prefix: prefix.clone(),
+        resources: None,
         installation_id,
         database_before: None,
         database_after: after,
@@ -74,6 +76,7 @@ fn fixture(root: &std::path::Path) -> (DatabasePaths, ChangeSet, PackagePlan) {
         format: 1,
         action: Action::Install,
         prefix,
+        resources: None,
         scope: Scope::User,
         expected_generation: None,
         installation_id: None,

@@ -146,7 +146,7 @@ fn restored(entry: &Journal) -> bool {
         first.entry(&action.path).or_insert(&action.before);
     }
     first.into_iter().all(
-        |(path, before)| match fs::identity(&entry.prefix.join(path)) {
+        |(path, before)| match fs::identity(&entry.file_path(path)) {
             Ok(identity) => before.as_ref() == Some(&identity),
             Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
                 before.is_none()
@@ -187,6 +187,17 @@ pub(super) fn finish(
     committed: bool,
 ) -> Result<Vec<std::path::PathBuf>> {
     let mut conflicts = Vec::new();
+    if let Some(root) = &entry.resources {
+        match fs::directory_identity(&root.path) {
+            Ok(identity)
+                if root.identity.as_ref().is_some_and(|expected| {
+                    identity.dev == expected.dev && identity.ino == expected.ino
+                }) => {}
+            Err(Error::Io(error))
+                if error.kind() == std::io::ErrorKind::NotFound && root.created && !committed => {}
+            _ => return Ok(vec![root.path.clone()]),
+        }
+    }
     if committed {
         if let (Some(before), Some(after)) =
             (&entry.lock_identity, journal::readable_lock(paths, entry))
@@ -207,9 +218,10 @@ pub(super) fn finish(
         {
             continue;
         }
-        let destination = entry.prefix.join(&action.path);
-        let backup = entry.workspace().join(&action.backup);
-        let stage = entry.workspace().join(&action.stage);
+        let destination = entry.file_path(&action.path);
+        let workspace = entry.workspace_for(&action.path);
+        let backup = workspace.join(&action.backup);
+        let stage = workspace.join(&action.stage);
         if !action.active {
             remove_if_owned(&stage, action.after.as_ref(), &mut conflicts)?;
             continue;
@@ -248,6 +260,17 @@ pub(super) fn finish(
     if !conflicts.is_empty() {
         return Ok(conflicts);
     }
+    if let Some(root) = &entry.resources {
+        let workspace = entry.workspace_for(crate::database::resources::LOGICAL_LOCATOR);
+        match fs::directory(&workspace) {
+            Ok(_) if !fs::rmdir(&workspace, root.workspace_identity.as_ref())? => {
+                conflicts.push(workspace)
+            }
+            Ok(_) => {}
+            Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => conflicts.push(workspace),
+        }
+    }
     let workspace = entry.workspace();
     match fs::directory(&workspace) {
         Ok(_) if !fs::rmdir(&workspace, entry.workspace_identity.as_ref())? => {
@@ -264,7 +287,15 @@ pub(super) fn finish(
         let mut directories = entry.directories.iter().collect::<Vec<_>>();
         directories.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
         for (name, identity) in directories {
-            let _removed = fs::rmdir(&entry.prefix.join(name), Some(identity))?;
+            let _removed = fs::rmdir(&entry.file_path(name), Some(identity))?;
+        }
+        if let Some(root) = &entry.resources {
+            if root.created && !fs::rmdir(&root.path, root.identity.as_ref())? {
+                conflicts.push(root.path.clone());
+            }
+        }
+        if !conflicts.is_empty() {
+            return Ok(conflicts);
         }
         if entry.lock_created {
             remove_if_owned(

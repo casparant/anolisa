@@ -115,7 +115,7 @@ pub(super) fn plan_with_limits(
     let mut removes = BTreeMap::new();
     for package in &removed {
         plan.removed.push(snapshot::summary(package));
-        snapshot::files(&mut plan, Action::Uninstall, package);
+        snapshot::files(&mut plan, Action::Uninstall, package, &installation);
         removes.extend(package.files.clone());
     }
     installation.packages.retain(|package| {
@@ -135,6 +135,7 @@ pub(super) fn plan_with_limits(
         database::validate_database(&after, paths.scope())?;
         let changes = ChangeSet {
             prefix: prefix.into(),
+            resources: plan.resources.clone(),
             database_before: snapshot.before.clone(),
             database_after: after,
             installation_id,

@@ -34,13 +34,17 @@ pub(crate) fn actions(paths: &database::DatabasePaths, changes: &ChangeSet) -> R
         .count();
     let marker_removal =
         usize::from(changes.marker_after.is_none() && changes.marker_before.is_some());
-    Ok(
-        gate_write
-            + legacy_removals
-            + changes.removes.len()
-            + changes.writes.len()
-            + marker_removal,
-    )
+    let resource_locators = if changes.resources.is_some() && changes.marker_before.is_none() {
+        2
+    } else {
+        0
+    };
+    Ok(gate_write
+        + legacy_removals
+        + changes.removes.len()
+        + changes.writes.len()
+        + marker_removal
+        + resource_locators)
 }
 
 /// Count unique absent parents that payload/locator publication would create.
@@ -57,7 +61,15 @@ fn parent_paths(
     let gate_path =
         (gate.is_some() && gate != changes.marker_before).then_some(".aw-packages/aw-core.json");
     let mut parents = BTreeSet::new();
-    for name in changes.writes.keys().map(String::as_str).chain(gate_path) {
+    let resource_locator = (changes.resources.is_some() && changes.marker_before.is_none())
+        .then_some(database::resources::LOGICAL_LOCATOR);
+    for name in changes
+        .writes
+        .keys()
+        .map(String::as_str)
+        .chain(gate_path)
+        .chain(resource_locator)
+    {
         for parent in Path::new(name)
             .ancestors()
             .skip(1)
@@ -72,7 +84,7 @@ fn parent_paths(
             missing.insert(parent.to_string_lossy().into_owned());
             continue;
         }
-        match database::safe_directory(&changes.prefix.join(&parent)) {
+        match database::safe_directory(&changes.file_path(&parent.to_string_lossy())) {
             Ok(_) => {}
             Err(error) if database::is_missing(&error) => {
                 missing.insert(parent.to_string_lossy().into_owned());
@@ -163,6 +175,10 @@ fn bounded_journal(
             true,
         );
     }
+    if changes.resources.is_some() && changes.marker_before.is_none() {
+        push(database::resources::LOGICAL_LOCATOR.into(), false, true);
+        push(database::resources::REVERSE_LOCATOR.into(), false, true);
+    }
     for name in changes
         .legacy
         .keys()
@@ -201,6 +217,15 @@ fn bounded_journal(
         transaction_id: format!("txn-{:x}-{:x}-{:x}", u128::MAX, u32::MAX, u64::MAX),
         database_root: paths.root.clone(),
         prefix: changes.prefix.clone(),
+        resources: changes
+            .resources
+            .as_ref()
+            .map(|path| super::journal::ResourceRoot {
+                path: path.clone(),
+                created: false,
+                identity: Some(identity(true)),
+                workspace_identity: Some(identity(true)),
+            }),
         installation_id: changes.installation_id.clone(),
         before_database: Some(before_database),
         after_database: serde_json::to_vec(&changes.database_after)?,

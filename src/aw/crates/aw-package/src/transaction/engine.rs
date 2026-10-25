@@ -135,6 +135,7 @@ fn execute(
     fs::mkdir(&entry.workspace(), 0o700)?;
     entry.workspace_identity = Some(fs::directory_identity(&entry.workspace())?);
     entry.write()?;
+    super::resources::begin(entry)?;
     archive(paths, changes, &entry.transaction_id)?;
     let gate = prepare::gate_bytes(paths, changes)?;
     let first_is_gate = gate.is_some() && gate != changes.marker_before;
@@ -150,6 +151,8 @@ fn execute(
             )?;
         } else if let Some(source) = changes.writes.get(&name) {
             prepare::stage_source(entry, index, source)?;
+        } else if let Some(bytes) = super::resources::metadata(entry, &name) {
+            prepare::stage_bytes(entry, index, &bytes)?;
         } else if name == ".aw-packages/aw-core.json" && first_is_gate {
             entry.actions[index].before = Some(prepare::verify_bytes(
                 &entry.prefix.join(&name),
@@ -162,7 +165,7 @@ fn execute(
             prepare::parents(entry, Path::new(&name))?;
         }
         let action = entry.actions[index].clone();
-        let destination = entry.prefix.join(&action.path);
+        let destination = entry.file_path(&action.path);
         match &action.before {
             Some(before) => require(
                 fs::same(&destination, before)?,
@@ -182,8 +185,9 @@ fn execute(
         // This durable intent precedes either namespace change; replay checks inode plus contents.
         entry.actions[index].active = true;
         entry.write()?;
-        let backup = entry.workspace().join(&action.backup);
-        let stage = entry.workspace().join(&action.stage);
+        let workspace = entry.workspace_for(&action.path);
+        let backup = workspace.join(&action.backup);
+        let stage = workspace.join(&action.stage);
         match (&action.before, &action.after) {
             (Some(before), Some(after)) => {
                 // The old-writer gate must never disappear, including across SIGKILL.
@@ -257,7 +261,7 @@ fn verify_after(entry: &Journal) -> Result<()> {
         final_actions.insert(&action.path, action);
     }
     for action in final_actions.values() {
-        let path = entry.prefix.join(&action.path);
+        let path = entry.file_path(&action.path);
         match &action.after {
             Some(after) => require(
                 fs::same(&path, after)?,

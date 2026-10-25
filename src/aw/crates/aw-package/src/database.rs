@@ -7,6 +7,7 @@ mod legacy;
 mod paths;
 mod read;
 mod registration;
+pub(crate) mod resources;
 mod validation;
 
 pub use doctor::{DoctorIssue, DoctorIssueCode, DoctorReport};
@@ -129,6 +130,9 @@ pub struct Installation {
     pub installation_id: String,
     /// Absolute payload root, independent of the central database location.
     pub prefix: PathBuf,
+    /// Optional external root for logical `share/` files; absent records use `prefix/share`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resources: Option<PathBuf>,
     /// Recorded owner; legacy views report only the current prefix directory's owner.
     pub owner_uid: u32,
     /// User or system privilege boundary.
@@ -140,6 +144,25 @@ pub struct Installation {
     pub registration: Registration,
     /// Packages with disjoint file ownership; empty registrations retain the prefix locator.
     pub packages: Vec<InstalledPackage>,
+}
+
+impl Installation {
+    /// Resolve a recorded logical payload path using this installation's persisted layout.
+    pub fn file_path(&self, name: &str) -> PathBuf {
+        payload_path(&self.prefix, self.resources.as_deref(), name)
+    }
+}
+
+pub(crate) fn payload_path(prefix: &Path, resources: Option<&Path>, name: &str) -> PathBuf {
+    if let Some(root) = resources {
+        if name == "share" {
+            return root.to_owned();
+        }
+        if let Some(suffix) = name.strip_prefix("share/") {
+            return root.join(suffix);
+        }
+    }
+    prefix.join(name)
 }
 
 /// Persisted database envelope. Queries reject unsupported schema versions.
