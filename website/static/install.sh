@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — lightweight installer for the anolisa CLI.
+# Download a complete Linux release, or preserve explicit standalone CLI operations.
 #
 # Usage:
 #   curl -fsSL https://get.agentic-os.sh | bash
@@ -12,6 +12,9 @@
 #   ANOLISA_MIRROR       OSS mirror base URL     (default: https://anolisa.oss-cn-hangzhou.aliyuncs.com)
 #   ANOLISA_UPDATE_URL   CLI release manifest URL (default: derived from mirror)
 #   ANOLISA_INSTALL_DIR  binary install directory (default: ~/.local/bin)
+#   ANOLISA_RELEASE_VERSION complete Linux product version (default: stable)
+#   ANOLISA_RELEASE_URL complete product JSON index URL
+#   ANOLISA_RELEASE_PROFILE product package profile (scope default if unset)
 
 set -euo pipefail
 
@@ -35,6 +38,20 @@ COMPONENT_ACTION_SET=0
 INSTALL_MODE=""
 COMPONENT_SYSTEM_SCOPE=0
 COMPONENT_USE_SUDO=0
+LEGACY_SELECTED=0
+PRODUCT_SELECTED=0
+RELEASE_VERSION="${ANOLISA_RELEASE_VERSION:-stable}"
+RELEASE_URL="${ANOLISA_RELEASE_URL:-}"
+RELEASE_SCOPE="user"
+RELEASE_PROFILE="${ANOLISA_RELEASE_PROFILE:-}"
+RELEASE_VERSION_SET=0
+RELEASE_URL_SET=0
+RELEASE_SCOPE_SET=0
+RELEASE_PROFILE_SET=0
+CLI_ONLY=0
+RPM_SUITE=0
+[ -z "${ANOLISA_VERSION+x}${ANOLISA_UPDATE_URL+x}${ANOLISA_INSTALL_DIR+x}${ANOLISA_MIRROR+x}" ] || LEGACY_SELECTED=1
+[ -z "${ANOLISA_RELEASE_VERSION+x}${ANOLISA_RELEASE_URL+x}${ANOLISA_RELEASE_PROFILE+x}" ] || PRODUCT_SELECTED=1
 
 log()  { printf '\033[1;32m%s\033[0m %s\n' "==>" "$*"; }
 warn() { printf '\033[1;33m%s\033[0m %s\n' "warn:" "$*" >&2; }
@@ -44,10 +61,19 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [OPTIONS]
 
-Install or update the anolisa CLI. Optionally manage one ANOLISA component
-after the CLI is ready. The CLI validates component support for this host.
+Linux defaults to the complete GNU/Linux product release (requires Python 3.6+).
+macOS and explicit legacy options retain the standalone CLI download protocol.
+Product downloads never fall back to the standalone CLI after a failure.
 
 Options:
+  --release-version VERSION
+                    Complete product version or stable (default: stable)
+  --release-url URL  Complete product JSON index URL (HTTPS or loopback HTTP)
+  --scope SCOPE      Product user or system scope (default: user; never sudo)
+  --profile NAME     Product package profile (scope-specific default if omitted)
+  --cli-only         Install only the standalone CLI using the legacy protocol
+  --rpm              Install the complete published component set using native RPM
+                     (Linux system scope; uses sudo when needed)
   --component NAME  Manage NAME (installs it by default)
   --cosh-ng         Shorthand for --component cosh-ng
   --backend BACKEND Use BACKEND for installation (default: raw)
@@ -57,10 +83,14 @@ Options:
   --uninstall       Uninstall the selected component
   -h, --help        Show this help text and exit
 
-Without --install-mode, ANOLISA uses user scope for non-root and system for root.
+Legacy --install-mode defaults to user for non-root and system for root.
+ANOLISA_VERSION, UPDATE_URL, INSTALL_DIR and MIRROR retain their old CLI meaning
+(with the ANOLISA_ prefix on every name). Do not mix these or legacy component
+flags with ANOLISA_RELEASE_VERSION, ANOLISA_RELEASE_URL or product options.
 
 Piped examples:
   curl -fsSL https://get.agentic-os.sh | bash
+  curl -fsSL https://get.agentic-os.sh | bash -s -- --rpm
   curl -fsSL https://get.agentic-os.sh | bash -s -- --component cosh-ng --backend rpm --install-mode system
   curl -fsSL https://get.agentic-os.sh | bash -s -- --component cosh-ng --install-mode system --upgrade
   curl -fsSL https://get.agentic-os.sh | bash -s -- --component cosh-ng --install-mode system --uninstall
@@ -120,42 +150,72 @@ select_component_action() {
 parse_args() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
+      --release-version|--release-url|--scope|--profile)
+        [ "$#" -ge 2 ] || err "$1 requires a value"
+        select_product_option "$1" "$2"
+        shift 2
+        ;;
+      --release-version=*|--release-url=*|--scope=*|--profile=*)
+        select_product_option "${1%%=*}" "${1#*=}"
+        shift
+        ;;
+      --cli-only)
+        [ "$CLI_ONLY" -eq 0 ] || err "--cli-only can only be selected once"
+        CLI_ONLY=1
+        LEGACY_SELECTED=1
+        shift
+        ;;
+      --rpm)
+        [ "$RPM_SUITE" -eq 0 ] || err "--rpm can only be selected once"
+        RPM_SUITE=1
+        LEGACY_SELECTED=1
+        shift
+        ;;
       --component)
+        LEGACY_SELECTED=1
         [ "$#" -ge 2 ] || err "--component requires a component name"
         select_component "$2"
         shift 2
         ;;
       --component=*)
+        LEGACY_SELECTED=1
         select_component "${1#*=}"
         shift
         ;;
       --cosh-ng)
+        LEGACY_SELECTED=1
         select_component "cosh-ng"
         shift
         ;;
       --backend)
+        LEGACY_SELECTED=1
         [ "$#" -ge 2 ] || err "--backend requires a backend name"
         select_component_backend "$2"
         shift 2
         ;;
       --backend=*)
+        LEGACY_SELECTED=1
         select_component_backend "${1#*=}"
         shift
         ;;
       --install-mode)
+        LEGACY_SELECTED=1
         [ "$#" -ge 2 ] || err "--install-mode requires user or system"
         select_install_mode "$2"
         shift 2
         ;;
       --install-mode=*)
+        LEGACY_SELECTED=1
         select_install_mode "${1#*=}"
         shift
         ;;
       --upgrade)
+        LEGACY_SELECTED=1
         select_component_action "update"
         shift
         ;;
       --uninstall)
+        LEGACY_SELECTED=1
         select_component_action "uninstall"
         shift
         ;;
@@ -169,10 +229,21 @@ parse_args() {
     esac
   done
 
+  [ "$LEGACY_SELECTED" -eq 0 ] || [ "$PRODUCT_SELECTED" -eq 0 ] ||
+    err "product release options and legacy CLI overrides cannot be combined"
+
+  if [ "$RPM_SUITE" -eq 1 ]; then
+    [ "$CLI_ONLY" -eq 0 ] && [ -z "$COMPONENT" ] &&
+      [ "$COMPONENT_BACKEND_SET" -eq 0 ] && [ "$COMPONENT_ACTION_SET" -eq 0 ] &&
+      [ -z "$INSTALL_MODE" ] ||
+      err "--rpm cannot be combined with CLI-only or component options"
+    INSTALL_MODE=system
+  fi
+
   if [ "$COMPONENT_ACTION_SET" -eq 1 ] && [ -z "$COMPONENT" ]; then
     err "--upgrade and --uninstall require --component NAME"
   fi
-  if [ -n "$INSTALL_MODE" ] && [ -z "$COMPONENT" ]; then
+  if [ -n "$INSTALL_MODE" ] && [ -z "$COMPONENT" ] && [ "$RPM_SUITE" -eq 0 ]; then
     err "--install-mode requires --component NAME"
   fi
   if [ "$COMPONENT_BACKEND_SET" -eq 1 ] && [ -z "$COMPONENT" ]; then
@@ -181,6 +252,26 @@ parse_args() {
   if [ "$COMPONENT_BACKEND_SET" -eq 1 ] && [ "$COMPONENT_ACTION_SET" -eq 1 ]; then
     err "--backend is only valid when installing a component"
   fi
+}
+
+select_product_option() {
+  [ -n "$2" ] || err "$1 requires a nonempty value"
+  PRODUCT_SELECTED=1
+  case "$1" in
+    --release-version)
+      [ "$RELEASE_VERSION_SET" -eq 0 ] || err "only one release version can be selected"
+      RELEASE_VERSION="$2"; RELEASE_VERSION_SET=1 ;;
+    --release-url)
+      [ "$RELEASE_URL_SET" -eq 0 ] || err "only one release URL can be selected"
+      RELEASE_URL="$2"; RELEASE_URL_SET=1 ;;
+    --scope)
+      [ "$RELEASE_SCOPE_SET" -eq 0 ] || err "only one release scope can be selected"
+      case "$2" in user|system) ;; *) err "invalid product scope: $2" ;; esac
+      RELEASE_SCOPE="$2"; RELEASE_SCOPE_SET=1 ;;
+    --profile)
+      [ "$RELEASE_PROFILE_SET" -eq 0 ] || err "only one product profile can be selected"
+      RELEASE_PROFILE="$2"; RELEASE_PROFILE_SET=1 ;;
+  esac
 }
 
 check_component_action_prerequisites() {
@@ -382,11 +473,13 @@ if [ "$actual_sha" != "$expected_sha" ]; then
   exit 1
 fi
 
-tar -xzf "$archive" -C "$workdir"
-if [ ! -f "$workdir/anolisa" ]; then
-  echo "error: privileged CLI archive does not contain anolisa" >&2
+entry=$(tar -tvzf "$archive" anolisa) || exit 1
+if [ "$(printf "%s\n" "$entry" | awk "END {print NR}")" -ne 1 ]; then
+  echo "error: privileged CLI archive requires one regular anolisa file" >&2
   exit 1
 fi
+case "$entry" in -*) ;; *) echo "error: privileged CLI archive requires a regular file" >&2; exit 1 ;; esac
+tar -xOzf "$archive" anolisa >"$workdir/anolisa"
 chmod 0755 "$workdir/anolisa"
 "$workdir/anolisa" --install-mode system "$@"
 '
@@ -495,10 +588,311 @@ check_active_cli() {
   return 1
 }
 
+refuse_managed_cli() {
+  local destination="${INSTALL_DIR}/anolisa" candidate parent resolved status
+  if ! resolved="$(canonical_path "$destination")"; then
+    resolved="$(cd "$INSTALL_DIR" 2>/dev/null && pwd -P)" || resolved=""
+    [ -z "$resolved" ] || resolved="${resolved}/anolisa"
+  fi
+  for candidate in "$destination" "$resolved"; do
+    [ -n "$candidate" ] || continue
+    if [ -f "$candidate" ]; then
+      command -v dd >/dev/null 2>&1 || err "dd is required to inspect an existing CLI"
+      if dd if="$candidate" bs=4096 count=1 2>/dev/null |
+        grep -Fq '# ANOLISA release launcher v1'; then
+        err "refusing to overwrite an ANOLISA product launcher at $destination; use the product release operation"
+      fi
+    fi
+    case "$candidate" in /*) ;; *) candidate="${PWD}/${candidate}" ;; esac
+    parent="${candidate%/*}"
+    while [ -n "$parent" ]; do
+      if [ -e "$parent/.aw-packages" ] || [ -L "$parent/.aw-packages" ] ||
+        [ -e "$parent/.aw-install.lock" ] || [ -L "$parent/.aw-install.lock" ]; then
+        err "refusing to overwrite an AW-managed CLI at $destination; use the product release operation"
+      fi
+      [ "$parent" != / ] || break
+      parent="${parent%/*}"
+      [ -n "$parent" ] || parent=/
+    done
+    case "$candidate" in
+      */node_modules/@anolisa/cli/*|*/Cellar/anolisa/*)
+        err "refusing to overwrite a CLI owned by npm or Homebrew: $destination" ;;
+    esac
+    if command -v rpm >/dev/null 2>&1; then
+      status=0
+      rpm -qf -- "$candidate" >/dev/null 2>&1 || status=$?
+      [ "$status" -ne 0 ] || err "refusing to overwrite an RPM-owned CLI: $destination"
+      [ "$status" -eq 1 ] || err "could not determine RPM ownership of $destination"
+    fi
+    if command -v dpkg-query >/dev/null 2>&1; then
+      status=0
+      dpkg-query -S -- "$candidate" >/dev/null 2>&1 || status=$?
+      [ "$status" -ne 0 ] || err "refusing to overwrite a dpkg-owned CLI: $destination"
+      [ "$status" -eq 1 ] || err "could not determine dpkg ownership of $destination"
+    fi
+  done
+}
+
+install_product() {
+  command -v python3 >/dev/null 2>&1 ||
+    err "Python 3 is required to verify a complete product release; install it or select --cli-only"
+  python3 - "$RELEASE_URL" "$RELEASE_VERSION" "$ARCH_SHORT" "$RELEASE_SCOPE" "$TMPDIR_INSTALL" "$RELEASE_PROFILE" <<'PY'
+import gzip
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import sys
+import tarfile
+import time
+import urllib.parse
+import urllib.request
+
+if sys.version_info < (3, 6):
+    print("error: complete product download requires Python 3.6 or newer", file=sys.stderr)
+    sys.exit(1)
+
+MAX_ARCHIVE = 4 * 1024**3
+MAX_EXPANDED = 16 * 1024**3
+MAX_FILE = 1024**3
+MAX_ENTRIES = 100000
+
+def fail(message):
+    raise ValueError(message)
+
+def version(value):
+    if not isinstance(value, str) or len(value) > 128:
+        fail("invalid product release version")
+    match = re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?", value)
+    if not match or any(item.isdigit() and len(item) > 1 and item[0] == "0" for item in (match[4] or "").split(".")):
+        fail("product release version must be a safe SemVer or stable")
+    return value
+
+def url(value):
+    if not isinstance(value, str) or len(value) > 8192 or any(ord(char) < 33 for char in value):
+        fail("invalid product download URL")
+    parsed = urllib.parse.urlsplit(value)
+    if not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.fragment:
+        fail("product URL requires a host and cannot contain credentials or a fragment")
+    if parsed.port is not None and not 1 <= parsed.port <= 65535:
+        fail("invalid product URL port")
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "localhost", "::1")):
+        fail("product URLs require HTTPS; HTTP is accepted only for loopback fixtures")
+    return value
+
+class Redirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, target):
+        url(target)
+        if urllib.parse.urlsplit(request.full_url).scheme == "https" and urllib.parse.urlsplit(target).scheme != "https":
+            fail("product download cannot downgrade HTTPS")
+        return super().redirect_request(request, fp, code, message, headers, target)
+
+def fetch(source, destination, limit, expected=None):
+    request = urllib.request.Request(url(source), headers={"Accept-Encoding": "identity", "User-Agent": "anolisa-bootstrap/1"})
+    digest = hashlib.sha256()
+    count = 0
+    deadline = time.monotonic() + 300
+    with urllib.request.build_opener(Redirect).open(request, timeout=15) as response, destination.open("xb") as output:
+        url(response.geturl())
+        length = response.headers.get("Content-Length")
+        if length is not None and (not length.isdigit() or int(length) > limit or (expected is not None and int(length) != expected)):
+            fail("product download Content-Length differs from its bounded size")
+        while True:
+            if time.monotonic() > deadline:
+                fail("product download exceeded its deadline")
+            chunk = response.read(65536)
+            if not chunk:
+                break
+            count += len(chunk)
+            if count > limit or (expected is not None and count > expected):
+                fail("product download exceeds its declared size")
+            digest.update(chunk)
+            output.write(chunk)
+    if expected is not None and count != expected:
+        fail("product download size differs from its index")
+    return digest.hexdigest()
+
+def pairs(items):
+    result = {}
+    for key, value in items:
+        if key in result:
+            fail("duplicate JSON key in product metadata")
+        result[key] = value
+    return result
+
+def read_json(path, limit):
+    if path.stat().st_size > limit:
+        fail("product metadata exceeds its byte limit")
+    with path.open("rb") as source:
+        data = source.read(limit + 1)
+    if len(data) > limit:
+        fail("product metadata changed beyond its byte limit")
+    return json.loads(data, object_pairs_hook=pairs)
+
+def unpack(archive, work):
+    expanded = work / "release.tar"
+    total = 0
+    with gzip.open(archive, "rb") as source, expanded.open("xb") as output:
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_EXPANDED:
+                fail("product archive exceeds the expanded byte limit")
+            output.write(chunk)
+    # Bound extended headers before tarfile parses their potentially large metadata bodies.
+    with expanded.open("rb") as source:
+        headers = 0
+        extended_bytes = 0
+        while True:
+            header = source.read(512)
+            if not header or header == bytes(512):
+                while True:
+                    tail = source.read(65536)
+                    if not tail:
+                        break
+                    if tail.strip(b"\0"):
+                        fail("unexpected data after product tar end marker")
+                break
+            headers += 1
+            if len(header) != 512 or headers > MAX_ENTRIES:
+                fail("product archive has too many or truncated headers")
+            size_field = header[124:136].strip(b"\0 ")
+            if not re.fullmatch(b"[0-7]{1,11}", size_field):
+                fail("unsupported product tar size encoding")
+            size = int(size_field, 8)
+            kind = header[156:157]
+            if kind not in (b"0", b"\0", b"5", b"x", b"L"):
+                fail("product archive contains a link, special file or unsupported header")
+            if size > (65536 if kind in (b"x", b"L") else MAX_FILE) or (kind == b"5" and size):
+                fail("product archive entry exceeds its byte limit")
+            if kind in (b"x", b"L"):
+                extended_bytes += size
+                if extended_bytes > 16 * 1024**2:
+                    fail("product archive extended metadata exceeds its total byte limit")
+            source.seek(((size + 511) // 512) * 512, 1)
+            if source.tell() > total:
+                fail("truncated product archive body")
+    with tarfile.open(expanded, "r:") as tar:
+        members = tar.getmembers()
+        roots, names, files = set(), set(), set()
+        if not members or len(members) > MAX_ENTRIES:
+            fail("empty or oversized product archive")
+        for member in members:
+            name = member.name.rstrip("/")
+            name.encode("utf-8", "strict")
+            parts = name.split("/")
+            if len(name) > 4096 or any(part in ("", ".", "..") for part in parts) or "\\" in name or any(ord(char) < 32 or ord(char) == 127 for char in name):
+                fail("unsafe product archive path")
+            if not re.fullmatch(r"[A-Za-z0-9._+-]{1,180}", parts[0]) or name in names:
+                fail("duplicate or invalid product archive root")
+            if not (member.isfile() or member.isdir()) or not 0 <= member.size <= MAX_FILE or member.mode & 0o7022:
+                fail("unsafe product archive file type or permissions")
+            if member.sparse is not None or any(key.startswith("GNU.sparse") for key in member.pax_headers) or (member.isdir() and member.size):
+                fail("sparse files and nonempty directory bodies are not supported")
+            if member.isfile() and member.mode & 0o777 not in (0o644, 0o755):
+                fail("product files must have mode 0644 or 0755")
+            names.add(name)
+            roots.add(parts[0])
+            if member.isfile():
+                files.add(name)
+        if len(roots) != 1:
+            fail("product archive requires exactly one root directory")
+        for name in names:
+            if any(str(parent) in files for parent in PurePosixPath(name).parents):
+                fail("product archive file is another entry's parent")
+        root_name = roots.pop()
+        if root_name + "/install.sh" not in files or root_name + "/release.json" not in files:
+            fail("product archive is missing install.sh or release.json")
+        destination = work / "extracted"
+        destination.mkdir(mode=0o700)
+        for member in members:
+            target = destination / member.name
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                with tar.extractfile(member) as source, target.open("xb") as output:
+                    shutil.copyfileobj(source, output, 65536)
+                os.chmod(target, member.mode & 0o777)
+    return destination / root_name
+
+def main():
+    explicit_url, requested, arch, scope, temporary, profile = sys.argv[1:]
+    if requested != "stable":
+        version(requested)
+    if scope == "system" and os.geteuid() != 0:
+        fail("system product installation requires root; this installer never invokes sudo")
+    base = "https://anolisa.oss-cn-hangzhou.aliyuncs.com/anolisa-releases/anolisa/v1/product"
+    selected_url = explicit_url or (base + "/release-index.json" if requested == "stable" else base + "/releases/" + requested + "/release-index.json")
+    work = Path(temporary)
+    index_file = work / "product-index.json"
+    print("==> downloading complete product index", flush=True)
+    fetch(selected_url, index_file, 1024 * 1024)
+    index = read_json(index_file, 1024 * 1024)
+    if not isinstance(index, dict) or set(index) != {"schema_version", "product_version", "artifacts"} or type(index["schema_version"]) is not int or index["schema_version"] != 1:
+        fail("unsupported complete product index")
+    selected = version(index["product_version"])
+    if requested != "stable" and selected != requested:
+        fail("product index version differs from the requested release")
+    artifacts = index["artifacts"]
+    if not isinstance(artifacts, list) or not 1 <= len(artifacts) <= 128:
+        fail("invalid product artifact list")
+    choices, platforms = [], set()
+    for item in artifacts:
+        if not isinstance(item, dict) or set(item) != {"os", "arch", "abi", "url", "sha256", "size"}:
+            fail("invalid product artifact record")
+        platform = (item["os"], item["arch"], item["abi"])
+        if platform[0] != "linux" or platform[1] not in ("x86_64", "aarch64") or platform[2] != "gnu" or platform in platforms:
+            fail("unsupported or duplicate product artifact platform")
+        platforms.add(platform)
+        url(item["url"])
+        if not isinstance(item["sha256"], str) or not re.fullmatch(r"[a-fA-F0-9]{64}", item["sha256"]) or type(item["size"]) is not int or not 0 < item["size"] <= MAX_ARCHIVE:
+            fail("invalid product artifact checksum or bounded size")
+        if platform == ("linux", arch, "gnu"):
+            choices.append(item)
+    if len(choices) != 1:
+        fail("product index has no artifact for linux/" + arch + "/gnu")
+    artifact = choices[0]
+    archive = work / "product.tar.gz"
+    print("==> downloading and verifying complete product " + selected, flush=True)
+    actual = fetch(artifact["url"], archive, artifact["size"], artifact["size"])
+    if actual != artifact["sha256"].lower():
+        fail("product archive SHA256 mismatch")
+    root = unpack(archive, work)
+    manifest = read_json(root / "release.json", 1024 * 1024)
+    if not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int or manifest.get("schema_version") not in (1, 2) or manifest.get("product_version") != selected:
+        fail("product archive release.json differs from its selected index")
+    print("==> installing verified complete product " + selected + " (scope " + scope + ")", flush=True)
+    command = ["bash", str(root / "install.sh"), "--scope", scope]
+    if profile:
+        command.extend(["--profile", profile])
+    os.execv("/bin/bash", command)
+
+try:
+    main()
+except (OSError, EOFError, ValueError, KeyError, TypeError, tarfile.TarError) as error:
+    print("error: complete product installation failed: " + str(error), file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 main() {
   parse_args "$@"
-  check_component_action_prerequisites
   detect_platform
+  [ "$RPM_SUITE" -eq 0 ] || [ "$OS" = linux ] || err "--rpm requires Linux"
+  if [ "$LEGACY_SELECTED" -eq 0 ] && [ "$OS" = linux ] || [ "$PRODUCT_SELECTED" -eq 1 ]; then
+    [ "$OS" = linux ] || err "complete product releases currently require Linux; use --cli-only on macOS"
+    TMPDIR_INSTALL="$(mktemp -d)"
+    trap cleanup EXIT
+    install_product
+    return "$?"
+  fi
+  check_component_action_prerequisites
+  refuse_managed_cli
   command -v curl >/dev/null 2>&1 || err "curl is required but not found"
   command -v tar  >/dev/null 2>&1 || err "tar is required but not found"
 
@@ -546,7 +940,13 @@ main() {
   VERIFIED_ARCHIVE_SHA256="$expected_sha"
 
   log "extracting binary"
-  tar -xzf "${TMPDIR_INSTALL}/${artifact}" -C "$TMPDIR_INSTALL"
+  local entry
+  entry="$(tar -tvzf "${TMPDIR_INSTALL}/${artifact}" anolisa)" ||
+    err "CLI archive requires one regular root anolisa file"
+  [ "$(printf '%s\n' "$entry" | awk 'END {print NR}')" -eq 1 ] ||
+    err "CLI archive contains duplicate anolisa entries"
+  case "$entry" in -*) ;; *) err "CLI archive anolisa must be a regular file" ;; esac
+  tar -xOzf "${TMPDIR_INSTALL}/${artifact}" anolisa >"${TMPDIR_INSTALL}/anolisa"
 
   mkdir -p "$INSTALL_DIR"
   STAGED_BINARY="$(mktemp "${INSTALL_DIR}/.anolisa.XXXXXX")"
@@ -561,6 +961,7 @@ main() {
     err "downloaded binary version does not match release manifest"
   fi
 
+  refuse_managed_cli
   mv -f "$STAGED_BINARY" "${INSTALL_DIR}/anolisa"
   STAGED_BINARY=""
   log "installed to ${INSTALL_DIR}/anolisa"
@@ -574,7 +975,14 @@ main() {
   esac
 
   log "$installed_version"
-  [ -z "$COMPONENT" ] || run_component_action
+  if [ "$RPM_SUITE" -eq 1 ]; then
+    log "installing the complete published RPM component set"
+    run_anolisa install --all --backend rpm
+    run_anolisa setup --non-interactive --scope system
+    log "run 'anolisa setup' as your regular user to configure Agent access"
+  else
+    [ -z "$COMPONENT" ] || run_component_action
+  fi
 
   check_active_cli "$INSTALL_DIR/anolisa" "$installed_version"
   log "done"
