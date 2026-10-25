@@ -11,6 +11,7 @@ pub mod central_log;
 pub mod component;
 pub mod component_snapshot;
 pub mod daemon_server;
+pub mod deployment;
 pub mod distribution;
 pub mod domain;
 pub mod download;
