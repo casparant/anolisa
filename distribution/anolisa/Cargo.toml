@@ -92,6 +92,7 @@ anolisa-core = { path = "crates/anolisa-core" }
 anolisa-env = { path = "crates/anolisa-env" }
 anolisa-build = { path = "crates/anolisa-build" }
 anolisa-platform = { path = "crates/anolisa-platform" }
+local-package = { path = "../crates/local-package" }
 
 [profile.release]
 lto = "thin"
@@ -100,3 +101,7 @@ panic = "abort"
 debug = true
 strip = "debuginfo"
 split-debuginfo = "packed"
+
+# Installation and verification repeatedly hash shipped program files.
+[profile.dev.package.sha2]
+opt-level = 3

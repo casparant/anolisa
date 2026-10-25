@@ -163,6 +163,11 @@ pub enum InstallMode {
     User,
 }
 
+/// An invalid component identity cannot authorize a shared-data directory.
+#[derive(Debug, thiserror::Error)]
+#[error("invalid component resource namespace: {0}")]
+pub struct ResourceNamespaceError(pub String);
+
 /// Resolved filesystem paths for a given install mode.
 ///
 /// All fields are absolute. `lock_file` and `central_log` are
@@ -191,6 +196,9 @@ pub struct FsLayout {
     pub libexec_dir: PathBuf,
     /// Shared read-only data root (skills, adapters, packaged catalogs).
     pub datadir: PathBuf,
+    /// One component namespace authorized by the caller's resolved installation target.
+    /// The shared base and other components are never authorized by this field.
+    component_resource_root: Option<PathBuf>,
     /// Configuration root.
     pub etc_dir: PathBuf,
     /// State root — `installed-state.toml` lives here.
@@ -222,6 +230,46 @@ pub struct FsLayout {
 }
 
 impl FsLayout {
+    /// Shared-data base without the ANOLISA product namespace.
+    pub fn sharedir(&self) -> &Path {
+        self.datadir.parent().unwrap_or(self.datadir.as_path())
+    }
+
+    /// Scope additional resource access to one already-resolved component identity.
+    ///
+    /// Callers must supply the selected component, not a path obtained from a receipt.
+    /// A clone replaces any prior component authorization rather than accumulating roots.
+    ///
+    /// # Errors
+    /// Rejects empty identities, path separators and traversal-like namespace names.
+    pub fn for_component(&self, component: &str) -> Result<Self, ResourceNamespaceError> {
+        let namespace = match component {
+            "sec-core" => "agent-sec-core",
+            "memory" => "agent-memory",
+            "ckpt" => "ws-ckpt",
+            "sight" => "agentsight",
+            "skill" => "os-skills",
+            other => other,
+        };
+        if namespace.is_empty()
+            || namespace.len() > 128
+            || !namespace.as_bytes()[0].is_ascii_alphanumeric()
+            || !namespace
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"-_.+".contains(&byte))
+        {
+            return Err(ResourceNamespaceError(component.to_owned()));
+        }
+        let mut selected = self.clone();
+        selected.component_resource_root = Some(self.sharedir().join(namespace));
+        Ok(selected)
+    }
+
+    /// The selected component's resource root, absent on a general product layout.
+    pub fn component_resource_root(&self) -> Option<&Path> {
+        self.component_resource_root.as_deref()
+    }
+
     /// System (FHS) install layout. `prefix` defaults to `/`.
     ///
     /// When a non-`/` prefix is supplied, every default absolute path
@@ -245,6 +293,7 @@ impl FsLayout {
             lib_dir: rebase(fhs::LIB),
             libexec_dir: rebase(fhs::LIBEXEC),
             datadir: rebase(fhs::DATADIR),
+            component_resource_root: None,
             etc_dir,
             state_dir,
             cache_dir: rebase(fhs::CACHE),
@@ -347,6 +396,7 @@ impl FsLayout {
             lib_dir,
             libexec_dir,
             datadir,
+            component_resource_root: None,
             etc_dir,
             state_dir,
             cache_dir,

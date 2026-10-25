@@ -451,6 +451,7 @@ fn extract_string_list(value: &toml::Value) -> Vec<String> {
 /// | `{libdir}`, `{lib_dir}`      | `layout.lib_dir`   |
 /// | `{libexecdir}`, `{libexec_dir}` | `layout.libexec_dir` |
 /// | `{datadir}`                   | `layout.datadir`   |
+/// | `{sharedir}`                  | `layout.sharedir()` |
 /// | `{etcdir}`, `{etc_dir}`      | `layout.etc_dir`   |
 /// | `{statedir}`, `{state_dir}`  | `layout.state_dir` |
 /// | `{logdir}`, `{log_dir}`      | `layout.log_dir`   |
@@ -507,6 +508,7 @@ fn expand(
     replacements.insert("libexecdir", &layout.libexec_dir);
     replacements.insert("libexec_dir", &layout.libexec_dir);
     replacements.insert("datadir", &layout.datadir);
+    replacements.insert("sharedir", layout.sharedir());
     replacements.insert("etcdir", &layout.etc_dir);
     replacements.insert("etc_dir", &layout.etc_dir);
     replacements.insert("statedir", &layout.state_dir);

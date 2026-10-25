@@ -239,7 +239,7 @@ enum RpmRootDecl {
     /// Declared but blank after trimming — fail closed everywhere.
     Blank,
     /// Declared with a placeholder outside the RPM vocabulary
-    /// (`{datadir}`, `{component}`) — fail closed everywhere. Any other
+    /// (`{datadir}`, `{sharedir}`, `{component}`) — fail closed everywhere. Any other
     /// layout placeholder (`{bindir}`, `{libexecdir}`, …) expands
     /// against the *consuming* manager's layout: a user-mode manager
     /// consuming a system RPM contract would resolve it under the user
@@ -289,8 +289,9 @@ impl RpmRootDecl {
 /// First `{placeholder}` in `template` outside the vocabulary allowed for
 /// `[adapters.backends.rpm].resource_root`. An RPM payload path is
 /// scope-independent by definition: absolute (the package-owned path) or
-/// `{datadir}`-rooted (expanded against the datadir roots of the scope
-/// that owns the contract, plus `{component}`). Every other layout
+/// `{datadir}`/`{sharedir}`-rooted (expanded against the data roots of the
+/// scope that owns the contract, plus `{component}`). Shared-data expansion
+/// remains bounded to that component's namespace. Every other layout
 /// placeholder expands against the consuming manager's layout — the
 /// wrong scope whenever the contract is consumed cross-scope. Token
 /// scanning mirrors [`expand_layout_placeholders`](super::expand_layout_placeholders)
@@ -303,7 +304,7 @@ fn unsupported_rpm_placeholder(template: &str) -> Option<String> {
             break;
         };
         let key = &template[open + 1..open + rel_close];
-        if key != "datadir" && key != "component" {
+        if key != "datadir" && key != "sharedir" && key != "component" {
             return Some(key.to_string());
         }
         search_from = open + rel_close + 1;
@@ -368,9 +369,9 @@ impl AdapterDecl {
 
 /// Trust decision for the external resources of one `(component, framework)`:
 /// the roots symlink targets may resolve under, plus
-/// whether the two-source condition — RPM provenance recorded in state
-/// **and** a contract-declared `[adapters.backends.rpm].resource_root`
-/// — currently grants external-root trust. This is the single decision
+/// whether a loaded component contract grants its own shared-data namespace
+/// or RPM provenance **and** a contract-declared backend root grant another
+/// external subtree. This is the single decision
 /// point shared by every claim-validation site (enable prior-receipt,
 /// pre-persist, apply, disable, status) and by the anchor lifecycle, so
 /// no call site can fall out of sync with the rule. Derived from the
@@ -389,8 +390,8 @@ struct ExternalRootTrust {
     /// cleanable, while a forged anchor authorizes nothing beneath it and
     /// no write outside anolisa's own layout.
     anchors: Vec<PathBuf>,
-    /// The two-source condition held, permitting newly declared external
-    /// targets. OpenCode also retains previously validated exact anchors
+    /// A matching contract namespace or the RPM two-source condition permits
+    /// newly declared targets. OpenCode retains previously validated exact anchors
     /// while a migration still owns their links.
     anchor_eligible: bool,
 }
@@ -2181,6 +2182,14 @@ impl AdapterManager {
     ) -> Result<PathBuf, AdapterError> {
         let mut layout = self.layout.clone();
         layout.datadir = datadir.to_path_buf();
+        let layout =
+            layout
+                .for_component(component)
+                .map_err(|error| AdapterError::InvalidAdapterInput {
+                    component: component.to_owned(),
+                    framework: String::new(),
+                    reason: error.to_string(),
+                })?;
         let path =
             super::expand_layout_placeholders(dest_template, &layout, &[("component", component)])?;
         if !path.is_absolute() {
@@ -2189,13 +2198,24 @@ impl AdapterManager {
                 path,
             });
         }
+        if dest_template.contains("{sharedir}") {
+            let roots = layout
+                .component_resource_root()
+                .map(Path::to_path_buf)
+                .into_iter()
+                .collect::<Vec<_>>();
+            super::claim::validate_external_path(&path, &roots).map_err(|_| AdapterError::InvalidAdapterInput {
+                component: component.to_owned(), framework: String::new(),
+                reason: format!("adapter resource {} is outside component {component}'s shared-data namespace", path.display()),
+            })?;
+        }
         Ok(path)
     }
 
     /// Build the [`ExternalRootTrust`] decision from an already-loaded
-    /// contract. The trusted set is the shared datadir roots, extended —
-    /// only under the two-source condition — with the contract's expanded
-    /// RPM root and the receipt's enable-time anchor.
+    /// contract. The trusted set includes the legacy product datadirs and
+    /// this component's scoped resource namespace; additional RPM roots need
+    /// native-package provenance. Receipt anchors authorize exact targets only.
     fn external_root_trust(
         &self,
         component: &str,
@@ -2206,6 +2226,22 @@ impl AdapterManager {
         state: &StateStore,
     ) -> ExternalRootTrust {
         let mut target_roots = self.all_datadir_roots.clone();
+        // The loaded contract grants one component namespace per owning scope.
+        // Its /usr/share parent is never added as a trusted subtree.
+        let mut component_roots = Vec::new();
+        if manifest.component.name == component {
+            for datadir in scoped_datadir_roots {
+                let mut layout = self.layout.clone();
+                layout.datadir = datadir.clone();
+                if let Ok(selected) = layout.for_component(component)
+                    && let Some(root) = selected.component_resource_root()
+                    && !target_roots.iter().any(|candidate| candidate == root)
+                {
+                    target_roots.push(root.to_path_buf());
+                    component_roots.push(root.to_path_buf());
+                }
+            }
+        }
         // The anchor is read regardless of the two-source outcome: as an
         // exact-equality allowance it is what keeps a stale external-root
         // receipt reportable and cleanable after the RPM (or the whole
@@ -2227,7 +2263,7 @@ impl AdapterManager {
                 return ExternalRootTrust {
                     target_roots,
                     anchors,
-                    anchor_eligible: false,
+                    anchor_eligible: !component_roots.is_empty(),
                 };
             }
         };
@@ -2369,7 +2405,7 @@ impl AdapterManager {
                         reason: format!(
                             "[adapters.backends.rpm].resource_root \"{template}\" uses \
                              placeholder '{{{placeholder}}}'; an RPM root must be an absolute \
-                             path or a {{datadir}}-rooted template (plus {{component}}) — \
+                             path or a {{datadir}}/{{sharedir}}-rooted template (plus {{component}}) — \
                              other layout placeholders would resolve against the consuming \
                              scope's layout, not the contract's"
                         ),
@@ -2384,7 +2420,8 @@ impl AdapterManager {
         let declared_entry = declared_bundle_entry(manifest, framework);
         match dest_template {
             Some(template) => {
-                let dest_uses_datadir = template.contains("{datadir}");
+                let dest_uses_datadir =
+                    template.contains("{datadir}") || template.contains("{sharedir}");
                 let ordered_roots = if dest_uses_datadir {
                     prioritize_datadir_root(scoped_datadir_roots, contract_datadir_root)
                 } else {
@@ -3954,7 +3991,17 @@ fn resolve_skill_sources(
 ) -> Result<Vec<super::driver::DeclaredSkill>, AdapterError> {
     let mut scoped_layout = layout.clone();
     scoped_layout.datadir = effective_datadir.to_path_buf();
-    let allowed_roots = [resource_root.to_path_buf(), effective_datadir.to_path_buf()];
+    let scoped_layout = scoped_layout.for_component(component).map_err(|error| {
+        AdapterError::InvalidAdapterInput {
+            component: component.to_owned(),
+            framework: framework.to_owned(),
+            reason: error.to_string(),
+        }
+    })?;
+    let mut allowed_roots = vec![resource_root.to_path_buf(), effective_datadir.to_path_buf()];
+    if let Some(root) = scoped_layout.component_resource_root() {
+        allowed_roots.push(root.to_path_buf());
+    }
     specs
         .into_iter()
         .map(|spec| {
@@ -3975,7 +4022,7 @@ fn resolve_skill_sources(
                             component: component.to_string(),
                             framework: framework.to_string(),
                             reason: format!(
-                                "skill '{}' source '{}' resolves to '{}' which is outside the allowed roots (resource_root or datadir)",
+                                "skill '{}' source '{}' resolves to '{}' which is outside the allowed roots (resource_root, datadir or selected component resources)",
                                 spec.name,
                                 template,
                                 resolved.display(),
@@ -7589,6 +7636,123 @@ resource_root = "{rpm_root}"
             matches!(err, AdapterError::ContractResourceRootNotFound { .. }),
             "expected ContractResourceRootNotFound, got: {err}"
         );
+    }
+
+    #[test]
+    fn sharedir_templates_authorize_only_the_loaded_component_namespace() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let layout = FsLayout::system(Some(tmp.path().to_path_buf()));
+        let datadir = layout.datadir.clone();
+        let sharedir = layout.sharedir().to_path_buf();
+        let manager = AdapterManager::new(layout, None, "test".into());
+        let expected = sharedir.join("tokenless/adapters/hermes");
+        assert_eq!(
+            manager
+                .expand_dest_template(
+                    "{sharedir}/tokenless/adapters/hermes",
+                    "tokenless",
+                    &datadir
+                )
+                .unwrap(),
+            expected
+        );
+        assert!(
+            manager
+                .expand_dest_template(
+                    "{sharedir}/agent-memory/adapters/hermes",
+                    "tokenless",
+                    &datadir
+                )
+                .is_err()
+        );
+        assert!(
+            manager
+                .expand_dest_template(
+                    "{sharedir}/tokenless/../agent-memory/adapters/hermes",
+                    "tokenless",
+                    &datadir
+                )
+                .is_err()
+        );
+        assert_eq!(
+            unsupported_rpm_placeholder("{sharedir}/tokenless/adapters/{component}"),
+            None
+        );
+        let manifest = ComponentManifest::from_toml_str(&contract_toml_with_custom_dest(
+            "tokenless",
+            "{sharedir}/tokenless/adapters/hermes",
+        ))
+        .unwrap();
+        let trust = manager.external_root_trust(
+            "tokenless",
+            &manifest,
+            "hermes",
+            &[datadir],
+            false,
+            &StateStore::empty(),
+        );
+        assert!(trust.target_roots.contains(&sharedir.join("tokenless")));
+        assert!(!trust.target_roots.contains(&sharedir));
+        assert!(!trust.target_roots.contains(&sharedir.join("agent-memory")));
+        assert!(trust.anchor_eligible);
+    }
+
+    #[test]
+    fn sharedir_skill_sources_stay_in_component_and_contract_scope() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let user = FsLayout::system(Some(tmp.path().join("user")));
+        let system = FsLayout::system(Some(tmp.path().join("system")));
+        let resource = system.sharedir().join("tokenless/adapters/hermes");
+        let spec = |path: &str| {
+            vec![crate::manifest::AdapterSkillSpec {
+                name: "usage".into(),
+                source: Some(path.into()),
+            }]
+        };
+        let result = resolve_skill_sources(
+            spec("{sharedir}/tokenless/skills/usage"),
+            &user,
+            &system.datadir,
+            "tokenless",
+            "hermes",
+            &resource,
+        )
+        .unwrap();
+        assert_eq!(
+            result[0].source.as_ref(),
+            Some(&system.sharedir().join("tokenless/skills/usage"))
+        );
+        assert!(
+            resolve_skill_sources(
+                spec("{sharedir}/agent-memory/skills/usage"),
+                &user,
+                &system.datadir,
+                "tokenless",
+                "hermes",
+                &resource
+            )
+            .is_err()
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let tokenless = system.sharedir().join("tokenless");
+            let memory = system.sharedir().join("agent-memory");
+            std::fs::create_dir_all(&tokenless).unwrap();
+            std::fs::create_dir_all(&memory).unwrap();
+            symlink(&memory, tokenless.join("escape")).unwrap();
+            assert!(
+                resolve_skill_sources(
+                    spec("{sharedir}/tokenless/escape/usage"),
+                    &user,
+                    &system.datadir,
+                    "tokenless",
+                    "hermes",
+                    &resource
+                )
+                .is_err()
+            );
+        }
     }
 
     /// User-mode manager can discover contract-defined resource root from

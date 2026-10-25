@@ -36,6 +36,7 @@ pub mod providers;
 pub mod provisioner;
 pub mod record_sink;
 pub mod register;
+pub mod release;
 pub mod resolver;
 pub mod sandbox_manifest;
 pub mod self_update;

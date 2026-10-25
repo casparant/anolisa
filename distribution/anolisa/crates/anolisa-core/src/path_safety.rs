@@ -48,7 +48,7 @@ pub enum PathBoundaryError {
 /// "filesystem at large" and must not be created or deleted by the
 /// framework.
 pub fn lexical_roots(layout: &FsLayout) -> Vec<&Path> {
-    vec![
+    let mut roots = vec![
         layout.bin_dir.as_path(),
         layout.etc_dir.as_path(),
         layout.state_dir.as_path(),
@@ -65,7 +65,11 @@ pub fn lexical_roots(layout: &FsLayout) -> Vec<&Path> {
         // (`~/.config/anolisa`) — so both must be listed explicitly.
         layout.systemd_unit_dir.as_path(),
         layout.systemd_user_unit_dir.as_path(),
-    ]
+    ];
+    if let Some(root) = layout.component_resource_root() {
+        roots.push(root);
+    }
+    roots
 }
 
 /// Reject `path` unless it lives under one of `layout`'s owned roots,
@@ -160,6 +164,59 @@ mod tests {
         std::fs::create_dir_all(&layout.bin_dir).unwrap();
         let dest = layout.bin_dir.join("agentsight");
         validate_owned_path(&layout, &dest).expect("clean path must accept");
+    }
+
+    #[test]
+    fn component_resources_authorize_only_the_selected_namespace() {
+        let tmp = tempdir().unwrap();
+        let layout = fixture(tmp.path());
+        let selected = layout.for_component("tokenless").unwrap();
+        let tokenless = layout
+            .sharedir()
+            .join("tokenless/adapters/hermes/plugin.yaml");
+        let memory = layout
+            .sharedir()
+            .join("agent-memory/adapters/openclaw/package.json");
+        assert!(validate_owned_path(&layout, &tokenless).is_err());
+        assert!(validate_owned_path(&selected, &tokenless).is_ok());
+        assert!(validate_owned_path(&selected, &memory).is_err());
+        assert!(
+            validate_owned_path(&selected, &layout.sharedir().join("other-app/settings")).is_err()
+        );
+        let replaced = selected.for_component("agent-memory").unwrap();
+        assert!(validate_owned_path(&replaced, &tokenless).is_err());
+        assert!(validate_owned_path(&replaced, &memory).is_ok());
+        assert!(layout.for_component("../tokenless").is_err());
+        for component in ["libstdc++", "component.test-1", "my_component"] {
+            let selected = layout.for_component(component).unwrap();
+            let namespace = layout.sharedir().join(component);
+            assert_eq!(
+                selected.component_resource_root(),
+                Some(namespace.as_path())
+            );
+            assert!(
+                validate_owned_path(
+                    &selected,
+                    &layout
+                        .sharedir()
+                        .join(component)
+                        .join("adapters/plugin.json")
+                )
+                .is_ok()
+            );
+            assert!(validate_owned_path(&selected, &memory).is_err());
+        }
+        for component in [
+            ".",
+            "..",
+            ".hidden",
+            "../memory",
+            "tokenless/../memory",
+            "bad\\name",
+            "bad:name",
+        ] {
+            assert!(layout.for_component(component).is_err(), "{component}");
+        }
     }
 
     #[test]

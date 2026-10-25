@@ -78,6 +78,7 @@ dependencies = [
  "flate2",
  "fs2",
  "json5",
+ "local-package",
  "nix",
  "plist",
  "semver",
@@ -921,6 +922,28 @@ name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
+
+[[package]]
+name = "local-package"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "local-package-runtime",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "local-package-runtime"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "thiserror",
+]
 
 [[package]]
 name = "log"

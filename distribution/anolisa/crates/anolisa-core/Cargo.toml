@@ -32,6 +32,7 @@ nix.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 xattr.workspace = true
+local-package.workspace = true
 
 [features]
 # Compiles the in-memory test executors (FakeServiceManager,

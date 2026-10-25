@@ -608,7 +608,7 @@ fn observe_owned_files_for_record(
         }
         RecordFacts::Absent => return None,
     };
-    observe_owned_file_contract(files, layout)
+    observe_owned_file_contract(files, layout, name)
 }
 
 /// Observe the owned-file contract of an active installation.
@@ -621,7 +621,9 @@ pub fn observe_owned_files(
     layout: &FsLayout,
 ) -> Option<OwnedFilesSnapshot> {
     match &installation.binding {
-        ProviderBinding::Owned { artifact } => observe_owned_file_contract(&artifact.files, layout),
+        ProviderBinding::Owned { artifact } => {
+            observe_owned_file_contract(&artifact.files, layout, &installation.name)
+        }
         ProviderBinding::Delegated { .. } => None,
     }
 }
@@ -629,16 +631,23 @@ pub fn observe_owned_files(
 fn observe_owned_file_contract(
     files: &[crate::state::OwnedFile],
     layout: &FsLayout,
+    component: &str,
 ) -> Option<OwnedFilesSnapshot> {
     if files.is_empty() {
         return None;
     }
 
+    // Installation identity chooses one resource namespace. File paths from a
+    // receipt can never widen it to every sibling under /usr/share.
+    let selected = layout.for_component(component);
     let mut verdict = OwnedFilesVerdict::Verified;
     let observations = files
         .iter()
         .map(|file| {
-            let status = check_owned_file(layout, file);
+            let status = match &selected {
+                Ok(selected) => check_owned_file(selected, file),
+                Err(_) => IntegrityStatus::OutOfBounds,
+            };
             if status.is_failure() {
                 verdict = OwnedFilesVerdict::Drifted;
             } else if matches!(status, IntegrityStatus::ProbeLimitExceeded { .. })
@@ -931,6 +940,37 @@ mod tests {
                 if package == "cosh" && observation.version == "2.7.0"
         ));
         assert!(!facts.pending_journal);
+    }
+
+    #[test]
+    fn owned_observation_selects_the_installation_resource_namespace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = layout_under(tmp.path());
+        let tokenless = layout
+            .sharedir()
+            .join("tokenless/adapters/hermes/plugin.yaml");
+        let memory = layout
+            .sharedir()
+            .join("agent-memory/adapters/openclaw/package.json");
+        for path in [&tokenless, &memory] {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"resource").unwrap();
+        }
+        let file = |path| OwnedFile {
+            path,
+            owner: FileOwner::Anolisa,
+            sha256: None,
+            kind: OwnedFileKind::File,
+            referent: None,
+            mode: None,
+            capabilities: Vec::new(),
+        };
+        let installation = owned_installation("tokenless", vec![file(tokenless), file(memory)]);
+        let scoped_to_wrong_component = layout.for_component("memory").unwrap();
+        let observed = observe_owned_files(&installation, &scoped_to_wrong_component).unwrap();
+        assert_eq!(observed.files[0].status, IntegrityStatus::Unverified);
+        assert_eq!(observed.files[1].status, IntegrityStatus::OutOfBounds);
+        assert_eq!(observed.verdict, OwnedFilesVerdict::Drifted);
     }
 
     #[test]
