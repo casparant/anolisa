@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.19] - 2026-10-25
+
+### Added
+
+- Select package profiles or components from a complete product bundle with
+  `anolisa release install`, or `anolisa install --bundle`.
+- Review and apply native service presets independently of package installation,
+  and supervise explicitly allowed foreground services with `anolisa serve`.
+- Publish verified backend unit templates with `anolisa release services`,
+  retaining ownership and backups without automatically enabling or starting them.
+- Plan and apply recorded same-scope legacy raw migrations, preserving old files
+  and retiring old management records only after successful product activation.
+- Inspect actual installed versions and local upgrade candidates with
+  `anolisa overview`, and prepare explicit user Agent configuration with
+  `anolisa setup`. Complete installation shows a configuration guide.
+- Inspect, verify and recover the ANOLISA package database through
+  `anolisa release list`, `anolisa release doctor` and `anolisa release recover`;
+  remove inactive releases with `anolisa release uninstall`.
+- Select `--rpm` in the website installer to install the published component
+  collection through the CLI's native RPM backend.
+
+### Changed
+
+- Keep component-owned RPM specifications and raw packagers independent of
+  ANOLISA. Optional component-local `.anolisa` recipes select ANOLISA metadata
+  and organize product packages and native plugin resources.
+- Install product files through a shared local package library with a distinct
+  ANOLISA database, without invoking AW as a software installer.
+- Default schema-2 bundles and container builds to the complete package set;
+  retain schema-1 bundle installation behavior and existing component commands.
+
+### Fixed
+
+- Scope shared-data path authorization to the selected component, including
+  installation, integrity checks, adapter sources and removal.
+
 ## [0.3.18] - 2026-10-15
 
 ### Added

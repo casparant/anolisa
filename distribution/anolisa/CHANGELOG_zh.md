@@ -9,6 +9,36 @@
 
 ## [未发布]
 
+## [0.3.19] - 2026-10-25
+
+### 新增
+
+- 通过 `anolisa release install` 或 `anolisa install --bundle`，从完整产品归档
+  选择包组合或组件。
+- 独立于包安装查看、应用原生服务 preset，并通过 `anolisa serve` 管理明确允许的
+  前台服务。
+- 通过 `anolisa release services` 发布已验证的后端 unit 模板，记录归属与备份，
+  不会自动启用或启动服务。
+- 生成并执行有记录的同 scope 旧 raw 迁移，保留旧文件，产品成功激活后才移除旧
+  安装管理记录。
+- 通过 `anolisa overview` 查看真实安装版本和本地升级候选，通过 `anolisa setup`
+  明确选择用户的 Agent 配置；完整安装成功后显示配置引导。
+- 通过 `anolisa release list`、`anolisa release doctor` 和 `anolisa release recover`
+  查询、校验、恢复 ANOLISA 包数据库，通过 `anolisa release uninstall` 清理未激活版本。
+- 网站安装脚本支持显式 `--rpm`，通过 CLI 的原生 RPM 后端安装已发布组件集合。
+
+### 变更
+
+- 组件独立维护 RPM spec 和 raw 打包脚本，无需 ANOLISA；组件内可选的 `.anolisa` 配方显式选择
+  ANOLISA 元数据，组织产品分包和原生插件资源。
+- 产品通过通用本地包库和独立的 ANOLISA 包数据库安装文件，不再调用 AW 安装软件。
+- schema 2 归档和容器构建默认携带全家桶；保留 schema 1 归档行为和
+  现有组件命令。
+
+### 修复
+
+- 安装、完整性检查、adapter 资源和卸载只授权当前组件的共享数据目录。
+
 ## [0.3.18] - 2026-10-15
 
 ### 新增
