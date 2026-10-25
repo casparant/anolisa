@@ -1,11 +1,8 @@
-//! Maintainer-only Rust build entrypoint; this binary is not distributed to users.
+//! Compatibility entrypoint for distribution-owned Preview maintainer tooling.
 
-use aw_package::{Error, Result};
-use std::path::PathBuf;
+use std::{os::unix::process::CommandExt, path::PathBuf, process::Command};
 #[path = "support/arguments.rs"]
 mod arguments;
-#[path = "support/signals.rs"]
-mod signals;
 
 fn main() {
     if let Err(error) = run() {
@@ -14,48 +11,20 @@ fn main() {
     }
 }
 
-fn run() -> Result<()> {
-    // std::env::args panics on non-UTF-8 arguments; reject them cleanly first.
-    let mut args = arguments::decode_all(std::env::args_os().skip(1))?.into_iter();
-    let mut version = None;
-    let mut output = None;
-    let mut component = None;
-    while let Some(flag) = args.next() {
-        if flag == "--help" {
-            println!("aw-build --version X.Y.Z-preview.N --output ABS_DIR [--component core|sec-core|tokenless|all]");
-            return Ok(());
-        }
-        let value = args
-            .next()
-            .ok_or_else(|| Error::Invalid(format!("missing value for {flag}")))?;
-        match flag.as_str() {
-            "--version" if version.is_none() => version = Some(value),
-            "--output" if output.is_none() => output = Some(PathBuf::from(value)),
-            "--component" if component.is_none() => component = Some(value),
-            _ => return Err(Error::Invalid(format!("unknown or duplicate flag: {flag}"))),
-        }
+fn run() -> aw_package::Result<()> {
+    let arguments = arguments::decode_all(std::env::args_os().skip(1))?;
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../distribution/tooling/aw-preview/Cargo.toml");
+    if !manifest.is_file() {
+        return Err(aw_package::Error::Invalid(
+            "Preview builds belong to distribution/tooling/aw-preview; use a complete source checkout".into(),
+        ));
     }
-    let version = version.ok_or_else(|| Error::Invalid("missing --version".into()))?;
-    let output = output.ok_or_else(|| Error::Invalid("missing --output".into()))?;
-    let selection = match component.as_deref().unwrap_or("core") {
-        "core" => aw_package::package::Selection::Core,
-        "sec-core" => aw_package::package::Selection::SecCore,
-        "tokenless" => aw_package::package::Selection::Tokenless,
-        "all" => aw_package::package::Selection::All,
-        _ => {
-            return Err(Error::Invalid(
-                "--component must be core, sec-core, tokenless or all".into(),
-            ))
-        }
-    };
-    signals::register()?;
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../..")
-        .canonicalize()?;
-    for archive in
-        aw_package::package::build(&repo, &version, &output, &signals::CANCEL, selection)?
-    {
-        println!("{}", archive.display());
-    }
-    Ok(())
+    Err(Command::new("cargo")
+        .args(["run", "--locked", "--release", "--manifest-path"])
+        .arg(manifest)
+        .args(["--bin", "anolisa-aw-preview", "--"])
+        .args(arguments)
+        .exec()
+        .into())
 }

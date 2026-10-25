@@ -50,6 +50,8 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             src/aw
+            distribution/crates/local-package
+            distribution/tooling/aw-preview
             providers/agent-sec-core
             providers/tokenless
             docs/developer-guide/en/aw
@@ -95,6 +97,8 @@ jobs:
           save-if: ${{ github.event_name == 'schedule' }}
           workspaces: |
             src/aw
+            distribution/crates/local-package
+            distribution/tooling/aw-preview
             providers/agent-sec-core
             providers/tokenless
             src/agent-sec-core/v2
@@ -103,11 +107,12 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           ! command -v python3
+          cargo test --locked --manifest-path distribution/tooling/aw-preview/Cargo.toml
           cargo test --locked --manifest-path src/aw/Cargo.toml -p aw-package
           cargo test --locked --manifest-path src/aw/Cargo.toml -p aw-cli \
             --test installation --test config_edit_cli --test standalone --test packages
-          cargo run --locked --release --manifest-path src/aw/Cargo.toml \
-            -p aw-package --bin aw-build -- --version 0.1.0-preview.1 \
+          cargo run --locked --release --manifest-path distribution/tooling/aw-preview/Cargo.toml \
+            --bin anolisa-aw-preview -- --version 0.1.0-preview.1 \
             --output "$AW_PREVIEW_DIR/packages" --component all
       - name: Stage the same build for native acceptance
         shell: bash

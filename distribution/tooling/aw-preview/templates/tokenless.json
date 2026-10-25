@@ -1,0 +1,91 @@
+{
+  "format": 1,
+  "packages": [
+    "aw-provider-tokenless"
+  ],
+  "constraints": [
+    {
+      "kind": "search_path",
+      "value": "${PREFIX}/libexec/aw/providers/tokenless"
+    }
+  ],
+  "providers": {
+    "tokenless": {
+      "protocol": "aw-provider/v1alpha1",
+      "transport": {
+        "type": "stdio",
+        "location": "agent",
+        "argv": [
+          "${PREFIX}/libexec/aw/providers/tokenless/aw-provider-tokenless",
+          "--cli",
+          "${PREFIX}/libexec/aw/providers/tokenless/tokenless",
+          "--data-dir",
+          "${STATE}/tokenless",
+          "--rtk",
+          "${PREFIX}/libexec/aw/providers/tokenless/rtk",
+          "--rtk-sha256",
+          "${RTK_SHA256}"
+        ]
+      },
+      "timeout_ms": 2000,
+      "max_output_bytes": 1048576,
+      "config": {
+        "version": 1
+      },
+      "view": {
+        "protocol": "aw-provider-view/v1alpha1",
+        "implementation": "tokenless",
+        "transport": {
+          "type": "stdio",
+          "location": "agent",
+          "argv": [
+            "${PREFIX}/libexec/aw/providers/tokenless/aw-provider-tokenless",
+            "--view",
+            "--cli",
+            "${PREFIX}/libexec/aw/providers/tokenless/tokenless",
+            "--data-dir",
+            "${STATE}/tokenless"
+          ]
+        }
+      }
+    }
+  },
+  "events": {
+    "tool.before": {
+      "enabled": true,
+      "required": true,
+      "steps": [
+        {
+          "id": "rewrite-command",
+          "provider": "tokenless",
+          "operation": "pre_tool",
+          "effects": [
+            "block"
+          ],
+          "on_error": "report"
+        }
+      ]
+    },
+    "tool.after": {
+      "enabled": true,
+      "required": true,
+      "steps": [
+        {
+          "id": "compress-result",
+          "provider": "tokenless",
+          "operation": "post_tool",
+          "effects": [
+            "replace_result"
+          ],
+          "on_error": "report"
+        }
+      ]
+    }
+  },
+  "file_hashes": {
+    "RTK_SHA256": {
+      "package": "aw-provider-tokenless",
+      "path": "libexec/aw/providers/tokenless/rtk"
+    }
+  }
+}

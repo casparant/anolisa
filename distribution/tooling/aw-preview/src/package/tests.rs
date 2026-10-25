@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn publication_failure_or_cancellation_removes_only_owned_links_and_allows_retry() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/preview");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/preview");
     fs::create_dir_all(&target).unwrap();
     for interrupted in [false, true] {
         for stop in 0..4 {
@@ -74,7 +74,7 @@ fn publication_failure_or_cancellation_removes_only_owned_links_and_allows_retry
 
 #[test]
 fn staging_cancellation_removes_partial_archives_and_allows_retry() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/preview");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/preview");
     fs::create_dir_all(&target).unwrap();
     let directory = tempfile::tempdir_in(target).unwrap();
     let repo = directory.path().canonicalize().unwrap();
@@ -179,6 +179,16 @@ fn staging_cancellation_removes_partial_archives_and_allows_retry() {
         std::env::consts::ARCH
     ));
     assert!(combined.join("aw").is_file());
+    for name in ["sec-core", "tokenless", "sec-core-tokenless"] {
+        let template: serde_json::Value = serde_json::from_slice(
+            &fs::read(combined.join("templates").join(format!("{name}.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(template["format"], 1);
+        assert!(template["providers"].is_object());
+        assert!(!template["packages"].as_array().unwrap().is_empty());
+    }
+
     assert!(!combined.join("aw-package").exists());
     assert!(!combined.join("payload/bin/aw-package").exists());
     crate::inspect(&combined).unwrap();
@@ -258,7 +268,7 @@ fn every_archive_builds_the_unified_cli() {
 
 #[test]
 fn core_selection_builds_and_stages_without_any_provider_tree() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/preview");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/preview");
     fs::create_dir_all(&target).unwrap();
     let directory = tempfile::tempdir_in(target).unwrap();
     let repo = directory.path().canonicalize().unwrap();
@@ -321,6 +331,7 @@ fn core_selection_builds_and_stages_without_any_provider_tree() {
     );
     assert!(!unpacked.join("aw-package").exists());
     assert!(!unpacked.join("payload/bin/aw-package").exists());
+    assert!(!unpacked.join("templates").exists());
     assert!(!unpacked.join("payload/libexec").exists());
     assert!(!repo.join("src/agent-sec-core").exists());
     assert!(!repo.join("src/tokenless").exists());
@@ -359,7 +370,7 @@ fn core_selection_builds_and_stages_without_any_provider_tree() {
 
 #[test]
 fn sec_core_selection_stages_only_extension_with_matching_core_requirement() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/preview");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/preview");
     fs::create_dir_all(&target).unwrap();
     let directory = tempfile::tempdir_in(target).unwrap();
     let repo = directory.path().canonicalize().unwrap();
@@ -444,7 +455,7 @@ fn sec_core_selection_stages_only_extension_with_matching_core_requirement() {
 
 #[test]
 fn tokenless_extension_stages_without_sec_core_or_native_plugins() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/preview");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/preview");
     fs::create_dir_all(&target).unwrap();
     let directory = tempfile::tempdir_in(target).unwrap();
     let repo = directory.path().canonicalize().unwrap();
@@ -534,7 +545,7 @@ fn tokenless_extension_stages_without_sec_core_or_native_plugins() {
 
 #[test]
 fn rtk_preparation_uses_fresh_owned_source_and_preserves_cached_edits() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/preview");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/preview");
     fs::create_dir_all(&target).unwrap();
     let directory = tempfile::tempdir_in(target.canonicalize().unwrap()).unwrap();
     let repo = directory.path();

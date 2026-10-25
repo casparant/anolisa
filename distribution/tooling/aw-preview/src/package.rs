@@ -429,10 +429,32 @@ fn stage(
             root.join("manifest.json"),
             serde_json::to_vec_pretty(&Manifest {
                 format: 1,
-                components: selected,
+                components: selected.clone(),
             })?,
         )?;
         copy(&aw.join("aw"), &root.join("aw"), cancel)?;
+        let has = |id: &str| selected.iter().any(|component| component.component == id);
+        let mut templates = Vec::new();
+        if has("aw-provider-sec-core") {
+            templates.push(("sec-core", include_str!("../templates/sec-core.json")));
+        }
+        if has("aw-provider-tokenless") {
+            templates.push(("tokenless", include_str!("../templates/tokenless.json")));
+        }
+        if has("aw-provider-sec-core") && has("aw-provider-tokenless") {
+            templates.push((
+                "sec-core-tokenless",
+                include_str!("../templates/sec-core-tokenless.json"),
+            ));
+        }
+        for (name, template) in templates {
+            fs::create_dir_all(root.join("templates"))?;
+            fs::write(
+                root.join("templates").join(format!("{name}.json")),
+                template,
+            )?;
+        }
+
         for (language, name) in [("en", "README.md"), ("zh", "README_zh.md")] {
             let mut text = fs::read_to_string(
                 repo.join(format!("docs/user-guide/{language}/aw/installation.md")),
@@ -514,7 +536,7 @@ fn publish_using(
         for path in published.iter().rev() {
             if let Err(cleanup) = fs::remove_file(path) {
                 eprintln!(
-                    "aw-build: rollback could not remove {}: {cleanup}",
+                    "anolisa-aw-preview: rollback could not remove {}: {cleanup}",
                     path.display()
                 );
             }

@@ -6,7 +6,6 @@ mod configuration;
 pub mod database;
 mod filesystem;
 mod install;
-pub mod package;
 pub mod plan;
 
 pub use configuration::{configure, document, Policy, Settings};
