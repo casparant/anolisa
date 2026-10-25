@@ -1,0 +1,29 @@
+# Build with a verified unpacked all-in-one release at ./bundle/ in the context.
+# The installer stage keeps unselected package payloads out of the final image.
+FROM ubuntu:24.04 AS runtime
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 anolisa \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /bin/sh anolisa \
+    && install -d -o 10001 -g 10001 -m 0700 /run/anolisa
+ENV HOME=/home/anolisa \
+    PATH=/home/anolisa/.local/bin:/usr/local/bin:/usr/bin:/bin \
+    XDG_CONFIG_HOME=/home/anolisa/.config \
+    XDG_DATA_HOME=/home/anolisa/.local/share \
+    XDG_STATE_HOME=/home/anolisa/.local/state \
+    XDG_CACHE_HOME=/home/anolisa/.cache \
+    XDG_RUNTIME_DIR=/run/anolisa
+USER 10001:10001
+
+FROM runtime AS installer
+ARG ANOLISA_PROFILE=complete
+COPY --chown=10001:10001 bundle/ /tmp/anolisa-bundle/
+RUN /tmp/anolisa-bundle/install.sh --scope user --profile "$ANOLISA_PROFILE"
+
+FROM runtime AS final
+COPY --from=installer --chown=10001:10001 /home/anolisa/ /home/anolisa/
+COPY --chmod=0755 distribution/containers/entrypoint.sh /usr/local/bin/anolisa-container-entrypoint
+WORKDIR /home/anolisa
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/anolisa-container-entrypoint"]
+CMD ["serve", "--preset", "container"]
