@@ -10,7 +10,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/cosh-ng/**'
-      - 'distribution/components/cosh-ng/**'
       - 'distribution/packaging/**'
   pull_request:
     branches: [main, 'release/**']
@@ -21,7 +20,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/cosh-ng/**'
-      - 'distribution/components/cosh-ng/**'
       - 'distribution/packaging/**'
   workflow_dispatch:
 

@@ -1226,11 +1226,18 @@ mod tests {
         use std::collections::BTreeSet;
 
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let source = manifest_dir
+            .ancestors()
+            .find(|root| {
+                root.join("src/ws-ckpt/.anolisa/component.toml.in")
+                    .is_file()
+            })
+            .expect("find ws-ckpt distribution fixtures");
         for contract in [
-            "../../../../src/ws-ckpt/.anolisa/component.toml",
-            "../../manifests/components/ws-ckpt/component.toml",
+            "src/ws-ckpt/.anolisa/component.toml",
+            "src/ws-ckpt/.anolisa/component.toml.in",
         ] {
-            let manifest = ComponentManifest::from_file(&manifest_dir.join(contract))
+            let manifest = ComponentManifest::from_file(&source.join(contract))
                 .expect("ws-ckpt Raw contract must parse");
             let sandbox = tempdir().unwrap();
             let layout = FsLayout::system(Some(sandbox.path().join("system")))

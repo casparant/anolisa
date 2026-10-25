@@ -1770,14 +1770,21 @@ mod tests {
 
     #[test]
     fn real_component_contracts_parse() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../manifests/components");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|root| {
+                root.join("src/tokenless/.anolisa/component.toml.in")
+                    .is_file()
+            })
+            .expect("find distribution source fixtures")
+            .join("src");
         let mut names = std::collections::BTreeSet::new();
         let mut count = 0;
         for entry in std::fs::read_dir(&root).expect("read component fixtures") {
             let path = entry
                 .expect("component entry")
                 .path()
-                .join("component.toml");
+                .join(".anolisa/component.toml.in");
             if path.is_file() {
                 let manifest = ComponentManifest::from_file(&path)
                     .unwrap_or_else(|error| panic!("{}: {error}", path.display()));

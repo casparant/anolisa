@@ -7,7 +7,6 @@ on:
       - 'release/agent-sec-core/**'
     paths:
       - 'src/agent-sec-core/**'
-      - 'distribution/components/sec-core/**'
       - 'distribution/packaging/**'
       - '.github/actions/package-source/**'
       - '.github/actions/package-vendor/**'

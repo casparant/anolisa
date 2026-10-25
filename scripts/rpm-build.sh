@@ -79,7 +79,10 @@ snapshot_recipe() {
         anolisa) identity=anolisa-cli ;;
         copilot-shell) return ;;
     esac
-    if [ -d "$ROOT_DIR/distribution/components/$identity" ]; then
+    local recipe
+    recipe=$(python3 "$ROOT_DIR/distribution/packaging/recipes.py" \
+        --source "$ROOT_DIR" --component "$identity" --optional)
+    if [ -n "$recipe" ]; then
         python3 "$ROOT_DIR/distribution/packaging/snapshot.py" \
             --source "$ROOT_DIR" --destination "$destination" --component "$identity"
     fi
@@ -789,11 +792,11 @@ build_anolisa() {
         revision=$(git -C "$ROOT_DIR" rev-parse HEAD)
         mkdir -p "$extract_dir" "$snapshot_repo"
 
-        # Pin source, central recipes, product policy and shared tools to the
-        # same Git revision before resolving aliases into a standalone Source0.
+        # Pin component integration, product policy and shared tools to the
+        # same Git revision before selecting inputs for standalone Source0.
         local archive_paths=(LICENSE distribution/anolisa)
         local path
-        for path in distribution/components distribution/providers distribution/packaging distribution/release distribution/crates/local-package; do
+        for path in src providers distribution/packaging distribution/release distribution/crates/local-package; do
             if git -C "$ROOT_DIR" cat-file -e "$revision:$path" 2>/dev/null; then
                 archive_paths+=("$path")
             fi
@@ -1380,8 +1383,8 @@ REPO_EOF
 build_aw_rpm() {
     local identity="$1" recipe source_path version spec_in tmp_dir pkg_dir manifest_path
     [ "$(uname -s)" = Linux ] || { err "AW RPM builds require Linux"; return 1; }
-    recipe="$ROOT_DIR/distribution/components/$identity/recipe.json"
-    [ -f "$recipe" ] || recipe="$ROOT_DIR/distribution/providers/$identity/recipe.json"
+    recipe=$(python3 "$ROOT_DIR/distribution/packaging/recipes.py" \
+        --source "$ROOT_DIR" --component "$identity")
     local fields
     fields=$(python3 - "$ROOT_DIR" "$recipe" <<'PY_RECIPE'
 import json

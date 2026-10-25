@@ -51,7 +51,7 @@ jobs:
           }
 
           dnf_install rpm-build rpmdevtools dnf-plugins-core tar gzip \
-            make gcc gcc-c++ findutils sed coreutils
+            make gcc gcc-c++ findutils sed coreutils python3
 
           # Component-specific dependencies
           case "${{ inputs.component }}" in
@@ -227,9 +227,27 @@ jobs:
           fi
 
           # Find and process spec template
-          SPEC_IN=$(find "$EXTRACT_DIR" -name "${COMPONENT}.spec.in" | head -1)
-          if [ -z "$SPEC_IN" ]; then
-            SPEC_IN=$(find "$EXTRACT_DIR" -name "*.spec.in" | head -1)
+          SOURCE_ROOT=$(find "$EXTRACT_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+          RECIPE_ID="$COMPONENT"
+          case "$RECIPE_ID" in
+            agent-sec-core) RECIPE_ID=sec-core ;;
+            anolisa) RECIPE_ID=anolisa-cli ;;
+            aw) RECIPE_ID=aw-core ;;
+          esac
+          RECIPE=""
+          if [ -f "$SOURCE_ROOT/distribution/packaging/recipes.py" ]; then
+            RECIPE=$(python3 "$SOURCE_ROOT/distribution/packaging/recipes.py" \
+              --source "$SOURCE_ROOT" --component "$RECIPE_ID" --optional)
+          fi
+          if [ -n "$RECIPE" ]; then
+            SPEC_REL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["rpm_spec"])' "$RECIPE")
+            SPEC_IN="$SOURCE_ROOT/$SPEC_REL"
+            test -f "$SPEC_IN"
+          else
+            SPEC_IN=$(find "$EXTRACT_DIR" -name "${COMPONENT}.spec.in" | head -1)
+            if [ -z "$SPEC_IN" ]; then
+              SPEC_IN=$(find "$EXTRACT_DIR" -name "*.spec.in" | head -1)
+            fi
           fi
           if [ -n "$SPEC_IN" ]; then
             SPEC_OUT="${SPEC_IN%.in}"

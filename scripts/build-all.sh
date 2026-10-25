@@ -2100,13 +2100,13 @@ detect_runtime_package_manager() {
 runtime_manifest_path() {
     case "$1" in
         cosh)      echo "$PROJECT_ROOT/distribution/anolisa/manifests/components/cosh/component.toml" ;;
-        skills)    echo "$PROJECT_ROOT/distribution/anolisa/manifests/components/os-skills/component.toml" ;;
+        skills)    echo "$PROJECT_ROOT/src/os-skills/.anolisa/component.toml" ;;
         sec-core)  echo "$PROJECT_ROOT/src/agent-sec-core/.anolisa/component.toml" ;;
         cosh-ng)   echo "$PROJECT_ROOT/src/cosh-ng/.anolisa/component.toml" ;;
-        tokenless) echo "$PROJECT_ROOT/distribution/anolisa/manifests/components/tokenless/component.toml" ;;
-        ws-ckpt)   echo "$PROJECT_ROOT/distribution/anolisa/manifests/components/ws-ckpt/component.toml" ;;
-        memory)    echo "$PROJECT_ROOT/distribution/anolisa/manifests/components/agent-memory/component.toml" ;;
-        sight)     echo "$PROJECT_ROOT/distribution/anolisa/manifests/components/agentsight/component.toml" ;;
+        tokenless) echo "$PROJECT_ROOT/src/tokenless/.anolisa/component.toml.in" ;;
+        ws-ckpt)   echo "$PROJECT_ROOT/src/ws-ckpt/.anolisa/component.toml" ;;
+        memory)    echo "$PROJECT_ROOT/src/agent-memory/.anolisa/component.toml.in" ;;
+        sight)     echo "$PROJECT_ROOT/src/agentsight/.anolisa/component.toml" ;;
         *)         return 1 ;;
     esac
 }

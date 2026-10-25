@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -33,14 +34,47 @@ def safe_path(value: Any) -> str:
     return value
 
 
+def recipe_paths(source: Path) -> list[Path]:
+    """Find optional distribution integration without traversing component internals."""
+    paths = [
+        path
+        for pattern in (
+            "src/*/.anolisa/recipe.json",
+            "providers/*/.anolisa/recipe.json",
+            "distribution/anolisa/.anolisa/recipe.json",
+        )
+        for path in source.glob(pattern)
+    ]
+    for path in paths:
+        relative = path.relative_to(source)
+        require(
+            not any((source / part).is_symlink() for part in (relative, *relative.parents))
+            and path.resolve().is_relative_to(source.resolve()),
+            f"component recipe must be an ordinary owned file: {path}",
+        )
+    return sorted(paths)
+
+
+def recipe_path(source: Path, component: str, optional: bool = False) -> Path | None:
+    """Resolve a stable package identity independently of its source directory name."""
+    matches = [
+        path
+        for path in recipe_paths(source)
+        if json.loads(path.read_text(encoding="utf-8")).get("id") == component
+    ]
+    require(
+        len(matches) <= 1 and (bool(matches) or optional),
+        f"missing or duplicate component recipe: {component}",
+    )
+    return matches[0] if matches else None
+
+
 def load_recipes(source: Path, allow_external: bool = False) -> list[dict[str, Any]]:
-    """Load the central recipes, checking identities and exact local dependencies."""
+    """Load component-local recipes, checking identities and exact dependencies."""
     result = []
     seen: set[str] = set()
     package_ids: set[str] = set()
-    paths = list((source / "distribution/components").glob("*/recipe.json"))
-    paths += list((source / "distribution/providers").glob("*/recipe.json"))
-    for path in sorted(paths):
+    for path in recipe_paths(source):
         document = json.loads(path.read_text(encoding="utf-8"))
         require(document.get("schema_version") == 1, f"unsupported recipe: {path}")
         identity = document.get("id")
@@ -64,7 +98,8 @@ def load_recipes(source: Path, allow_external: bool = False) -> list[dict[str, A
                 safe_path(mapping["from"])
                 safe_path(mapping.get("to", mapping["from"]))
         result.append(document)
-    require(bool(result), "no central component recipes")
+    require(bool(result), "no component-local distribution recipes")
+    result.sort(key=lambda recipe: (recipe["source_dir"].startswith("providers/"), recipe["id"]))
     for recipe in result:
         for package in recipe["packages"]:
             for dependency in package.get("requires", []):
@@ -73,6 +108,23 @@ def load_recipes(source: Path, allow_external: bool = False) -> list[dict[str, A
                     f"unknown package dependency: {package['id']}/{dependency}",
                 )
     return result
+
+
+def main() -> None:
+    """Resolve one recipe for shell and workflow callers without a second catalog."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--component", required=True)
+    parser.add_argument("--field")
+    parser.add_argument("--optional", action="store_true")
+    args = parser.parse_args()
+    path = recipe_path(args.source, args.component, optional=args.optional)
+    if path is None:
+        return
+    if args.field:
+        print(json.loads(path.read_text(encoding="utf-8"))[args.field])
+    else:
+        print(path)
 
 
 def build_specs(source: Path) -> list[dict[str, Any]]:
@@ -181,3 +233,7 @@ def package_specs(source: Path, allow_external: bool = False) -> list[dict[str, 
                 }
             )
     return result
+
+
+if __name__ == "__main__":
+    main()

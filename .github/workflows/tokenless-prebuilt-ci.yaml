@@ -11,7 +11,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/tokenless/**'
-      - 'distribution/components/tokenless/**'
       - 'distribution/packaging/**'
   pull_request:
     branches: [main, 'release/**']
@@ -23,7 +22,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/tokenless/**'
-      - 'distribution/components/tokenless/**'
       - 'distribution/packaging/**'
   workflow_dispatch:
 

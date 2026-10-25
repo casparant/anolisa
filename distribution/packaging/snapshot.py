@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""Carry central release recipes with a standalone component source archive."""
+"""Carry optional distribution integration in standalone component sources."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import shutil
+import tomllib
 from pathlib import Path
+
+try:
+    from .recipes import recipe_path, recipe_paths, safe_path
+except ImportError:
+    from recipes import recipe_path, recipe_paths, safe_path
 
 
 def snapshot(source: Path, destination: Path, component: str) -> None:
     """Copy the recipe and shared tools without following arbitrary source links."""
-    recipe = source / "distribution/components" / component
-    if not recipe.is_dir():
-        recipe = source / "distribution/providers" / component
-    if not recipe.is_dir() or recipe.is_symlink():
-        raise ValueError(f"missing central component recipe: {component}")
+    source = source.resolve()
+    definition_path = recipe_path(source, component)
+    if definition_path is None:
+        raise ValueError(f"missing component recipe: {component}")
+    recipe = definition_path.parent
+    selected = json.loads((recipe / "recipe.json").read_text())
+    selected_source = source / selected["source_dir"]
     inputs = [recipe, source / "distribution/packaging"]
     inputs += [
         source / "distribution/anolisa/packaging/release" / name
@@ -23,8 +31,7 @@ def snapshot(source: Path, destination: Path, component: str) -> None:
     ]
     if component == "anolisa-cli":
         inputs += [source / "distribution/release"]
-        inputs += sorted((source / "distribution/components").iterdir())
-        inputs += sorted((source / "distribution/providers").iterdir())
+        inputs += [path.parent for path in recipe_paths(source) if path.parent != recipe]
         inputs += [source / "distribution/crates/local-package"]
     if component == "aw-core" or component.startswith("aw-provider-"):
         inputs += [
@@ -45,7 +52,7 @@ def snapshot(source: Path, destination: Path, component: str) -> None:
         if not target.exists():
             shutil.copyfile(source / "LICENSE", target)
     recipe_roots = [root for root in inputs if (root / "recipe.json").is_file()]
-    flattened_roots: dict[Path, Path] = {}
+    flattened_roots: dict[Path, Path] = {recipe: selected_source}
     for recipe_root in recipe_roots:
         definition = json.loads((recipe_root / "recipe.json").read_text())
         component_root = (source / definition["source_dir"]).resolve()
@@ -56,12 +63,7 @@ def snapshot(source: Path, destination: Path, component: str) -> None:
                 continue
             owned = source / definition[field]
             resolved = owned.resolve(strict=True)
-            # CLI, providers and cosh retain canonical inputs in their recipe tree.
-            # That tree is already an explicit snapshot input; no new source is trusted.
-            recipe_owned = owned.is_relative_to(recipe_root) and resolved.is_relative_to(
-                recipe_root.resolve()
-            )
-            if not resolved.is_relative_to(component_root) and not recipe_owned:
+            if not resolved.is_relative_to(component_root):
                 raise ValueError(f"component build input escapes its source directory: {owned}")
             inputs.append(resolved.parent if field == "raw_script" else resolved)
             if recipe_root == recipe and resolved.is_relative_to(component_root):
@@ -109,6 +111,33 @@ def snapshot(source: Path, destination: Path, component: str) -> None:
                     continue
                 shutil.copyfile(resolved_path, target, follow_symlinks=False)
                 target.chmod(0o755 if resolved_path.stat().st_mode & 0o111 else 0o644)
+    for recipe_root in recipe_roots:
+        template = recipe_root / "component.toml.in"
+        if not template.is_file():
+            continue
+        definition = json.loads((recipe_root / "recipe.json").read_text())
+        rendered = template.read_text()
+        if "@VERSION@" in rendered:
+            build = definition["build"]
+            version_file = source / safe_path(build["version_file"])
+            component_root = (source / safe_path(definition["source_dir"])).resolve()
+            if not version_file.resolve().is_relative_to(component_root):
+                raise ValueError(f"component version escapes its source directory: {version_file}")
+            value = tomllib.loads(version_file.read_text())
+            for key in build["version_key"].split("."):
+                value = value[key]
+            rendered = rendered.replace("@VERSION@", str(value))
+        targets = [destination / recipe_root.relative_to(source) / "component.toml"]
+        if recipe_root == recipe:
+            targets.append(destination / ".anolisa/component.toml")
+        for target in targets:
+            if target.is_symlink():
+                target.unlink()
+            if target.exists() and target.read_text() not in {template.read_text(), rendered}:
+                raise ValueError(f"generated contract conflicts with source: {target}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(rendered)
+            target.chmod(0o644)
     if component in {"anolisa-cli", "aw-core"}:
         manifest = destination / "Cargo.toml"
         if manifest.is_file():

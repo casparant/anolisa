@@ -10,7 +10,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/agent-sec-core/**'
-      - 'distribution/components/sec-core/**'
       - 'distribution/packaging/**'
   pull_request:
     paths:
@@ -20,7 +19,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/agent-sec-core/**'
-      - 'distribution/components/sec-core/**'
       - 'distribution/packaging/**'
   workflow_dispatch:
 

@@ -84,7 +84,7 @@ for attempt in 1 2; do
     python3 "$SOURCE/packaging/raw/package.py" --source-dir "$SOURCE" \
         --output-dir "$OUTPUT_DIR" --version "$VERSION" \
         --target-arch "$TARGET_ARCH" --epoch "$EPOCH" \
-        --contract "$WORKTREE/distribution/components/os-skills/component.toml.in"
+        --contract "$WORKTREE/src/os-skills/.anolisa/component.toml.in"
     archive="$OUTPUT_DIR/os-skills-$VERSION-linux-$TARGET_ARCH.tar.gz"
     digest="$(sha256sum "$archive" | awk '{print $1}')"
     if [ "$attempt" = 1 ]; then first_digest="$digest"

@@ -10,9 +10,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/ws-ckpt/**'
-      - 'distribution/components/ws-ckpt/**'
       - 'distribution/packaging/**'
-      - 'distribution/anolisa/manifests/components/ws-ckpt/**'
   pull_request:
     branches: [main, 'release/**']
     paths:
@@ -22,9 +20,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/ws-ckpt/**'
-      - 'distribution/components/ws-ckpt/**'
       - 'distribution/packaging/**'
-      - 'distribution/anolisa/manifests/components/ws-ckpt/**'
   workflow_dispatch:
 
 permissions:

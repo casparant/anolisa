@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'src/os-skills/**'
-      - 'distribution/components/os-skills/**'
       - 'distribution/packaging/**'
       - '.github/actions/build-os-skills-prebuilt/**'
       - '.github/actions/prebuilt-rust-common/**'

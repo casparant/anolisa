@@ -1,4 +1,4 @@
 {
   "schema_version": 2,
-  "recipes": "distribution/components"
+  "recipes": "component-local"
 }

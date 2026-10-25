@@ -231,14 +231,22 @@ def elf(path: Path, arch: str, executable: bool) -> None:
         require(header.startswith(b"#!"), f"executable is neither ELF nor a script: {path}")
     elif header[:4] in {b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"MZ\x90\x00"}:
         # Python packaging tools carry Windows launcher templates as inert data.
-        if (
-            not executable
-            and (
-                "/site-packages/pip/_vendor/distlib/" in str(path)
-                and path.name in {"t32.exe", "t64.exe", "t64-arm.exe", "w32.exe", "w64.exe", "w64-arm.exe"}
-                or "/site-packages/setuptools/" in str(path)
-                and path.name in {"cli.exe", "cli-32.exe", "cli-64.exe", "cli-arm64.exe", "gui.exe", "gui-32.exe", "gui-64.exe", "gui-arm64.exe"}
-            )
+        if not executable and (
+            "/site-packages/pip/_vendor/distlib/" in str(path)
+            and path.name
+            in {"t32.exe", "t64.exe", "t64-arm.exe", "w32.exe", "w64.exe", "w64-arm.exe"}
+            or "/site-packages/setuptools/" in str(path)
+            and path.name
+            in {
+                "cli.exe",
+                "cli-32.exe",
+                "cli-64.exe",
+                "cli-arm64.exe",
+                "gui.exe",
+                "gui-32.exe",
+                "gui-64.exe",
+                "gui-arm64.exe",
+            }
         ):
             return
         raise ReleaseError(f"foreign binary format in Linux payload: {path}")
@@ -248,7 +256,7 @@ def composition(path: Path) -> list[dict[str, Any]]:
     """Read the checked-in complete Linux composition, preserving its stable order."""
     document = read_json(path)
     if document.get("schema_version") == 2:
-        require(document.get("recipes") == "distribution/components", "unsupported recipe location")
+        require(document.get("recipes") == "component-local", "unsupported recipe location")
         return package_specs(SOURCE_ROOT)
     require(document.get("schema_version") == 1, "unsupported composition schema")
     packages = document.get("packages")
@@ -341,7 +349,10 @@ def validate_package(
             )
     for name in spec["required"]:
         if name.endswith("/"):
-            require(any(path.startswith(name) for path in payload), f"missing required release directory: {package_id}/{name}")
+            require(
+                any(path.startswith(name) for path in payload),
+                f"missing required release directory: {package_id}/{name}",
+            )
             continue
         require(
             name in payload and actual[name].stat().st_size > 0,

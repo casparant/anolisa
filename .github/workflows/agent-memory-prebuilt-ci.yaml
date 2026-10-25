@@ -10,7 +10,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/agent-memory/**'
-      - 'distribution/components/agent-memory/**'
       - 'distribution/packaging/**'
   pull_request:
     paths:
@@ -20,7 +19,6 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/agent-memory/**'
-      - 'distribution/components/agent-memory/**'
       - 'distribution/packaging/**'
   workflow_dispatch:
 

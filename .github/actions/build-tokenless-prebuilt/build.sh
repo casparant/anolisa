@@ -124,7 +124,7 @@ git -C "$SOURCE_REPO" worktree lock --reason 'Tokenless prebuilt package build' 
 COMPONENT_ROOT="$FIXED_WORKTREE/src/tokenless"
 (
     cd "$COMPONENT_ROOT"
-    make -B stamp-adapter-templates stamp-python-packages
+    make -B stamp-adapter-templates stamp-python-packages generate-component-contract
 )
 CONTRACT="$COMPONENT_ROOT/.anolisa/component.toml"
 SOURCE_VERSION="$(

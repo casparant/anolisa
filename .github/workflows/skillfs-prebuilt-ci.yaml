@@ -10,9 +10,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/skillfs/**'
-      - 'distribution/components/skillfs/**'
       - 'distribution/packaging/**'
-      - 'distribution/anolisa/manifests/components/skillfs/**'
   pull_request:
     branches: [main, 'release/**']
     paths:
@@ -22,9 +20,7 @@ on:
       - '.github/workflows/release.yaml'
       - '.github/workflows/release-preview.yaml'
       - 'src/skillfs/**'
-      - 'distribution/components/skillfs/**'
       - 'distribution/packaging/**'
-      - 'distribution/anolisa/manifests/components/skillfs/**'
   workflow_dispatch:
 
 permissions:

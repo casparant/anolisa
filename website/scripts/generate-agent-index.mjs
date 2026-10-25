@@ -128,14 +128,10 @@ function platformObject(platform) {
   return {linux: true, macos: false, windows: false, architectures: []};
 }
 
-async function componentPlatform(installName, fallback) {
-  const manifestPath = path.join(
-    repoRoot,
-    anolisaSourcePath,
-    'manifests/components',
-    installName,
-    'component.toml',
-  );
+async function componentPlatform(sourcePath, installName, fallback) {
+  const manifestPath = installName === 'cosh'
+    ? path.join(repoRoot, anolisaSourcePath, 'manifests/components/cosh/component.toml')
+    : path.join(repoRoot, sourcePath, '.anolisa/component.toml.in');
   if (!(await exists(manifestPath))) return fallback;
 
   const manifest = await readFile(manifestPath, 'utf8');
@@ -222,7 +218,7 @@ for (const row of componentRows) {
   const installName = componentOverride.install_name || row.alias || id;
   const platformSupport =
     componentOverride.platform_support ||
-    await componentPlatform(installName, platformObject(row.platform));
+    await componentPlatform(row.source_path, installName, platformObject(row.platform));
   const defaultInstallMethod =
     id === 'anolisa' ? 'bootstrap' : 'manual';
   const defaultInstall =
@@ -305,7 +301,7 @@ const index = {
   })),
   components,
   platform_support: {
-    source: `${anolisaSourcePath}/manifests/components/*/component.toml with AGENTS.md fallback`,
+    source: 'component-local .anolisa/component.toml.in with AGENTS.md fallback',
     linux: components.filter((component) => component.platform_support.linux).map((component) => component.id),
     macos: components.filter((component) => component.platform_support.macos).map((component) => ({id: component.id, support: component.platform_support.macos})),
     windows: components.filter((component) => component.platform_support.windows).map((component) => component.id),

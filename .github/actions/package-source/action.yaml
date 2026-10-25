@@ -167,6 +167,20 @@ runs:
           cp -p "${LICENSE_REAL_PATH}" "/tmp/build/${ARCHIVE_NAME}/${LICENSE_BUILD_TARGET}"
         fi
 
+    - name: Include ANOLISA distribution metadata
+      if: inputs.component != 'copilot-shell'
+      shell: bash
+      run: |
+        component="${{ inputs.component }}"
+        case "$component" in
+          agent-sec-core) component=sec-core ;;
+          anolisa) component=anolisa-cli ;;
+          aw) component=aw-core ;;
+        esac
+        python3 distribution/packaging/snapshot.py \
+          --source "$GITHUB_WORKSPACE" \
+          --destination "/tmp/build/${ARCHIVE_NAME}" --component "$component"
+
     - name: Vendor rtk source (tokenless)
       if: inputs.component == 'tokenless'
       shell: bash

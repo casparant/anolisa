@@ -109,6 +109,7 @@ git -C "$SOURCE_REPO" worktree lock --reason 'agent-memory prebuilt package buil
     "$FIXED_WORKTREE"
 
 COMPONENT_ROOT="$FIXED_WORKTREE/src/agent-memory"
+make -C "$COMPONENT_ROOT" generate-component-contract
 COMPONENT_VERSION="$(
     python3 "$COMPONENT_ROOT/packaging/raw/verify-release.py" \
         "$COMPONENT_ROOT"
