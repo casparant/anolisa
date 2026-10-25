@@ -17,9 +17,11 @@ fn configuration_holds_a_read_lock_through_publication() {
         prefix: &f.prefix,
         config: &config,
         state: &state,
-        policy: crate::Policy::SecCore {
-            socket: Path::new("/run/aw-test/sec.sock"),
-        },
+        policy: crate::configuration::test_templates::policy(
+            "sec-core",
+            &f.prefix,
+            Path::new("/run/aw-test/sec.sock"),
+        ),
         qoder: Some(Path::new("/bin/true")),
         node: Some(Path::new("/bin/true")),
         openclaw: Some(Path::new("/bin/true")),
@@ -78,9 +80,11 @@ fn configuration_rejects_state_file_collisions_before_publication() {
             prefix: &f.prefix,
             config: &config,
             state,
-            policy: crate::Policy::SecCore {
-                socket: Path::new("/run/aw-test/sec.sock"),
-            },
+            policy: crate::configuration::test_templates::policy(
+                "sec-core",
+                &f.prefix,
+                Path::new("/run/aw-test/sec.sock"),
+            ),
             qoder: Some(Path::new("/bin/true")),
             node: Some(Path::new("/bin/true")),
             openclaw: Some(Path::new("/bin/true")),
@@ -109,9 +113,11 @@ fn configuration_requires_an_existing_private_state_directory() {
         prefix: &f.prefix,
         config: &config,
         state: &state,
-        policy: crate::Policy::SecCore {
-            socket: Path::new("/run/aw-test/sec.sock"),
-        },
+        policy: crate::configuration::test_templates::policy(
+            "sec-core",
+            &f.prefix,
+            Path::new("/run/aw-test/sec.sock"),
+        ),
         qoder: Some(Path::new("/bin/true")),
         node: Some(Path::new("/bin/true")),
         openclaw: Some(Path::new("/bin/true")),
@@ -153,9 +159,11 @@ fn configuration_checks_launcher_access_and_accepts_readable_scripts() {
         prefix: &f.prefix,
         config: &config,
         state: &state,
-        policy: crate::Policy::SecCore {
-            socket: Path::new("/run/aw-test/sec.sock"),
-        },
+        policy: crate::configuration::test_templates::policy(
+            "sec-core",
+            &f.prefix,
+            Path::new("/run/aw-test/sec.sock"),
+        ),
         qoder: Some(&qoder),
         node: Some(&node),
         openclaw: Some(&openclaw),
@@ -196,7 +204,7 @@ fn one_configuration_maps_both_agents_and_rejects_long_socket() {
         prefix: &f.prefix,
         config: &config,
         state: &state,
-        policy: crate::Policy::SecCore { socket: &socket },
+        policy: crate::configuration::test_templates::policy("sec-core", &f.prefix, &socket),
         qoder: Some(Path::new("/bin/true")),
         node: Some(Path::new("/bin/true")),
         openclaw: Some(Path::new("/bin/true")),
@@ -207,7 +215,7 @@ fn one_configuration_maps_both_agents_and_rejects_long_socket() {
     let state = runtime.path().join("state");
     settings.state = &state;
     let socket = runtime.path().join("sec.sock");
-    settings.policy = crate::Policy::SecCore { socket: &socket };
+    settings.policy = crate::configuration::test_templates::policy("sec-core", &f.prefix, &socket);
     crate::configure(&settings).unwrap();
     let value: serde_json::Value = serde_yaml_ng::from_slice(&fs::read(&config).unwrap()).unwrap();
     assert_eq!(value["spec"]["agents"].as_object().unwrap().len(), 2);
@@ -221,11 +229,11 @@ fn one_configuration_maps_both_agents_and_rejects_long_socket() {
     assert!(crate::configure(&settings).is_err());
     fs::remove_file(&config).unwrap();
     let long = runtime.path().join("s".repeat(108));
-    settings.policy = crate::Policy::SecCore { socket: &long };
+    settings.policy = crate::configuration::test_templates::policy("sec-core", &f.prefix, &long);
     assert!(crate::configure(&settings)
         .unwrap_err()
         .to_string()
-        .contains("sec-core"));
+        .contains("unix_socket"));
     assert!(!config.exists());
 }
 
@@ -270,9 +278,11 @@ fn configure_rejects_damaged_payloads_and_allows_retry() {
                     prefix: &f.prefix,
                     config: &config,
                     state: &runtime.path().join("state"),
-                    policy: crate::Policy::SecCore {
-                        socket: Path::new("/run/aw-test/sec.sock"),
-                    },
+                    policy: crate::configuration::test_templates::policy(
+                        "sec-core",
+                        &f.prefix,
+                        Path::new("/run/aw-test/sec.sock"),
+                    ),
                     qoder: Some(Path::new("/bin/true")),
                     node: Some(Path::new("/bin/true")),
                     openclaw: Some(Path::new("/bin/true")),
@@ -314,7 +324,11 @@ fn tokenless_templates_require_its_package_and_keep_security_before_compression(
         prefix: &f.prefix,
         config: &config,
         state,
-        policy: crate::Policy::Tokenless,
+        policy: crate::configuration::test_templates::policy(
+            "tokenless",
+            &f.prefix,
+            Path::new("/run/unused.sock"),
+        ),
         qoder: Some(Path::new("/bin/true")),
         node: None,
         openclaw: None,
@@ -322,7 +336,7 @@ fn tokenless_templates_require_its_package_and_keep_security_before_compression(
     assert!(crate::configure(&settings)
         .unwrap_err()
         .to_string()
-        .contains("install the Tokenless Provider"));
+        .contains("install required template package: aw-provider-tokenless"));
     let provider = bundle(
         &f.root.join("tokenless-provider"),
         &["aw-provider-tokenless"],
@@ -360,9 +374,11 @@ fn tokenless_templates_require_its_package_and_keep_security_before_compression(
         serde_json::json!(["replace_result"])
     );
     fs::remove_file(&config).unwrap();
-    settings.policy = crate::Policy::SecCoreTokenless {
-        socket: Path::new("/run/aw-test/sec.sock"),
-    };
+    settings.policy = crate::configuration::test_templates::policy(
+        "sec-core-tokenless",
+        &f.prefix,
+        Path::new("/run/aw-test/sec.sock"),
+    );
     crate::configure(&settings).unwrap();
     let document: serde_json::Value =
         serde_yaml_ng::from_slice(&fs::read(&config).unwrap()).unwrap();
@@ -419,7 +435,11 @@ fn desired_tokenless_document_does_not_require_installed_payloads() {
         prefix: &prefix,
         config: &config,
         state: &state,
-        policy: crate::Policy::Tokenless,
+        policy: crate::configuration::test_templates::policy(
+            "tokenless",
+            &f.prefix,
+            Path::new("/run/unused.sock"),
+        ),
         qoder: Some(Path::new("/bin/true")),
         node: None,
         openclaw: None,
@@ -430,7 +450,7 @@ fn desired_tokenless_document_does_not_require_installed_payloads() {
             .as_array()
             .unwrap()
             .len(),
-        5
+        9
     );
     assert!(!prefix.exists() && !config.exists() && !state.exists());
 }
@@ -450,16 +470,20 @@ fn managed_tokenless_configuration_rejects_path_delimiters_before_publication() 
         prefix: &prefix,
         config: &config,
         state: &state,
-        policy: crate::Policy::Tokenless,
+        policy: crate::configuration::test_templates::policy(
+            "tokenless",
+            &f.prefix,
+            Path::new("/run/unused.sock"),
+        ),
         qoder: Some(Path::new("/bin/true")),
         node: None,
         openclaw: None,
     };
-    assert!(crate::document(&settings).is_ok());
+    assert!(crate::document(&settings).is_err());
     assert!(crate::configure(&settings)
         .unwrap_err()
         .to_string()
-        .contains("managed RTK directory cannot be represented in PATH"));
+        .contains("template search_path cannot be represented in PATH"));
     assert!(!config.exists() && !state.exists());
     settings.policy = crate::Policy::None;
     crate::configure(&settings).unwrap();

@@ -1,7 +1,10 @@
 //! Installed-package acceptance without Python, Agent accounts or source helpers.
 //! Native framework adoption is validated separately through the documented user flow.
 
+use aw_package::{digest, Policy};
 use aw_service::{Client, Operation};
+#[path = "../src/configuration/test_templates.rs"]
+mod templates;
 use serde_json::{json, Value};
 use std::{
     fs::{self, File, Permissions},
@@ -102,10 +105,13 @@ fn installed_inspect_reads_tokenless_without_starting_security_or_agent_services
     let state = root.join("state");
     let socket = root.join("not-started-sec.sock");
     for (name, policy) in [
-        ("tokenless", aw_package::Policy::Tokenless),
+        (
+            "tokenless",
+            templates::policy("tokenless", &prefix, &socket),
+        ),
         (
             "combined",
-            aw_package::Policy::SecCoreTokenless { socket: &socket },
+            templates::policy("sec-core-tokenless", &prefix, &socket),
         ),
     ] {
         let config = root.join(format!("{name}.yaml"));
@@ -181,7 +187,7 @@ fn installed_binaries_scan_and_recover_audit() {
         prefix: &prefix,
         config: &config,
         state: &state,
-        policy: aw_package::Policy::SecCore { socket: &socket },
+        policy: templates::policy("sec-core", &prefix, &socket),
         qoder: Some(Path::new("/bin/true")),
         node: Some(Path::new("/bin/true")),
         openclaw: Some(Path::new("/bin/true")),

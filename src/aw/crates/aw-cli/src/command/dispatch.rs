@@ -103,6 +103,7 @@ pub(super) fn run(command: Command) -> Result<Exit> {
             "install",
             &attachment(native(value.native), value.attachment),
         ),
+        Command::Agent(Agent::List { json }) => super::discovery::agents(json),
         Command::Config(value) => config(value),
         Command::Service(value) => service(value),
         Command::Serve(value) => service(Service::Serve(value)),
@@ -188,11 +189,15 @@ fn config(command: Config) -> Result<Exit> {
                 ("node", value.node),
                 ("openclaw", value.openclaw),
                 ("provider", value.provider),
-                ("socket", value.socket),
+                ("template", value.template),
                 ("check", value.check),
                 ("effect", value.effect),
                 ("reason-code", value.reason_code),
             ]);
+            args.flags.insert(
+                "--template-vars".into(),
+                serde_json::to_string(&value.template_var)?,
+            );
             args.native = value.arguments;
             return configure(args, value.prefix.output);
         }

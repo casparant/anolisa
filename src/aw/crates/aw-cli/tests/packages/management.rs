@@ -64,7 +64,7 @@ fn generic(f: &Fixture, id: &str, dependencies: Value) -> PathBuf {
     fs::write(bundle.join("package.json"), serde_json::to_vec(&json!({
         "schema_version":1,"package_id":id,"version":"1.2.3","os":"linux",
         "arch":std::env::consts::ARCH,"files":{name:{"sha256":aw_package::digest(&path).unwrap(),"mode":493}},
-        "dependencies":dependencies
+        "dependencies":dependencies,"provider":{"protocol":"aw-provider/v1alpha1"}
     })).unwrap()).unwrap();
     bundle
 }
@@ -142,6 +142,30 @@ fn generic_packages_support_selective_removal_exact_dependencies_and_reinstall()
     assert!(f.prefix.join(".aw-packages/aw-core.json").is_file());
     install(&base);
     assert_eq!(fs::read(f.prefix.join("user.txt")).unwrap(), b"keep");
+}
+
+#[test]
+fn ordinary_software_is_rejected_without_creating_an_aw_database() {
+    let f = Fixture::new();
+    let bundle = generic(&f, "ordinary-software", json!([]));
+    let descriptor = bundle.join("package.json");
+    let mut value: Value = serde_json::from_slice(&fs::read(&descriptor).unwrap()).unwrap();
+    value.as_object_mut().unwrap().remove("provider");
+    fs::write(&descriptor, serde_json::to_vec(&value).unwrap()).unwrap();
+    let before = snapshot(&f.root);
+    let output = report(
+        f.command()
+            .args(["install", "--bundle"])
+            .arg(&bundle)
+            .arg("--prefix")
+            .arg(&f.prefix)
+            .arg("--json"),
+        1,
+    );
+    assert_eq!(output["error"]["code"], "package_contract");
+    assert_eq!(before, snapshot(&f.root));
+    assert!(!f.prefix.exists());
+    assert!(!f.root.join("package-state").exists());
 }
 
 #[test]

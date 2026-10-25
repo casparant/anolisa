@@ -14,9 +14,9 @@ mod qoder;
 pub mod reload;
 
 pub use adapter::{
-    block_reason, select, Adapter, HookEvent, HookOutput, InstallOptions, LaunchContext,
-    LaunchFiles, LaunchInput, LaunchPlan, NativeContext, NativeOptions, PreparedLaunch, Readiness,
-    OBSERVE_STEP,
+    block_reason, registered_adapters, select, Adapter, HookEvent, HookOutput, InstallOptions,
+    LaunchContext, LaunchFiles, LaunchInput, LaunchPlan, NativeContext, NativeOptions,
+    PreparedLaunch, Readiness, RegisteredAdapter, OBSERVE_STEP,
 };
 
 /// Native callback status; only the CLI delivers signals or exits its process.

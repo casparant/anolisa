@@ -26,6 +26,17 @@ pub(super) fn install(value: package::Install) -> crate::cli::Result<crate::cli:
             .bundle
             .as_deref()
             .ok_or_else(|| aw_package::Error::Invalid("missing --bundle".into()))?;
+        let input = aw_package::open_bundle::inspect(Path::new(bundle))?;
+        if !input.legacy_preview
+            && input
+                .packages
+                .iter()
+                .any(|package| package.provider.is_none())
+        {
+            return Err(aw_package::Error::Invalid(
+                "aw installs local AW extensions; use ANOLISA or the native package manager for ordinary software".into(),
+            ));
+        }
         let plan = plan::install_with_resources(
             &paths,
             Path::new(bundle),

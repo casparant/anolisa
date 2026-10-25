@@ -54,20 +54,22 @@ fn explicit_enable_then_remove_generates_complete_documents_without_dangling_ste
     install(&f.core, &f.prefix).unwrap();
     let config = f.root.join("aw.yaml");
     let mut settings = settings(&f, &config);
-    settings.policy = Policy::SecCore {
-        socket: Path::new("/run/aw-test/sec.sock"),
-    };
+    settings.policy = crate::configuration::test_templates::policy(
+        "sec-core",
+        &f.prefix,
+        Path::new("/run/aw-test/sec.sock"),
+    );
     assert!(crate::configure(&settings)
         .unwrap_err()
         .to_string()
-        .contains("install the sec-core Provider"));
+        .contains("install required template package: aw-provider-sec-core"));
     assert!(!config.exists());
     install(&f.provider, &f.prefix).unwrap();
     crate::configure(&settings).unwrap();
     let enabled = read(&config);
     assert_eq!(
         enabled["spec"]["providers"]["security"]["config"]["tools"],
-        json!({"Bash":{"language":"bash","input_pointer":"/command"}})
+        json!({"Bash":{"language":"bash","input_pointer":"/command"}, "exec":{"language":"bash","input_pointer":"/command"}})
     );
     assert_eq!(
         enabled["spec"]["events"]["tool.before"]["steps"][0]["on_error"],
@@ -96,9 +98,11 @@ fn unused_provider_damage_does_not_become_a_core_configuration_dependency() {
     .unwrap();
     crate::configure(&settings).unwrap();
     fs::remove_file(&config).unwrap();
-    settings.policy = Policy::SecCore {
-        socket: Path::new("/run/aw-test/sec.sock"),
-    };
+    settings.policy = crate::configuration::test_templates::policy(
+        "sec-core",
+        &f.prefix,
+        Path::new("/run/aw-test/sec.sock"),
+    );
     assert!(crate::configure(&settings).is_err());
     assert!(!config.exists());
     // Even an invalid optional receipt must not become a core prerequisite.
@@ -110,9 +114,11 @@ fn unused_provider_damage_does_not_become_a_core_configuration_dependency() {
     settings.policy = Policy::None;
     crate::configure(&settings).unwrap();
     fs::remove_file(&config).unwrap();
-    settings.policy = Policy::SecCore {
-        socket: Path::new("/run/aw-test/sec.sock"),
-    };
+    settings.policy = crate::configuration::test_templates::policy(
+        "sec-core",
+        &f.prefix,
+        Path::new("/run/aw-test/sec.sock"),
+    );
     assert!(crate::configure(&settings).is_err());
     assert!(!config.exists());
 }

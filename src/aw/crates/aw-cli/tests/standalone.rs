@@ -174,3 +174,89 @@ fn legacy_socket_and_mismatched_provider_options_never_silently_drop_security() 
         assert!(!f.config().exists());
     }
 }
+
+#[test]
+fn explicit_template_preserves_literal_variables_and_rejects_invalid_inputs() {
+    let f = Fixture::new();
+    let template = f.directory.path().join("provider-template.json");
+    let definition = json!({"format":1,"providers":{"custom":{"transport":{"type":"stdio","location":"agent","argv":["/bin/true","${ARG}","${PREFIX}"]},"timeout_ms":1000,"max_output_bytes":32}},"events":{"tool.before":{"enabled":true,"required":true,"steps":[{"id":"custom","provider":"custom","effects":["observe"],"on_error":"report"}]}}});
+    fs::write(&template, serde_json::to_vec(&definition).unwrap()).unwrap();
+    let literal = "literal ; $(touch NEVER) ${STATE} = tail";
+    let output = f
+        .command()
+        .arg("--template")
+        .arg(&template)
+        .arg("--template-var")
+        .arg(format!("ARG={literal}"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        f.read()["spec"]["providers"]["custom"]["transport"]["argv"],
+        json!(["/bin/true", literal, f.prefix])
+    );
+    fs::remove_file(f.config()).unwrap();
+    for variables in [
+        vec![],
+        vec!["ARG=one", "ARG=two"],
+        vec!["PREFIX=/other"],
+        vec!["ARG"],
+    ] {
+        let mut command = f.command();
+        command.arg("--template").arg(&template);
+        for variable in variables {
+            command.args(["--template-var", variable]);
+        }
+        assert!(!command.output().unwrap().status.success());
+        assert!(!f.config().exists());
+    }
+    let mut bad = definition;
+    bad["packages"] = json!(["other-provider"]);
+    bad["file_hashes"] = json!({"HASH":{"package":"other-provider","path":"../outside"}});
+    fs::write(&template, serde_json::to_vec(&bad).unwrap()).unwrap();
+    assert!(!f
+        .command()
+        .arg("--template")
+        .arg(template)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert!(!f.config().exists());
+}
+
+#[test]
+fn native_or_unregistered_aw_initializes_without_package_database() {
+    for existing in [false, true] {
+        let f = Fixture::new();
+        let prefix = f.directory.path().join("native-prefix");
+        if existing {
+            fs::create_dir(&prefix).unwrap();
+        }
+        let state_home = f.directory.path().join("empty-state-home");
+        let output = Command::new(env!("CARGO_BIN_EXE_aw"))
+            .args(["config", "init", "--prefix"])
+            .arg(&prefix)
+            .arg("--config")
+            .arg(f.config())
+            .arg("--state-dir")
+            .arg(f.directory.path().join("state"))
+            .args(["--qoder", "/bin/true"])
+            .env("XDG_STATE_HOME", &state_home)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(f.read()["spec"]["providers"], json!({}));
+        assert!(!prefix.join(".aw-packages").exists());
+        assert!(!prefix.join(".aw-install.lock").exists());
+        assert!(!state_home.exists());
+    }
+}

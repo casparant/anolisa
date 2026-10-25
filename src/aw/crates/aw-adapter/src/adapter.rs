@@ -231,6 +231,30 @@ pub fn select(name: &str) -> Result<&'static dyn Adapter> {
         .ok_or_else(|| format!("unsupported launcher adapter: {name}").into())
 }
 
+/// One compiled native integration; this describes framework support, not installed Agent software.
+#[derive(Debug, Serialize)]
+pub struct RegisteredAdapter {
+    /// Name accepted by an AW configuration's `adapter` field.
+    pub name: &'static str,
+    /// Declared native events and adopted effects, before runtime admission.
+    pub events: BTreeMap<&'static str, Vec<&'static str>>,
+}
+
+/// Enumerate the same compiled catalog used by native launch selection.
+pub fn registered_adapters() -> Vec<RegisteredAdapter> {
+    catalog::PROFILES
+        .iter()
+        .map(|profile| RegisteredAdapter {
+            name: profile.name,
+            events: profile
+                .events
+                .iter()
+                .map(|(event, effects)| (*event, effects.to_vec()))
+                .collect(),
+        })
+        .collect()
+}
+
 pub(crate) struct Probe<'a>(pub(crate) &'a AtomicBool);
 
 impl Probe<'_> {

@@ -99,6 +99,12 @@ enum Command {
 
 #[derive(Subcommand, Debug, PartialEq)]
 enum Agent {
+    /// List compiled native adapters without probing or connecting Agent software
+    List {
+        /// Emit versioned catalog metadata from the native launch registry
+        #[arg(long)]
+        json: bool,
+    },
     /// Connect supported native Hooks; does not install Agent software
     Connect(Connect),
 }

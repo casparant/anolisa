@@ -143,6 +143,23 @@ pub(super) fn completion(shell: clap_complete::Shell) -> crate::cli::Result<crat
     Ok(crate::cli::Exit::Code(0))
 }
 
+pub(super) fn agents(json: bool) -> crate::cli::Result<crate::cli::Exit> {
+    let adapters = aw_adapter::registered_adapters();
+    let mut stdout = std::io::stdout().lock();
+    if json {
+        serde_json::to_writer(
+            &mut stdout,
+            &serde_json::json!({"format":1,"adapters":adapters}),
+        )?;
+        writeln!(stdout)?;
+    } else {
+        for adapter in adapters {
+            writeln!(stdout, "{}", adapter.name)?;
+        }
+    }
+    Ok(crate::cli::Exit::Code(0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
