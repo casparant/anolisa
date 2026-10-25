@@ -109,17 +109,23 @@ def snapshot(source: Path, destination: Path, component: str) -> None:
                     continue
                 shutil.copyfile(resolved_path, target, follow_symlinks=False)
                 target.chmod(0o755 if resolved_path.stat().st_mode & 0o111 else 0o644)
-    if component == "anolisa-cli":
+    if component in {"anolisa-cli", "aw-core"}:
         manifest = destination / "Cargo.toml"
         if manifest.is_file():
-            # Standalone sources flatten the CLI workspace into the archive root.
-            # Keep its sibling shared library inside that same source archive.
-            manifest.write_text(
-                manifest.read_text().replace(
-                    'local-package = { path = "../crates/local-package" }',
-                    'local-package = { path = "distribution/crates/local-package" }',
-                )
+            # Flattened sources retain sibling workspaces inside the archive without
+            # allowing Cargo to absorb them as members of the parent workspace.
+            prefix = (
+                "../crates/local-package"
+                if component == "anolisa-cli"
+                else "../../distribution/crates/local-package"
             )
+            contents = manifest.read_text().replace(
+                f'path = "{prefix}', 'path = "distribution/crates/local-package'
+            )
+            excluded = 'exclude = ["distribution/crates/local-package", "distribution/tooling/aw-preview"]\n'
+            if excluded not in contents:
+                contents = contents.replace("[workspace]\n", "[workspace]\n" + excluded, 1)
+            manifest.write_text(contents)
     document = json.loads((recipe / "recipe.json").read_text())
     source_component = source / document["source_dir"]
     # Resolve only the explicit repository compatibility links for this component.

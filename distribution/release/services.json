@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "services": [
+    {
+      "id": "aw",
+      "package": "aw-core",
+      "program": "aw",
+      "args": ["service", "serve", "--config", "${XDG_CONFIG_HOME}/aw/aw.yaml", "--state-dir", "${XDG_RUNTIME_DIR}/aw"],
+      "scope": "user",
+      "run_as": "same-user",
+      "communication": "socket",
+      "container_allowed": true,
+      "unit": null,
+      "depends_on": [],
+      "required_paths": ["${XDG_CONFIG_HOME}/aw/aw.yaml", "${XDG_RUNTIME_DIR}"],
+      "readiness": {"kind": "unix-socket", "path": "${XDG_RUNTIME_DIR}/aw/aw.sock", "timeout_ms": 10000},
+      "stop_timeout_ms": 10000
+    },
+    {
+      "id": "cosh-gateway",
+      "package": "cosh-ng-core",
+      "program": "cosh-gateway",
+      "args": ["serve"],
+      "scope": "system",
+      "run_as": "same-user",
+      "communication": "socket",
+      "container_allowed": false,
+      "unit": null,
+      "depends_on": [],
+      "required_paths": ["/etc/cosh"],
+      "readiness": {"kind": "process", "delay_ms": 500, "timeout_ms": 10000},
+      "stop_timeout_ms": 15000
+    },
+    {
+      "id": "agent-sec-core",
+      "package": "agent-sec-cli",
+      "program": "agent-sec-daemon",
+      "args": ["serve"],
+      "scope": "system",
+      "run_as": "root",
+      "communication": "socket",
+      "container_allowed": false,
+      "unit": "agent-sec-core.service",
+      "depends_on": [],
+      "required_paths": [],
+      "readiness": {"kind": "process", "delay_ms": 500, "timeout_ms": 10000},
+      "stop_timeout_ms": 10000
+    },
+    {
+      "id": "agentsight-enforcer",
+      "package": "agentsight",
+      "program": "agentsight-enforcer",
+      "args": [],
+      "scope": "system",
+      "run_as": "root",
+      "communication": "socket",
+      "container_allowed": false,
+      "unit": "agentsight-enforcer.service",
+      "depends_on": [],
+      "required_paths": ["/sys/fs/bpf"],
+      "readiness": {"kind": "unix-socket", "path": "/run/agentsight/enforcer.sock", "timeout_ms": 10000},
+      "stop_timeout_ms": 15000
+    },
+    {
+      "id": "agentsight",
+      "package": "agentsight",
+      "program": "agentsight-start",
+      "args": [],
+      "scope": "system",
+      "run_as": "root",
+      "communication": "http",
+      "container_allowed": false,
+      "unit": "agentsight.service",
+      "depends_on": ["agentsight-enforcer"],
+      "required_paths": ["/sys/fs/bpf"],
+      "readiness": {"kind": "process", "delay_ms": 500, "timeout_ms": 10000},
+      "stop_timeout_ms": 30000
+    },
+    {
+      "id": "ws-ckpt",
+      "package": "ws-ckpt-core",
+      "program": "ws-ckpt",
+      "args": ["daemon"],
+      "scope": "system",
+      "run_as": "root",
+      "communication": "socket",
+      "container_allowed": false,
+      "unit": "ws-ckpt.service",
+      "depends_on": [],
+      "required_paths": [],
+      "readiness": {"kind": "process", "delay_ms": 500, "timeout_ms": 10000},
+      "stop_timeout_ms": 15000
+    }
+  ],
+  "presets": {
+    "disabled": {
+      "services": [
+        {"id": "aw", "enable": false, "start": false},
+        {"id": "cosh-gateway", "enable": false, "start": false},
+        {"id": "agent-sec-core", "enable": false, "start": false},
+        {"id": "agentsight-enforcer", "enable": false, "start": false},
+        {"id": "agentsight", "enable": false, "start": false},
+        {"id": "ws-ckpt", "enable": false, "start": false}
+      ]
+    },
+    "host": {
+      "services": [
+        {"id": "agent-sec-core", "enable": true, "start": true},
+        {"id": "agentsight-enforcer", "enable": true, "start": true},
+        {"id": "agentsight", "enable": true, "start": true},
+        {"id": "ws-ckpt", "enable": true, "start": true}
+      ]
+    },
+    "container": {
+      "services": [
+        {"id": "aw", "enable": false, "start": true}
+      ]
+    }
+  }
+}

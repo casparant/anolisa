@@ -72,6 +72,19 @@ install_package() {
 # -----------------------------------------------------------------------------
 # Setup rpmbuild directory tree under scripts/rpmbuild/
 # -----------------------------------------------------------------------------
+snapshot_recipe() {
+    local identity="$1" destination="$2"
+    case "$identity" in
+        agent-sec-core) identity=sec-core ;;
+        anolisa) identity=anolisa-cli ;;
+        copilot-shell) return ;;
+    esac
+    if [ -d "$ROOT_DIR/distribution/components/$identity" ]; then
+        python3 "$ROOT_DIR/distribution/packaging/snapshot.py" \
+            --source "$ROOT_DIR" --destination "$destination" --component "$identity"
+    fi
+}
+
 setup_rpmbuild() {
     log "Setting up rpmbuild tree at ${BUILD_DIR}"
     mkdir -p "${BUILD_DIR}"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -103,7 +116,11 @@ process_spec_template() {
     local spec_out="${BUILD_DIR}/SPECS/$(basename "${spec_in%.in}")"
 
     log "Processing template: $(basename "$spec_in") -> $(basename "$spec_out") (version=${version})"
-    sed "s/@VERSION@/${version}/g" "$spec_in" > "$spec_out"
+    {
+        # Component owners build without this flag; ANOLISA includes its optional metadata.
+        printf '%%global _with_anolisa_integration 1\n'
+        sed "s/@VERSION@/${version}/g" "$spec_in"
+    } > "$spec_out"
     echo "$spec_out"
 }
 
@@ -171,6 +188,7 @@ build_copilot_shell() {
     mkdir -p "$pkg_dir"
     tar -cf - -C "$SHELL_DIR" "${excludes[@]}" . | tar -xf - -C "$pkg_dir"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -298,6 +316,7 @@ build_agent_sec_core() {
         --exclude='.pytest_cache' \
         agent-sec-cli/ | tar -xf - -C "$pkg_dir/"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -384,6 +403,7 @@ build_agent_sec_core_v2() {
         v2/ \
         packaging/systemd/skillsec.json | tar -xf - -C "$pkg_dir/"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
 
     # Source1 is produced by the same helper used by package-vendor in CI.
@@ -457,6 +477,7 @@ build_agentic_os_skills() {
     # component.toml — spec %install installs it to %{_datadir}/anolisa/components/os-skills/
     [ -f "${SKILLS_DIR}/component.toml" ] && cp "${SKILLS_DIR}/component.toml" "$pkg_dir/"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -539,6 +560,7 @@ build_agentsight() {
     local pkg_dir="${tmp_dir}/${pkg_name}-${version}"
     ENFORCER_BIN="$ENFORCER_BIN" "${SIGHT_DIR}/scripts/stage-rpm-payload.sh" "$pkg_dir"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -629,6 +651,7 @@ build_tokenless() {
         --exclude='adapters/tokenless/qwenpaw/requirements.txt' \
         . | tar -xf - -C "$pkg_dir"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -735,6 +758,7 @@ build_agent_memory() {
     mkdir -p "$pkg_dir"/.cargo
     cp "$MEM_DIR"/.cargo/config.toml "$pkg_dir"/.cargo/
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -760,12 +784,27 @@ build_anolisa() {
     (
         trap 'rm -rf -- "$snapshot_tmp"' EXIT
         local extract_dir="${snapshot_tmp}/source"
-        mkdir -p "$extract_dir"
+        local snapshot_repo="${snapshot_tmp}/repository"
+        local revision
+        revision=$(git -C "$ROOT_DIR" rev-parse HEAD)
+        mkdir -p "$extract_dir" "$snapshot_repo"
 
-        # Both source archives must share this snapshot so a dirty worktree
-        # cannot pair committed sources with dependencies from another revision.
-        git -C "$ROOT_DIR" archive --format=tar HEAD:distribution/anolisa |
-            tar -xf - -C "$extract_dir"
+        # Pin source, central recipes, product policy and shared tools to the
+        # same Git revision before resolving aliases into a standalone Source0.
+        local archive_paths=(LICENSE distribution/anolisa)
+        local path
+        for path in distribution/components distribution/providers distribution/packaging distribution/release distribution/crates/local-package; do
+            if git -C "$ROOT_DIR" cat-file -e "$revision:$path" 2>/dev/null; then
+                archive_paths+=("$path")
+            fi
+        done
+        git -C "$ROOT_DIR" archive --format=tar "$revision" "${archive_paths[@]}" |
+            tar -xf - -C "$snapshot_repo"
+        cp -a "$snapshot_repo/distribution/anolisa/." "$extract_dir/"
+        if [ -f "$snapshot_repo/distribution/packaging/snapshot.py" ]; then
+            python3 "$snapshot_repo/distribution/packaging/snapshot.py" \
+                --source "$snapshot_repo" --destination "$extract_dir" --component anolisa-cli
+        fi
 
         local spec_in="${extract_dir}/anolisa.spec.in"
         if [ ! -f "$spec_in" ]; then
@@ -866,6 +905,7 @@ build_skillfs() {
         cp -p "${ROOT_DIR}/LICENSE" "${pkg_dir}/LICENSE"
     fi
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -945,6 +985,7 @@ build_ktuner() {
         cp -p "${ROOT_DIR}/LICENSE" "${pkg_dir}/LICENSE"
     fi
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -1062,6 +1103,7 @@ build_cosh_ng() {
         --exclude='node_modules' \
         . | tar -xf - -C "$pkg_dir"
 
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -1189,6 +1231,7 @@ ANOLISA-design/docs/anolisa/osbase/sandbox/sandbox-rpm-packaging.md
 EOF
 
     log "Step 2/3: Creating source tarball ${tarball_name}..."
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -1227,6 +1270,7 @@ EOF
 Placeholder ANOLISA Substrate component. Real implementation pending —
 see ANOLISA-design/docs/anolisa/osbase/sandbox/sandbox-rpm-packaging.md
 EOF
+    snapshot_recipe "$pkg_name" "$pkg_dir"
     tar -czf "${BUILD_DIR}/SOURCES/${tarball_name}" -C "$tmp_dir" "${pkg_name}-${version}"
     rm -rf "$tmp_dir"
 
@@ -1332,6 +1376,59 @@ gpgcheck=0
 REPO_EOF
 }
 
+# Build AW and Provider RPMs from a standalone source snapshot and offline vendor archive.
+build_aw_rpm() {
+    local identity="$1" recipe source_path version spec_in tmp_dir pkg_dir manifest_path
+    [ "$(uname -s)" = Linux ] || { err "AW RPM builds require Linux"; return 1; }
+    recipe="$ROOT_DIR/distribution/components/$identity/recipe.json"
+    [ -f "$recipe" ] || recipe="$ROOT_DIR/distribution/providers/$identity/recipe.json"
+    local fields
+    fields=$(python3 - "$ROOT_DIR" "$recipe" <<'PY_RECIPE'
+import json
+from pathlib import Path
+import sys
+import tomllib
+root, recipe = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text())
+value = tomllib.loads((root / recipe["build"]["version_file"]).read_text())
+for key in recipe["build"]["version_key"].split("."):
+    value = value[key]
+print(recipe["source_dir"] + "\t" + str(value) + "\t" + recipe["rpm_spec"])
+PY_RECIPE
+    )
+    IFS=$'\t' read -r source_path version spec_in <<< "$fields"
+    version="${VERSION:-$version}"
+    tmp_dir=$(mktemp -d)
+    pkg_dir="$tmp_dir/$identity-$version"
+    mkdir -p "$pkg_dir"
+    if [ "$identity" = aw-core ]; then
+        tar -cf - --exclude=target --exclude=node_modules --exclude=.git \
+            -C "$ROOT_DIR/$source_path" . | tar -xf - -C "$pkg_dir"
+        manifest_path="$pkg_dir/Cargo.toml"
+    else
+        manifest_path="$pkg_dir/$source_path/Cargo.toml"
+    fi
+    python3 "$ROOT_DIR/distribution/packaging/snapshot.py" --source "$ROOT_DIR" \
+        --destination "$pkg_dir" --component "$identity"
+    rm -f "$pkg_dir/LICENSE"
+    cp -p "$ROOT_DIR/LICENSE" "$pkg_dir/LICENSE"
+    sed "s/@VERSION@/$version/g" "$ROOT_DIR/$spec_in" > "$BUILD_DIR/SPECS/$identity.spec"
+    tar -czf "$BUILD_DIR/SOURCES/$identity-$version.tar.gz" -C "$tmp_dir" "$identity-$version"
+    mkdir -p "$tmp_dir/vendor/.cargo"
+    cargo vendor --locked --manifest-path "$manifest_path" "$tmp_dir/vendor/vendor" \
+        | sed 's|directory = ".*"|directory = "vendor"|' > "$tmp_dir/vendor/.cargo/config.toml"
+    tar -czf "$BUILD_DIR/SOURCES/$identity-$version-vendor.tar.gz" -C "$tmp_dir/vendor" vendor .cargo
+    rm -rf "$tmp_dir"
+    "$RPMBUILD" --with anolisa_integration -ba --define "_topdir $BUILD_DIR" "$BUILD_DIR/SPECS/$identity.spec"
+}
+
+build_product_wrapper() {
+    local product_version="${VERSION:-0.1.0}" profile="${PROFILE:-complete}"
+    python3 "$ROOT_DIR/distribution/packaging/product.py" --source "$ROOT_DIR" \
+        --format rpm-spec --profile "$profile" --version "$product_version" \
+        --output "$BUILD_DIR/SPECS/anolisa-product.spec"
+    "$RPMBUILD" -ba --define "_topdir $BUILD_DIR" "$BUILD_DIR/SPECS/anolisa-product.spec"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -1351,6 +1448,10 @@ usage() {
     echo "  ktuner                    Build ktuner RPM"
     echo "  anolisa                   Build anolisa RPM"
     echo "  cosh-ng                   Build cosh-ng RPM"
+    echo "  aw-core                   Build the AW framework RPM"
+    echo "  aw-provider-tokenless     Build the Tokenless Provider bridge RPM"
+    echo "  aw-provider-sec-core      Build the sec-core Provider bridge RPM"
+    echo "  anolisa-standard          Build the selected product wrapper (PROFILE overrides)"
     echo "  gvisor-runsc              Build gvisor-runsc RPM (sandbox)"
     echo "  containerd-shim-runsc-v1  Build containerd-shim-runsc-v1 RPM (sandbox)"
     echo "  atelet                    Build atelet RPM (sandbox, placeholder)"
@@ -1421,6 +1522,12 @@ case "$TARGET" in
         ;;
     cosh-ng)
         build_cosh_ng
+        ;;
+    aw-core|aw-provider-tokenless|aw-provider-sec-core)
+        build_aw_rpm "$TARGET"
+        ;;
+    anolisa-standard)
+        build_product_wrapper
         ;;
     gvisor-runsc)
         build_gvisor_runsc

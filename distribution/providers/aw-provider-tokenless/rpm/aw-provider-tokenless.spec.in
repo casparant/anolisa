@@ -1,0 +1,39 @@
+%global debug_package %{nil}
+Name:           aw-provider-tokenless
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        AW Provider bridge for tokenless
+License:        Apache-2.0
+URL:            https://github.com/agentic-os-org/ANOLISA
+Source0:        %{name}-%{version}.tar.gz
+Source1:        %{name}-%{version}-vendor.tar.gz
+BuildRequires:  rust >= 1.93
+BuildRequires:  cargo
+BuildRequires:  gcc
+Requires:       aw-core >= 0.1.0
+Requires:       tokenless-core >= 0.8.8
+
+%description
+Connect the separately installed tokenless backend to AW without bundling
+another copy of its CLI, daemon or native Agent plugins.
+
+%prep
+%setup -q -a 1
+
+%build
+cargo build --release --locked --offline --manifest-path providers/tokenless/Cargo.toml
+
+%install
+install -D -m 0755 providers/tokenless/target/release/aw-provider-tokenless \
+    %{buildroot}%{_libexecdir}/aw/providers/tokenless/aw-provider-tokenless
+install -d %{buildroot}%{_datadir}/aw/providers/tokenless
+for resource in schemas examples; do
+    if [ -d providers/tokenless/$resource ]; then
+        cp -rp providers/tokenless/$resource %{buildroot}%{_datadir}/aw/providers/tokenless/
+    fi
+done
+
+%files
+%license LICENSE
+%{_libexecdir}/aw/providers/tokenless/
+%{_datadir}/aw/providers/tokenless/

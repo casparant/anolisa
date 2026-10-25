@@ -1,0 +1,48 @@
+{
+  "build": {
+    "package_id": "aw-core",
+    "source": "src/aw",
+    "version_file": "src/aw/crates/aw-cli/Cargo.toml",
+    "version_key": "package.version",
+    "builder": "cargo",
+    "binary": "aw",
+    "dependencies": [],
+    "entrypoints": {
+      "aw": "bin/aw"
+    },
+    "required": [
+      "bin/aw",
+      "share/aw/schemas/aw-config/configuration-v1alpha1.schema.json",
+      "share/aw/native/openclaw/index.mjs"
+    ]
+  },
+  "schema_version": 1,
+  "id": "aw-core",
+  "source_dir": "src/aw",
+  "resource_namespace": "aw",
+  "packages": [
+    {
+      "id": "aw-core",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/aw/",
+          "to": "share/aw/"
+        },
+        {
+          "from": "share/doc/aw-core/",
+          "to": "share/doc/aw-core/"
+        }
+      ],
+      "entrypoints": {
+        "aw": "bin/aw"
+      }
+    }
+  ],
+  "rpm_spec": "distribution/components/aw-core/rpm/aw-core.spec.in"
+}

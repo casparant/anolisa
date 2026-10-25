@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "default_profiles": {"user": "complete", "system": "complete"},
+  "profiles": {
+    "complete": {
+      "packages": ["anolisa-cli", "aw-core"],
+      "kinds": ["core", "backend", "skills", "provider", "plugin", "runtime"],
+      "scopes": ["user", "system"],
+      "preset": "disabled"
+    },
+    "minimal": {
+      "packages": ["aw-core", "anolisa-cli"],
+      "scopes": ["user", "system"],
+      "preset": "disabled"
+    },
+    "standard-system": {
+      "packages": ["aw-core", "anolisa-cli"],
+      "kinds": ["core", "backend", "skills", "provider"],
+      "scopes": ["system"],
+      "preset": "disabled"
+    },
+    "standard-user": {
+      "packages": ["aw-core", "anolisa-cli"],
+      "kinds": ["core", "skills", "provider"],
+      "components": ["aw-core", "anolisa-cli", "cosh-ng", "tokenless", "aw-provider-tokenless", "agent-memory", "os-skills"],
+      "scopes": ["user"],
+      "preset": "disabled"
+    }
+  },
+  "native_profiles": {
+    "base": "standard-system",
+    "scopes": ["system"],
+    "preset": "disabled"
+  },
+  "services": "distribution/release/services.json"
+}

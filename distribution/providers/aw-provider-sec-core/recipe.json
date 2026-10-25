@@ -1,0 +1,52 @@
+{
+  "build": {
+    "package_id": "aw-provider-sec-core",
+    "source": "providers/agent-sec-core",
+    "version_file": "providers/agent-sec-core/Cargo.toml",
+    "version_key": "package.version",
+    "builder": "cargo",
+    "binary": "aw-provider-sec-core",
+    "dependencies": [
+      "aw-core",
+      "sec-core"
+    ],
+    "provider": true,
+    "entrypoints": {},
+    "required": [
+      "libexec/aw/providers/sec-core/aw-provider-sec-core",
+      "share/aw/providers/sec-core/schemas/health-v1alpha1.schema.json",
+      "share/aw/providers/sec-core/examples/aw.yaml",
+      "share/aw/providers/sec-core/agent-sec-core-v2.service.in",
+      "share/aw/providers/sec-core/skillsec.json"
+    ]
+  },
+  "schema_version": 1,
+  "id": "aw-provider-sec-core",
+  "source_dir": "providers/agent-sec-core",
+  "resource_namespace": "aw",
+  "rpm_spec": "distribution/providers/aw-provider-sec-core/rpm/aw-provider-sec-core.spec.in",
+  "packages": [
+    {
+      "id": "aw-provider-sec-core",
+      "kind": "provider",
+      "requires": [
+        "aw-core",
+        "agent-sec-cli"
+      ],
+      "sources": [
+        {
+          "from": "libexec/aw/providers/sec-core/",
+          "to": "libexec/aw/providers/sec-core/"
+        },
+        {
+          "from": "share/aw/providers/sec-core/",
+          "to": "share/aw/providers/sec-core/"
+        },
+        {
+          "from": "share/doc/aw-provider-sec-core/",
+          "to": "share/doc/aw-provider-sec-core/"
+        }
+      ]
+    }
+  ]
+}

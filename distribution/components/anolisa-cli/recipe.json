@@ -1,0 +1,49 @@
+{
+  "build": {
+    "package_id": "anolisa-cli",
+    "source": "distribution/anolisa",
+    "version_file": "distribution/anolisa/Cargo.toml",
+    "version_key": "workspace.package.version",
+    "builder": "anolisa",
+    "profile": "gnu2.17",
+    "dependencies": [],
+    "entrypoints": {
+      "anolisa": "bin/anolisa"
+    },
+    "required": [
+      "bin/anolisa",
+      "share/anolisa/templates/repo.toml",
+      "share/anolisa/manifests/repo.toml"
+    ]
+  },
+  "schema_version": 1,
+  "id": "anolisa-cli",
+  "source_dir": "distribution/anolisa",
+  "resource_namespace": "anolisa",
+  "packages": [
+    {
+      "id": "anolisa-cli",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/anolisa/",
+          "to": "share/anolisa/"
+        },
+        {
+          "from": "share/doc/anolisa-cli/",
+          "to": "share/doc/anolisa-cli/"
+        }
+      ],
+      "entrypoints": {
+        "anolisa": "bin/anolisa"
+      }
+    }
+  ],
+  "rpm_spec": "distribution/components/anolisa-cli/rpm/anolisa.spec.in",
+  "raw_script": "distribution/anolisa/packaging/prebuilt/package.sh"
+}

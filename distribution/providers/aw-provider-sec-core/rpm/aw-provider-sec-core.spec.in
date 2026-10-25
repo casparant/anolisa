@@ -1,0 +1,39 @@
+%global debug_package %{nil}
+Name:           aw-provider-sec-core
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        AW Provider bridge for sec-core
+License:        Apache-2.0
+URL:            https://github.com/agentic-os-org/ANOLISA
+Source0:        %{name}-%{version}.tar.gz
+Source1:        %{name}-%{version}-vendor.tar.gz
+BuildRequires:  rust >= 1.93
+BuildRequires:  cargo
+BuildRequires:  gcc
+Requires:       aw-core >= 0.1.0
+Requires:       agent-sec-cli >= 1.0.0
+
+%description
+Connect the separately installed sec-core backend to AW without bundling
+another copy of its CLI, daemon or native Agent plugins.
+
+%prep
+%setup -q -a 1
+
+%build
+cargo build --release --locked --offline --manifest-path providers/agent-sec-core/Cargo.toml
+
+%install
+install -D -m 0755 providers/agent-sec-core/target/release/aw-provider-sec-core \
+    %{buildroot}%{_libexecdir}/aw/providers/sec-core/aw-provider-sec-core
+install -d %{buildroot}%{_datadir}/aw/providers/sec-core
+for resource in schemas examples; do
+    if [ -d providers/agent-sec-core/$resource ]; then
+        cp -rp providers/agent-sec-core/$resource %{buildroot}%{_datadir}/aw/providers/sec-core/
+    fi
+done
+
+%files
+%license LICENSE
+%{_libexecdir}/aw/providers/sec-core/
+%{_datadir}/aw/providers/sec-core/

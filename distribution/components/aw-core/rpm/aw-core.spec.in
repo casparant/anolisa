@@ -1,0 +1,38 @@
+%global debug_package %{nil}
+Name:           aw-core
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        AW Agent framework and Provider extensions
+License:        Apache-2.0
+URL:            https://github.com/agentic-os-org/ANOLISA
+Source0:        %{name}-%{version}.tar.gz
+Source1:        %{name}-%{version}-vendor.tar.gz
+BuildRequires:  rust >= 1.97.1
+BuildRequires:  cargo
+BuildRequires:  gcc
+Provides:       anolisa-component(aw)
+
+%description
+AW provides common Agent adapters, Provider execution and local extension
+installation through the single aw command.
+
+%prep
+%setup -q -a 1
+
+%build
+cargo build --release --locked --offline -p aw-cli --bin aw
+
+%install
+install -D -m 0755 target/release/aw %{buildroot}%{_bindir}/aw
+install -d %{buildroot}%{_datadir}/aw/schemas %{buildroot}%{_datadir}/aw/native
+for crate in crates/*; do
+    if [ -d "$crate/schemas" ]; then
+        cp -rp "$crate/schemas" %{buildroot}%{_datadir}/aw/schemas/$(basename "$crate")
+    fi
+done
+cp -rp crates/aw-adapter/native/. %{buildroot}%{_datadir}/aw/native/
+
+%files
+%license LICENSE
+%{_bindir}/aw
+%{_datadir}/aw/
