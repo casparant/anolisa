@@ -7,6 +7,14 @@ AW 让不同 Agent 共用安全检查、工具输出压缩和自定义规则。
 Agent 继续管理自己的模型、界面和权限；AW 保存本地执行记录，便于检查运行情况。
 当前为 Linux Preview。
 
+AW 可以脱离 ANOLISA 产品 CLI、catalog 和账号独立构建与运行。仓库的 `providers/`
+只是源码托管位置，运行接入依靠显式配置和 `transport.argv`，不扫描该目录注册。
+AW 负责运行策略、Agent Adapter、Provider 协议和配置。ANOLISA 负责产品软件
+安装与部署，直接调用共享的 `distribution/crates/local-package` 库。
+本地 `aw install` 保留给 AW 扩展和历史 Preview 兼容，拒绝 ANOLISA 所有的包记录。
+具体后端预设由 distribution 通过显式 `--template ABS_FILE` 提供，可重复使用
+`--template-var NAME=VALUE` 传入字面值；已有 YAML 不受影响。
+
 ## 安装与使用
 
 AW 使用 Preview 包分发，尚未接入 `anolisa install` 或 RPM。
@@ -25,6 +33,13 @@ Rust 库保留。每个 bundle 根目录携带 `aw` 用于首次安装，必须�
 移除指定包。新操作会提交本地包数据库；`aw recover` 清理已提交但中断的操作，或回滚
 尚未提交的操作。默认使用当前用户的数据库。root 管理的 raw 安装必须显式使用
 `sudo aw install ... --scope system`，权限不会自动选择 system。RPM/DEB 暂未接入。
+
+需要将包内资源与程序分开存放时，在首次安装选择绝对路径 `--resources-dir`：
+`aw install --prefix ABS_PROGRAM_DIR --resources-dir ABS_RESOURCE_DIR --bundle ABS_BUNDLE`。
+`share/` 下的文件去掉该前缀后直接安装到资源目录，`bin/` 和 `libexec/` 仍放在
+程序目录下。后续安装可省略此选项，沿用已记录的位置；未使用此选项的已有安装
+继续使用合并布局。两个目录可以位于不同文件系统。父目录要求、验证和卸载说明见
+[资源目录合同](../../docs/user-guide/zh/aw/packages.md#将资源与程序分开存放)。
 
 新卸载入口仅在 stdin 和 stderr 都是交互终端时询问确认。
 脚本或 JSON 输出必须使用 `aw uninstall --prefix ABS_DIR --yes`（或 `-y`）。

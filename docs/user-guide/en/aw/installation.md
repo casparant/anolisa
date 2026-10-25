@@ -82,10 +82,12 @@ aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle"
 ```
 
 For the system prefix above, run the command with `sudo` and `--scope system`.
-This accepts unpacked Preview bundles and independent packages described by
-`package.json`, not component names, download URLs or RPM/DEB packages. Preview
-Provider packages still require core from the same build; an independent ordinary
-tool need not include AW core or declare a Provider. Exact dependencies must
+This accepts unpacked historical Preview bundles and independent AW extensions
+whose `package.json` declares a Provider protocol. Ordinary software, component
+names, download URLs and RPM/DEB packages use their actual installer instead.
+Preview Provider packages still require core from the same build; an independent
+Provider extension need not include AW core. Existing ordinary-tool records
+remain queryable and removable through their original AW ownership. Exact dependencies must
 already exist in the same prefix or be delivered in the same Preview bundle.
 Use `--dry-run` before execution; see [package plans and recovery](operations.md).
 It does not start services, register Agent Hooks or enable Providers.

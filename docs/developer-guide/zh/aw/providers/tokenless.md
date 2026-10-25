@@ -34,14 +34,18 @@ PostTool 不依赖 RTK。包生成的 PreTool 先校验受管理 RTK 及其直�
 PostTool 和只读 view 继续工作。现有 view/schema 及其 unknown 就绪字段保持不变。
 
 先安装 core，再把匹配的 Tokenless 扩展安装到同一前缀；也可以将 all-in-one 安装到新
-前缀。Qoder/OpenClaw 使用 `aw config init --provider tokenless`，并提供既有
-Agent 参数。选择 `--provider sec-core+tokenless --socket ABS_FILE`，可生成执行前
+前缀。Qoder/OpenClaw 使用
+`aw config init --template ABS_BUNDLE/templates/tokenless.json`，并提供既有 Agent 参数。
+选择 `--template ABS_BUNDLE/templates/sec-core-tokenless.json --template-var SOCKET=ABS_FILE`，可生成执行前
 sec-core 检查，追加 PreTool，保留完成观察，并在既有 after 步骤末尾追加压缩。安装组件不会自动启用。
 原有单独 `sec-core` 选项保持既有行为。
 
+模板由 distribution 维护并随对应 Preview 包交付；原具体后端 `--provider` 选项
+不再接受，已有 YAML 继续可读。
+
 受支持的 target 接入时复制[共用示例](https://github.com/agentic-os-org/ANOLISA/blob/main/providers/tokenless/examples/aw.yaml)，
 替换可执行路径，并将 `RTK_SHA256_FROM_RECEIPT` 替换为
-`PREFIX/.aw-packages/aw-provider-tokenless.json` 中 RTK 条目的 `sha256`，
+`aw list --installed --prefix ABS_PREFIX --json` 的包记录 中 RTK 条目的 `sha256`，
 将两个 state 目录都放到不可变安装前缀之外。原生 profile 和各框架
 启动参数见 [AW 指南](../native-agents.md#四框架使用同一份配置)。
 

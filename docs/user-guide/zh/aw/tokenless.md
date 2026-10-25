@@ -26,10 +26,15 @@ sudo "./$AW_TOKENLESS_BUNDLE/aw" install --scope system --bundle "$PWD/$AW_TOKEN
 无需另外安装 RTK、TOON、Python wheel 或 Tokenless 原生插件。
 不要在同一会话叠加功能相同的 Tokenless 插件，以免重复处理。
 
+模板路径应指向已解包的 Provider 或 all-in-one 包；生成配置时须保留该包。
+本页适用于 AW 所有的 Preview 安装。ANOLISA 产品安装使用自身包记录、
+实际组件路径和产品提供的模板。
+
 ```bash
+export AW_TEMPLATE_DIR="/absolute/path/to/unpacked-provider-or-all-in-one-bundle/templates"
 aw config init --prefix "$AW_PREFIX" \
   --config "$AW_HOME/tokenless.yaml" --state-dir "$AW_HOME/tokenless-state" \
-  --provider tokenless --qoder "$AW_QODER"
+  --template "$AW_TEMPLATE_DIR/tokenless.json" --qoder "$AW_QODER"
 aw validate --config "$AW_HOME/tokenless.yaml"
 cd "$AW_HOME/workspace"
 aw run --config "$AW_HOME/tokenless.yaml" --agent qoder
@@ -37,7 +42,7 @@ aw run --config "$AW_HOME/tokenless.yaml" --agent qoder
 
 OpenClaw 使用[对应的 Agent 参数](configuration.md#openclaw)。需要同时检查风险时，
 安装并启动 [sec-core](security.md)，把 Provider 参数改为
-`--provider sec-core+tokenless --socket /run/agent-sec-core/daemon.sock`。将 socket 路径改成实际后端使用的路径。
+`--template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var SOCKET=/run/agent-sec-core/daemon.sock`。将 socket 路径改成实际后端使用的路径。
 其他框架与 SDK 的接线见[集成参考](../../../developer-guide/zh/aw/providers/tokenless.md)。
 
 ## 运行时会发生什么

@@ -76,9 +76,10 @@ aw install --prefix "$AW_PREFIX" --bundle "/absolute/path/to/unpacked-bundle"
 ```
 
 对于上面的 system 安装目录，命令还需加上 `sudo` 和 `--scope system`。
-此入口接受解压后的 Preview 包，以及用 `package.json` 描述的独立包，不接受组件名、
-下载 URL 或 RPM/DEB 包。Preview Provider 包仍要求先安装同一次构建的 core；
-独立普通工具不必包含 AW core 或声明 Provider。精确依赖必须已在同一安装目录中，
+此入口接受解压后的历史 Preview 包，以及在 `package.json` 中声明 Provider 协议
+的独立 AW 扩展。普通软件、组件名、下载 URL 和 RPM/DEB 包使用实际安装管理者。
+Preview Provider 包仍要求同一次构建的 core；独立 Provider 扩展不必包含 AW core。
+已有普通工具记录继续可按原 AW 管理权查询和卸载。精确依赖必须已在同一安装目录中，
 或由同一个 Preview 组合包提供。执行前可用 `--dry-run` 查看计划，见
 [安装计划与恢复](operations.md)。安装不启动服务、不注册 Agent Hook、
 不启用 Provider。独立 `aw-package` 命令已删除；首次安装使用 bundle 根目录的 `aw`，

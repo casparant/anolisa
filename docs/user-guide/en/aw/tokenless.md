@@ -28,9 +28,10 @@ There is no separate RTK, TOON, Python wheel or native Tokenless plugin to insta
 Avoid enabling an overlapping Tokenless plugin in the same session to prevent duplicate processing.
 
 ```bash
+export AW_TEMPLATE_DIR="/absolute/path/to/unpacked-provider-or-all-in-one-bundle/templates"
 aw config init --prefix "$AW_PREFIX" \
   --config "$AW_HOME/tokenless.yaml" --state-dir "$AW_HOME/tokenless-state" \
-  --provider tokenless --qoder "$AW_QODER"
+  --template "$AW_TEMPLATE_DIR/tokenless.json" --qoder "$AW_QODER"
 aw validate --config "$AW_HOME/tokenless.yaml"
 cd "$AW_HOME/workspace"
 aw run --config "$AW_HOME/tokenless.yaml" --agent qoder
@@ -38,8 +39,13 @@ aw run --config "$AW_HOME/tokenless.yaml" --agent qoder
 
 For OpenClaw, use its [Agent arguments](configuration.md#openclaw). To also check safety,
 install and start [sec-core](security.md) and select
-`--provider sec-core+tokenless --socket /run/agent-sec-core/daemon.sock`. Use the socket path of your running backend.
+`--template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var SOCKET=/run/agent-sec-core/daemon.sock`. Use the socket path of your running backend.
 For other frameworks and SDKs, see the [integration reference](../../../developer-guide/en/aw/providers/tokenless.md).
+
+The template path must refer to the unpacked Provider or all-in-one bundle;
+keep that bundle available for configuration generation. These instructions use
+AW-owned Preview installations. ANOLISA product installations retain their own
+package records and supply their own component paths and templates.
 
 ## Runtime behavior
 

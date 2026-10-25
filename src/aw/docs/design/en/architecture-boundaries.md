@@ -24,7 +24,7 @@ ANOLISA/
 │   │   ├── aw-core/                # Plan API and Journal
 │   │   ├── aw-cli/                 # Unified aw command frontend
 │   │   ├── aw-service/             # Client, service and runtime state
-│   │   └── aw-package/             # Current Preview build, install and config editing
+│   │   └── aw-package/             # AW extension compatibility and config editing
 │   ├── tests/                     # Regression matrix, native inventory and shared checks
 │   └── scripts/                   # Unified gate
 ├── providers/                     # Independent concrete Provider collaboration
@@ -32,7 +32,9 @@ ANOLISA/
 │   └── tokenless/                 # Own workspace, lockfile, source and tests
 ├── src/agent-sec-core/            # Security engine and public product interfaces
 ├── src/tokenless/                 # Compression engine and public product interfaces
-└── distribution/                  # OS distribution composition
+└── distribution/                  # Product installation and composition
+    ├── crates/local-package/      # Shared file transactions, records and runtime leases
+    └── tooling/aw-preview/        # Preview bundles and concrete Provider templates
 ```
 
 `providers/` accepts first-party and community implementations. External
@@ -45,13 +47,16 @@ development dependencies on them.
 
 `aw-cli` owns the unified `aw` command. The standalone `aw-package` executable
 has been removed; the Rust crate remains.
-It directly calls the `aw-package` library for installation and offline editing;
-`aw-build` remains a maintenance binary in `aw-package`. `aw-service` provides
+It directly calls `aw-package` for local AW extension compatibility and offline
+editing. ANOLISA product raw installation directly calls the independent
+`local-package` library. The historical `aw-build` entrypoint forwards to
+`distribution/tooling/aw-preview`; concrete backend packaging and configuration
+defaults belong to distribution. `aw-service` provides
 the client and service as a library. Libraries do not depend on `aw-cli`.
 Both launcher and service use `aw-adapter`, which does not depend on service,
 Host or CLI internals.
 
-Software installation uses `aw install --prefix ... --bundle ...`; native Hook
+Local AW extension installation uses `aw install --prefix ... --bundle ...`; native Hook
 registration uses `aw agent connect --config ... --agent ...`. The old native
 `aw install --config ... --agent ...` remains compatible. Mixed installation
 and native-registration arguments fail before mutation. Preview still accepts

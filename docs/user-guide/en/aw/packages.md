@@ -6,7 +6,7 @@ This reference is for integration and maintenance. For installation and daily us
 see the [user guide](installation.md).
 
 Use `aw install`, `aw uninstall`, `aw config init`, and `aw config` editing
-commands for local package operations. The standalone `aw-package` executable
+commands for local AW extension compatibility and configuration. The standalone `aw-package` executable
 has been removed; its Rust library remains. Every bundle includes `aw` at its
 root for first installation and requires an explicit absolute `--bundle` path.
 `aw config validate` uses `aw validate` semantics, including relative paths
@@ -14,8 +14,18 @@ and `--against`. The removed editor-specific validation command has no CLI
 replacement with the same ownership checks; the Rust editor API retains them.
 Native Hook registration is `aw agent connect`; legacy native `aw install
 --config ... --agent ...` remains compatible and cannot mix package options.
-Installation still accepts only local unpacked Preview bundles, not URLs or
-arbitrary named components.
+Installation accepts local unpacked bundles, including Preview bundles; it does
+not resolve URLs or arbitrary named components. New independent packages must
+declare a Provider protocol; historical Preview bundles retain their format
+compatibility. Ordinary software is installed by ANOLISA or its native manager,
+while existing AW-owned ordinary-tool records remain queryable and removable.
+
+ANOLISA product software is installed directly by ANOLISA through the shared
+`local-package` library. New product records are not AW-owned. The commands on
+this page retain the independent Preview workflow; they reject an ANOLISA-owned
+prefix rather than querying or modifying the product database. Concrete Provider
+configuration templates ship in the bundle's `templates/` directory; core-only
+bundles have no backend templates.
 
 Install AW core to run your existing Qoder or OpenClaw with no Provider. Add sec-core or your own boolean policy command when needed, using one AW configuration. The AW and sec-core components in this Preview ship as native Rust binaries; building, installing and running them do not require Python. Custom Providers or hook scripts have their own runtime dependencies. OpenClaw still needs Node.js, and both Agents need their own model accounts.
 
@@ -63,6 +73,74 @@ The default build produces core only; `--component all` produces four packages. 
 
 The installer verifies hashes, modes, architecture, version and source commit, refuses replacements and records ownership in `.aw-packages`. Ctrl-C (SIGINT) or SIGTERM during installation rolls back this invocation’s writes so installation can be retried; forced termination (SIGKILL) is outside automatic rollback. Checksums detect corruption; they are not publisher signatures. Install parents must belong to the installer user and must not be writable by other users. Root owns the system backend installation; when connecting to an existing backend, a user-owned prefix is also supported.
 
+## Separate resources from programs
+
+Use `--resources-dir ABS_DIR` when a local installation needs separate program
+and resource directories. Package descriptions and unpacked bundles keep their
+existing logical paths. The installer records the selected resource directory
+in the installation's optional `resources` field and maps destinations as follows:
+
+| Logical path in the package | Installed path |
+| --- | --- |
+| `bin/example` | `PREFIX/bin/example` |
+| `libexec/example/helper` | `PREFIX/libexec/example/helper` |
+| `share/example/schema.json` | `RESOURCES_DIR/example/schema.json` |
+
+`share/` is stripped; an extra `RESOURCES_DIR/share/` directory is not created.
+Without this option on a new installation, `share/` stays below the prefix.
+Old database records without `resources` retain that layout. Adding packages
+to an installation with a recorded resource directory reuses it when the option
+is omitted. An explicit different directory is rejected; this option does not
+move an existing combined or split installation.
+
+Choose two new, separate, application-specific directories. The resource root
+must not exist at first installation; prepare its parent yourself. Parents must
+be owned by the installing user and must not be group/world writable or reached
+through symlinks. The resource root cannot equal, contain, or sit below the
+program prefix, package database, or another installation's program/resource
+root recorded in that database. These example paths are user-selected locations,
+not product defaults:
+
+```bash
+AW_EXAMPLE_PREFIX="$HOME/.local/lib/aw-example/1"
+AW_EXAMPLE_RESOURCES="$HOME/.local/share/aw-example/1"
+install -d -m 755 "$HOME/.local/lib/aw-example" "$HOME/.local/share/aw-example"
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle \
+  --dry-run --json
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle
+aw doctor --prefix "$AW_EXAMPLE_PREFIX" --json
+aw uninstall --scope user --prefix "$AW_EXAMPLE_PREFIX" --dry-run --json
+```
+
+`--dry-run` uses the same install planner without creating installation records,
+directories or locks. Its file changes include logical `path` and actual absolute
+`destination` values. `aw list --installed --json` exposes the recorded `resources`;
+`doctor`, uninstall and `aw config init` resolve files through that record, so
+they need no additional resource option. Integrity failures name the actual
+resource path. Keep mutable configuration, state and credentials outside both
+package-owned trees.
+
+AW writes two ordinary metadata files: `PREFIX/.aw-resources-dir` points to the
+resource root, and `RESOURCES_DIR/.aw-installation-prefix` points back to the
+program prefix. They exist even when the first package has no `share/` files.
+Do not move either registered directory or edit these files; verification
+detects missing or conflicting metadata. Runtime package leases follow the
+resource-side reference to the same prefix lock when an explicit command or
+absolute argument refers to a resource.
+
+Program and resource roots may be on different devices. Each filesystem stages
+its own payload and backups under the same journaled transaction; the database
+commit remains the single commit point. Both filesystems must support Linux
+`O_TMPFILE`, hard links, directory fsync and the required `renameat2` operations;
+unsupported storage fails instead of falling back to unsafe staging. On uninstall, only the selected
+packages' verified files are removed from their actual locations. Unknown files,
+the two root directories, their reference metadata and the empty installation
+registration remain after the last package is removed, permitting later reuse
+of the same recorded layout. `aw recover` uses the retained transaction record
+for interrupted changes across both roots.
+
 ## Use core without a Provider
 
 Install only the Agent you need: Qoder CLI >=1.1.64 retaining the [native command-Hook contract](../../../developer-guide/en/aw/native-agents.md#build-and-start-qoder), or OpenClaw **2026.9.6** with Node.js. For Qoder, generate a base configuration as your regular user:
@@ -82,8 +160,9 @@ install -d -m 700 "$AW_DEMO" "$AW_DEMO/workspace"
 For OpenClaw alone, replace `--qoder "$AW_QODER"` with `--node "$AW_NODE" --openclaw "$AW_OPENCLAW"`; supply the native settings and state options described in step 5 when launching. You can also provide both Agent entrypoints. No sec-core socket or Provider package is required. Empty `providers` and `events` mean no AW policy checks or per-tool AW audit; native permissions and existing Hooks/plugins still apply. AW still creates an instance and starts/reuses its shared service. Exit the Agent and stop that service with `aw stop --config "$AW_DEMO/aw-core.yaml"`.
 
 `aw config init` is the initialization command: after core installation, it creates
-a complete `aw.yaml` with Agent, daemon, execution and audit settings. Omitting
-`--provider` (or passing `--provider none`) leaves `providers` and `events` empty.
+a complete `aw.yaml` with Agent, daemon, execution and audit settings. Omitting both
+`--provider` and `--template` (or passing `--provider none`) leaves `providers`
+and `events` empty.
 It creates a new file and refuses to overwrite an existing one. To initialize a
 policy in one command, select `--provider command` as shown in the
 [boolean script guide](../../../developer-guide/en/aw/native-agents.md#boolean-policy-commands). To add rules later, follow
@@ -286,13 +365,15 @@ export AW_NODE=/absolute/path/to/node
 export AW_OPENCLAW=/absolute/path/to/openclaw/openclaw.mjs
 export AW_DEMO="$HOME/aw-preview"
 install -d -m 700 "$AW_DEMO" "$AW_DEMO/workspace" "$AW_DEMO/openclaw"
+export AW_TEMPLATE_DIR="/absolute/path/to/unpacked-provider-or-all-in-one-bundle/templates"
 "$AW_PREVIEW_PREFIX/bin/aw" config init --prefix "$AW_PREVIEW_PREFIX" \
   --config "$AW_DEMO/aw.yaml" --state-dir "$AW_DEMO/state" \
-  --provider sec-core --socket /run/aw-preview-sec/daemon.sock --qoder "$AW_QODER" \
+  --template "$AW_TEMPLATE_DIR/sec-core.json" \
+  --template-var SOCKET=/run/aw-preview-sec/daemon.sock --qoder "$AW_QODER" \
   --node "$AW_NODE" --openclaw "$AW_OPENCLAW"
 ```
 
-Qoder and Node entrypoints must be executable by the current user; the OpenClaw `.mjs` file must be readable and does not need execute permission. Keep the configuration and socket paths short enough for Unix sockets (less than 108 bytes). The configuration file must not be the state directory or one of its ancestors; an existing state path must be a directory owned by the current user with mode `0700`. `aw config init` holds a shared package lock through validation and publication, including for a regular user reading a root-owned prefix. An active installation or uninstall causes a retryable lock error. It rechecks core and the explicitly selected Provider file hashes and permission modes, refusing missing or modified required payloads. A Provider installed but not selected adds no initialization dependency. Without `--provider`, configuration has no policy; `--socket` requires explicit `--provider sec-core` so old security commands cannot silently generate an unprotected configuration. It writes a private temporary file before exclusively publishing the configuration; a failed write leaves no partial configuration and can be retried. Both Agent bindings share the same Provider and before/after steps: Qoder `Bash` and OpenClaw `exec` both map their `/command` input to the sec-core Bash scanner. A risky command or a failed before-check blocks execution; after-checks observe the results reported by each framework (OpenClaw also reports blocked tool results). Other tools are not scanned. This provides native Hook enforcement, not an OS sandbox or cross-framework approval service.
+Qoder and Node entrypoints must be executable by the current user; the OpenClaw `.mjs` file must be readable and does not need execute permission. Keep the configuration and socket paths short enough for Unix sockets (less than 108 bytes). The configuration file must not be the state directory or one of its ancestors; an existing state path must be a directory owned by the current user with mode `0700`. `aw config init` holds a shared package lock through validation and publication, including for a regular user reading a root-owned prefix. An active installation or uninstall causes a retryable lock error. It rechecks core and the explicitly selected Provider file hashes and permission modes, refusing missing or modified required payloads. A Provider installed but not selected adds no initialization dependency. Without `--provider` or `--template`, configuration has no policy. Concrete backend defaults come from the selected distribution template; `SOCKET` is a literal template variable. Removed backend selections are rejected, preserving existing YAML without silently generating an unprotected configuration. It writes a private temporary file before exclusively publishing the configuration; a failed write leaves no partial configuration and can be retried. Both Agent bindings share the same Provider and before/after steps: Qoder `Bash` and OpenClaw `exec` both map their `/command` input to the sec-core Bash scanner. A risky command or a failed before-check blocks execution; after-checks observe the results reported by each framework (OpenClaw also reports blocked tool results). Other tools are not scanned. This provides native Hook enforcement, not an OS sandbox or cross-framework approval service.
 
 ## 4. Test Qoder
 
@@ -362,8 +443,8 @@ From a clean committed checkout, install Rust 1.97.1, a C compiler, pkg-config a
 
 ```bash
 cargo test --locked --manifest-path src/aw/Cargo.toml -p aw-package
-cargo run --locked --release --manifest-path src/aw/Cargo.toml \
-  -p aw-package --bin aw-build -- --version 0.1.0-preview.1 \
+cargo run --locked --release --manifest-path distribution/tooling/aw-preview/Cargo.toml \
+  --bin anolisa-aw-preview -- --version 0.1.0-preview.1 \
   --output "$PWD/target/aw-preview-packages"
 ```
 
@@ -376,6 +457,7 @@ CI / AW Integration runs nightly and can be dispatched manually for an exact sou
 `--component tokenless` builds `aw-provider-tokenless`; `--component all` also
 includes it in `aw-all-in-one`. The extension contains its bridge, Tokenless CLI and pinned patched RTK,
 requires matching core, and follows the same installation-record and integrity rules as sec-core.
-Use `aw config init --provider tokenless` or `aw config init --provider sec-core+tokenless --socket ABS_FILE`
+Use `aw config init --template "$AW_TEMPLATE_DIR/tokenless.json"` or
+`aw config init --template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var SOCKET=ABS_FILE`
 to enable compression explicitly. See the [Tokenless guide](tokenless.md) for
 four-framework configuration, native result slots and failure behavior.

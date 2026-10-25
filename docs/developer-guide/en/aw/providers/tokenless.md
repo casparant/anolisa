@@ -43,16 +43,18 @@ The existing view/schema and its unknown readiness fields are unchanged.
 
 After installing core, install the matching Tokenless extension into the same
 prefix, or install all-in-one into a new prefix. For Qoder/OpenClaw, initialize
-with `aw config init --provider tokenless` and the usual Agent flags.
-Choose `--provider sec-core+tokenless --socket ABS_FILE` to generate sec-core
-checks before execution, append PreTool, retain its completion observer, and append
-compression after the existing after steps. Installing a component
-does not enable it. The existing plain `sec-core` selection retains its behavior.
+with `aw config init --template ABS_BUNDLE/templates/tokenless.json` and the usual
+Agent flags. Choose `--template ABS_BUNDLE/templates/sec-core-tokenless.json
+--template-var SOCKET=ABS_FILE` for sec-core checks before execution, PreTool,
+its completion observer and PostTool compression. The templates are maintained
+by distribution and shipped with the matching Preview bundles; installing a
+component does not enable it. Existing YAML remains readable. Concrete
+`--provider tokenless/sec-core` selections are no longer accepted.
 
 For supported targets, copy the
 [shared example](https://github.com/agentic-os-org/ANOLISA/blob/main/providers/tokenless/examples/aw.yaml),
 replace its executable paths and `RTK_SHA256_FROM_RECEIPT` with the RTK entry's
-`sha256` from `PREFIX/.aw-packages/aw-provider-tokenless.json`, and keep both state
+`sha256` from `aw list --installed --prefix ABS_PREFIX --json`, and keep both state
 directories outside the immutable installation prefix. Use the framework-specific profile and launch flags from the
 [AW guide](../native-agents.md#use-one-configuration-for-four-frameworks).
 
@@ -213,7 +215,7 @@ or calling generic service RPC:
 aw inspect --config /absolute/path/to/aw.yaml --json
 ```
 
-Use matching AW binaries. New `aw config init` Tokenless selections register
+Use matching AW binaries. The distribution's Tokenless configuration template registers
 the optional view automatically. For existing configurations, stop Agents and the
 original service before editing offline. Add this alongside the Tokenless
 Provider's existing `transport`, not inside its private `config`:

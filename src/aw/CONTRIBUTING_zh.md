@@ -176,18 +176,22 @@ Hermes 私有工具/环境，避免为 runner 的 loader 覆盖或共享可写�
 
 ## Crate 边界
 
-本地软件包变更从 `aw-package::plan` 进入，先生成只读计划，再由 `plan::execute`
+本地 AW 扩展变更从 `aw-package::plan` 进入，复用独立的
+`distribution/crates/local-package` 库，先生成只读计划，再由 `plan::execute`
 调用同一持久事务实现。查询和预览不能创建记录或锁。在 Linux 上检查这些路径：
 
 ```bash
 cargo test --locked -p aw-package --test management --test database
-cargo test --locked -p aw-package transaction::tests
+cargo test --locked --manifest-path ../../distribution/crates/local-package/Cargo.toml transaction::tests
 cargo test --locked -p aw-exec --test packages
 ```
 
 包测试覆盖独立工具、同目录精确依赖、旧记录存档、冲突和恢复。CLI、服务与 Host
 共用 `aw-exec` 的包读锁，不让运行时依赖包数据库。修改包和发布配置时都保持先锁
-数据库、再锁安装目录的顺序。system scope 是显式 raw 管理，不是原生包后端。
+数据库、再锁安装目录的顺序。ANOLISA 直接调用同一库并使用自己的包数据库；AW 查询和写入拒绝 ANOLISA 所有的
+指针，共享运行锁不读取任一数据库。system scope 是显式 raw 管理，不是原生包后端。
+Preview 打包与具体 Provider 模板归 `distribution/tooling/aw-preview`，
+`aw-build` 只是源码兼容转调入口。
 提交、恢复规则及运行引用发现范围见[本地包管理](docs/design/zh/packaging/package-management.md)。
 这些局部命令不能代替 AW 完整检查或原生验收。
 

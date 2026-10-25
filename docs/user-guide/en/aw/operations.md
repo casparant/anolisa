@@ -133,6 +133,13 @@ native Agent output do not receive this management envelope.
 
 ## Installed packages and file checks
 
+These package commands query and modify AW-owned local extensions and legacy
+Preview installations. ANOLISA product installations use separate package
+records and product commands; AW rejects their manager-marked locators rather
+than following them. The shared file-transaction library does not combine
+ownership. Runtime file leases still protect AW and Provider processes installed
+by ANOLISA, without giving AW permission to change their package records.
+
 List the packages recorded for an installation, then check their files:
 
 ```bash
@@ -232,8 +239,12 @@ retaining the plan. A successful preview has no mutation report.
 
 Each independent bundle contains `package.json` and a `payload/` tree. The
 description records its package ID, SemVer version, Linux architecture, each
-file's SHA-256 and mode, and exact package requirements. A normal tool need not
-declare a Provider or depend on `aw-core`. For example, `example.mant` may require
+file's SHA-256 and mode, and exact package requirements. New AW extensions
+must declare `"provider": {"protocol": "aw-provider/v1alpha1"}`; ordinary software
+is installed by ANOLISA or its native manager. Existing AW-owned ordinary-tool
+records retain query and removal compatibility. Independent extensions need not
+depend on `aw-core`. Both sample bundles above must be Provider extensions;
+for example, `example.mant` may require
 exactly `example.base` version `2.1.0`, while keeping its own version `7.4.2`.
 Requirements must exist in the selected prefix; the command neither downloads
 missing packages nor selects dependencies in another prefix. Preview bundles

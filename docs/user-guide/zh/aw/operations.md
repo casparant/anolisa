@@ -110,6 +110,11 @@ aw config validate --config "$HOME/aw/aw.yaml" --json
 
 ## 已安装包与文件检查
 
+这些包命令查询和修改 AW 所有的本地扩展与历史 Preview 安装。ANOLISA 产品
+使用独立的包记录及产品命令；AW 遇到标记为 ANOLISA 管理者的位置文件会拒绝，
+不会沿指针读取产品数据库。共用文件事务库不合并管理权。由 ANOLISA 安装的 AW
+和 Provider 仍受运行文件读锁保护，但持锁不赋予 AW 修改包记录的权限。
+
 先列出指定安装目录中的包，再检查它们的文件：
 
 ```bash
@@ -188,8 +193,10 @@ JSON 把这些信息保存在 `result.plan` 中，包括 `problems[].code` 和
 成功预览没有 mutation 报告。
 
 独立 bundle 包含 `package.json` 和 `payload/` 文件树。说明文件保存包名、SemVer
-版本、Linux 架构、每个文件的 SHA-256 和模式，以及精确依赖。普通工具无需声明
-Provider，也无需依赖 `aw-core`。例如 `example.mant` 可以使用自己的 `7.4.2` 版本，
+版本、Linux 架构、每个文件的 SHA-256 和模式，以及精确依赖。新 AW 扩展必须
+声明 `"provider": {"protocol": "aw-provider/v1alpha1"}`，普通软件由 ANOLISA 或
+原生管理器安装；已有 AW 所有的普通工具记录继续可查、可卸载。独立扩展不必依赖
+`aw-core`。上例的两个 bundle 均须为 Provider 扩展，例如 `example.mant` 可使用 `7.4.2` 版本，
 精确依赖 `example.base` 的 `2.1.0`。依赖必须位于所选安装目录中；命令不下载缺失包，
 也不从另一个安装目录选取依赖。Preview 包保留原有的同构建要求。暂不支持替换已安装
 的包或原地升级。

@@ -7,6 +7,17 @@ It starts a native Agent from one configuration and runs selected Providers arou
 its tool calls. The Agent keeps its model configuration, interface, and permissions;
 AW records execution locally for inspection. The current release is a Linux Preview.
 
+AW builds and runs independently of ANOLISA's product CLI, catalog or accounts.
+The repository's `providers/` directory hosts source code; runtime registration
+uses explicit configuration and `transport.argv`, without scanning that directory.
+AW owns runtime policy, Agent Adapters, Provider protocol and configuration.
+ANOLISA owns product software installation and deployment, calling the shared
+`distribution/crates/local-package` library directly. The local `aw install`
+workflow remains available for AW extensions and historical Preview bundles;
+it rejects ANOLISA-owned package records. Concrete configuration presets now
+come from explicit `--template ABS_FILE` input supplied by distribution, with
+repeated `--template-var NAME=VALUE` for literal values. Existing YAML is unchanged.
+
 ## Install and use
 
 AW ships as Preview packages and is not yet available through `anolisa install` or
@@ -31,6 +42,16 @@ commit a local package database; `aw recover` resumes cleanup or rolls back an
 interrupted operation. User scope is the default. Root-managed raw installs
 require `sudo aw install ... --scope system`; privileges never select that scope
 implicitly. RPM/DEB support remains separate.
+
+To keep packaged resources separate from programs, choose an absolute
+`--resources-dir` on the first install:
+`aw install --prefix ABS_PROGRAM_DIR --resources-dir ABS_RESOURCE_DIR --bundle ABS_BUNDLE`.
+Files under `share/` go directly below that resource directory; `bin/` and
+`libexec/` remain below the program prefix. Subsequent installs can omit the
+option and reuse its recorded location. Existing installations without it keep
+their combined layout. The two directories may be on different filesystems;
+see the [resource layout contract](../../docs/user-guide/en/aw/packages.md#separate-resources-from-programs)
+for parent-directory requirements, verification and removal.
 
 Canonical removal asks for confirmation only with interactive stdin and stderr.
 Scripts and JSON output must use `aw uninstall --prefix ABS_DIR --yes` (or `-y`).

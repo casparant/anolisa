@@ -68,6 +68,31 @@ export UV_PYTHON_INSTALL_MIRROR="https://your-mirror.example/python-build-standa
 
 ## 4. 统一构建脚本
 
+### 完整 Linux 发行归档
+
+组件保留自己的独立 RPM spec 与 raw 打包入口。可选 ANOLISA 集成位于
+`src/<component>/.anolisa/`、`providers/<provider>/.anolisa/` 和
+`distribution/anolisa/.anolisa/`，存放产品配方与安装描述；独立组件发布可以忽略
+这些目录。共享封装工具和产品组合继续放在 `distribution/`。
+子包整理、源码快照、RPM 组合包装包和镜像入口见
+[distribution 说明](../../../../distribution/README_zh.md)。
+
+制作完整产品 tarball 使用独立发行入口：
+
+```bash
+distribution/anolisa/packaging/release/build.sh --output-dir "$PWD/target/product-release"
+```
+
+源码模式目前要求 Linux x86_64、Python 3.11+、干净 checkout，以及组件发行构建使用的预备环境：固定 Rust 工具链、Cross 0.2.5、Docker 和经校验的 GNU 发行镜像、cargo-sbom、Node.js 22.23.2/npm、make、just、uvx、patch 和 GNU 打包工具。入口检查依赖并分别保存组件日志，不在构建宿主安装依赖或组件文件。
+
+归档包含组合清单中的 ANOLISA、AW、cosh-ng、backend、Provider bridge、schema、adapter 和资源，内部组件保留独立版本。输出目录必须是新目录，不覆盖已有产物，也不清理其他 `target` 文件。`--product-version` 选择产品版本；`--artifact-base-url` 接收 HTTPS 发布目录，并另外生成产品下载索引。
+
+`--staged-input` 只组装明确提供的完整包集合，需要显式源码提交和 epoch，不编译组件。输入输出格式见[发行合同](../../../../distribution/anolisa/docs/design/2026-10-24_all-in-one-release_zh.md)与 `build.sh --help`，安装过程见[安装指南](installation.md)。
+
+发布时先上传不可变归档、校验和及固定版本索引，核实 URL 后再更新 stable 产品索引。新的网站默认安装脚本应在产品索引上线后部署；索引缺失会明确失败，不切换旧安装器。手动 full-build 工作流只上传 Actions artifacts，不自动发布 Mirror 或 GitHub Release。
+
+### 开发构建
+
 `scripts/build-all.sh` 是 Linux 上的便捷入口，并不负责构建整个 monorepo。请通过
 重复的 `--component` 参数选择需要的维护中组件：`skills`、`sec-core`、`tokenless`、
 `ws-ckpt`、`memory`、`cosh-ng` 和 `sight`。

@@ -18,11 +18,22 @@ aw config init --prefix "$AW_PREFIX" \
 | 需要的能力 | 在生成命令中增加 |
 | --- | --- |
 | 只启动 Agent | 不增加 Provider 参数 |
-| 工具输出压缩 | `--provider tokenless` |
-| 工具安全检查 | `--provider sec-core --socket /run/agent-sec-core/daemon.sock` |
-| 安全检查和压缩 | `--provider sec-core+tokenless --socket /run/agent-sec-core/daemon.sock` |
+| 工具输出压缩 | `--template "$AW_TEMPLATE_DIR/tokenless.json"` |
+| 工具安全检查 | `--template "$AW_TEMPLATE_DIR/sec-core.json" --template-var SOCKET=/run/agent-sec-core/daemon.sock` |
+| 安全检查和压缩 | `--template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var SOCKET=/run/agent-sec-core/daemon.sock` |
 
-先安装所选 Provider；生成器会填入程序路径和校验信息。
+先安装所选 Preview Provider，并将 `AW_TEMPLATE_DIR` 设为已解包 Provider 或
+all-in-one 包中 `templates/` 的绝对路径。模板由发行工具提供，AW 不内置后端默认值。
+`--template ABS_FILE` 选择一份模板，可重复使用 `--template-var NAME=VALUE`
+传入字面值；AW 填入 `PREFIX`、`STATE` 和要求核对的已登记文件摘要。
+缺少变量或文件时拒绝生成配置。`--provider` 现在只接受 `none` 或 `command`，
+原来的 `tokenless`、`sec-core` 及组合名称会被拒绝；已有 YAML 继续可读。
+ANOLISA 产品安装使用产品提供的模板与实际组件路径，AW 本地扩展生成器不管理
+ANOLISA 所有的包记录。
+
+原生包或其他未登记 prefix 可生成基础、command 配置及没有包要求的显式模板，
+不创建 AW 包数据库。要求已登记包的模板仍需核验 AW 所有的包记录。
+产品配置应使用 ANOLISA 的实际组件路径，不能把产品文件当作 AW 所有的包。
 
 ## 修改已有配置
 

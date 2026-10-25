@@ -1,8 +1,8 @@
 # anolisa CLI
 
-`anolisa` CLI 是 ANOLISA 组件的统一生命周期入口。它负责解析组件来源、
-维护按 scope 隔离的安装记录、将 RPM transaction 委托给 native package
-manager，并诊断或修复状态漂移。
+`anolisa` CLI 用于安装完整 ANOLISA 产品发行及管理独立组件。完整 Linux
+发行使用 ANOLISA 包记录和按版本分开的程序目录。已有组件命令解析 raw/RPM 来源，
+维护按 scope 隔离的记录，并诊断或修复状态漂移。
 
 ---
 
@@ -13,6 +13,12 @@ manager，并诊断或修复状态漂移。
 ```bash
 curl -fsSL https://get.agentic-os.sh | bash
 ```
+
+在 GNU/Linux x86_64 或 aarch64 上，此命令安装产品的 user-scope 完整组合，
+下载和解包需要 Python 3.6 或更新版本。显式使用安装脚本的 `--rpm` 参数，
+可在 system scope 安装全部已发布的原生 RPM 组件。在 macOS 上，它安装独立 CLI。Linux 用户可以通过
+`--cli-only` 选择独立 CLI 渠道。版本选择、归档安装、文件位置、已有入口冲突和
+旧参数说明见[安装指南](installation.md)。
 
 ### 方式 B：YUM（Alinux）
 
@@ -28,7 +34,237 @@ anolisa --version
 
 ---
 
-## Scope 与可见性
+## 本地概览与用户配置
+
+`anolisa overview` 汇总产品记录、旧组件记录与本地 RPM 记录中的实际组件版本，
+并检查本地可执行入口。它不下载索引，也不执行组件程序猜版本；无法读取的证据会
+单独说明。普通用户可以读取公开的系统产品摘要，无需访问管理员私有的包数据库。
+
+```bash
+anolisa overview
+anolisa overview --scope system --check-services --json
+anolisa overview --candidate-bundle /absolute/unpacked-candidate --json
+anolisa setup
+anolisa setup --non-interactive
+```
+
+`--scope user|system|all` 只筛选安装证据的可见范围，不授予写权限。
+`--check-services` 查询 systemd 状态，不启动服务，也不把 unit active 当作接口健康。
+候选比较会验证本地 bundle 并列出包版本差异，不查询远端最新版。产品更新先查看
+`install --bundle DIR --dry-run`；受支持的历史迁移入口见 `migrate plan --help`。
+
+`setup` 先显示相同概览。在终端中，它可以询问已装 AW Adapter、Agent 可执行文件和
+新的用户配置位置；管道、JSON 或 `--non-interactive` 执行不提问。
+无人值守创建时，从 `aw agent list --json` 选择实际名称，并指定真实 Agent 程序：
+
+```bash
+aw agent list --json
+anolisa setup --write-config "$HOME/.config/anolisa/aw.yaml" \
+  --agent qoder --agent-bin /absolute/path/to/qoder --dry-run --json
+anolisa setup --write-config "$HOME/.config/anolisa/aw.yaml" \
+  --agent qoder --agent-bin /absolute/path/to/qoder --yes
+```
+
+Agent 参数使用可重复的 `--agent-arg VALUE`，按字面值传递。创建使用当前调用用户的
+身份与 XDG state，保留已有文件，初始 Provider 和事件策略为空。
+`--provider NAME` 配合显式 `--provider-template ABS_JSON`，会把选中的定义渲染到
+单独的禁用文件供检查，不自动启用。`setup --preset host --service-scope system`
+仅预览服务计划；应用仍需显式执行 `preset apply`。
+系统软件安装与普通用户的 Agent 配置分别完成。
+
+## 产品发行命令
+
+Linux 产品归档包含可交付的组件，产品 profile 决定安装哪些包。`--bundle`
+指向已解包真实目录的绝对路径。首次安装使用该归档内的 CLI：
+
+```bash
+./packages/anolisa-cli/payload/bin/anolisa release inspect --bundle "$PWD" --json
+./packages/anolisa-cli/payload/bin/anolisa install --bundle "$PWD" --scope user --dry-run --json
+./packages/anolisa-cli/payload/bin/anolisa install --bundle "$PWD" --scope user --json
+./packages/anolisa-cli/payload/bin/anolisa release status --bundle "$PWD" --scope user --json
+```
+
+`release inspect` 校验全部交付包，列出归档声明的产品组合，不调用 AW 或写入
+安装状态。选择包之前先完成整套校验，因此未选包损坏也会导致验证失败。
+`install --bundle` 与 `release install --bundle` 使用同一安装实现。
+`--dry-run` 检查选择与已有入口冲突，不安装包或发布命令。
+`release status` 读取产品进度和当前版本引用，不报告服务健康状态。
+
+新的 schema-2 归档声明下列 profile。准确的包集合和可用原生组合见
+`release inspect --json`。
+
+| Profile | Scope | 安装内容 |
+| --- | --- | --- |
+| `complete` | user 或 system | 本平台交付的全部包，包括原生集成 |
+| `minimal` | user 或 system | ANOLISA CLI 与 AW，需显式选择的精简组合 |
+| `standard-user` | user | 用户可运行的核心程序、已支持的 Provider 和技能 |
+| `standard-system` | system | 本平台支持的后端核心程序、已支持的 Provider 和技能 |
+| `native-<agent>` | system | 标准后端及该 Agent 需要的原生接入包 |
+
+schema-2 归档在两个 scope 都默认选择 `complete`，安装全部交付包，包括原生
+插件与已声明的运行依赖。`minimal`、`standard-user` 等精简组合仍可显式选择。
+Profile 决定文件，不会启用服务、将 Agent 切换到 AW 或满足特权运行条件。旧 schema-1 归档保留全包安装行为，不接受
+profile 或组件选择。
+
+一个原生接入包可以包含多个 Agent 的资源。安装该包不会激活这些 Agent
+的插件，启用仍需显式执行。
+
+也可以从同一归档选择独立组件，带上其原生接入资源和依赖包：
+
+```bash
+anolisa release install --bundle /absolute/unpacked-release --component tokenless --component agent-memory --scope user
+anolisa release status --bundle /absolute/unpacked-release --component tokenless --component agent-memory --scope user
+```
+
+`--profile` 与 `--component` 互斥。组件选择始终包含 ANOLISA CLI；AW 仅在 profile 或明确的包依赖要求时包含，
+不使用 AW 的组件选择不必安装 AW。
+简写 `anolisa install tokenless --bundle /absolute/unpacked-release --scope user`
+选择归档里的单个组件；`anolisa install tokenless` 继续使用配置的独立组件
+backend。`install --all` 仍枚举组件仓库，不表示产品 profile。
+
+产品 scope 始终默认 `user`，包括 root 执行时。system 安装必须以 root 执行并
+显式选择 `--scope system`，不会自动调用 `sudo`。不要将产品命令与旧
+`--install-mode` 或 `--prefix` 混用。程序、资源、配置和包数据库的位置见
+[安装指南](installation.md#程序配置与包数据库的位置)。
+
+安装会记录每个本地包的提交，选定的包全部通过验证后才激活新发行。中断后保留
+归档和输出中的产品记录，以相同归档、scope、profile 或组件集合重试。不同选择
+使用不同安装身份，不能接续对方的部分操作。已提交的包仍有记录，中断不代表
+整次发行已经回滚。无法确认归属的已有命令和编辑过的配置会保留并报告冲突。
+已支持的历史 raw 安装可使用下文迁移命令。
+
+激活较小组合时，会移除新组合不再提供且未被修改的产品命令入口。管理员修改过
+的入口会保留并阻止这次切换。较早版本的程序文件仍保留，可用于回退。
+
+安装会准备禁用的 Provider 模板，固定程序和资源路径。必须按实际调用用户
+渲染用户目录参数；模板不是可直接执行的 AW transport 定义，AW 不在 argv
+中展开 shell 变量。system 安装不会把用户数据或会话 socket 绑定到 root
+安装者的环境。启用 Provider、连接原生 Agent、准备服务用户、capability、
+配置和 unit 都是单独的部署动作。已有组件的 `status`、`update all`、
+`uninstall` 命令不管理 产品发行记录。
+
+### 查询产品包记录与检查文件
+
+```bash
+anolisa release list --scope user --json
+anolisa release doctor --bundle /absolute/unpacked-release --scope user --json
+sudo anolisa release list --scope system --json
+sudo anolisa release doctor --bundle /absolute/unpacked-release --scope system --json
+```
+
+`release list` 只读所选 ANOLISA 包数据库，不检查 payload 文件，也不需要 bundle，
+不会跨到另一数据库列出旧 AW 所有的版本。`release doctor` 检查所选发行的已登记
+文件，不修复；应提供安装时相同的 `--profile` 或 `--component` 选择。
+已有且核验匹配的产品记录仍可引用原 AW 数据库。`release status` 则显示产品安装
+进度。这些查询不启动 AW、Provider 或组件服务，不建库、不转移所有权。
+
+系统产品记录位于管理员私有的 `/var/lib/anolisa`，清单与文件检查使用 root。
+普通用户仍可运行已安装的程序、读取静态资源，不需要访问这些包记录。
+
+### 恢复产品包事务
+
+```bash
+anolisa release recover --scope user --json
+sudo anolisa release recover --scope system --json
+```
+
+选择原安装的 scope。此命令显式恢复新 ANOLISA 包数据库中未完成的事务，无需
+提供 bundle。结果报告数据库位置、已提交、已回滚和冲突操作；不切换活动产品
+版本，也不启动服务。先处理报告的冲突文件，再重试相同安装。
+恢复会修改文件，因此拒绝 `--dry-run`。已有 AW 所有的产品版本继续使用原数据库
+及同 scope 的 `aw recover`，此命令不会将其管理权转移到 ANOLISA。
+
+### 清理不再使用的产品版本
+
+先激活另一发行，再用旧版本原来的 bundle 和包选择预览、清理：
+
+```bash
+anolisa release uninstall --bundle /absolute/old-unpacked-release --scope user --dry-run --json
+anolisa release uninstall --bundle /absolute/old-unpacked-release --scope user --yes --json
+```
+
+原安装如使用 `--profile NAME` 或重复的 `--component ID`，清理时保持相同选择。
+系统清理需要 root 和 `--scope system`。实际执行需 `--yes`，预览不需要。
+命令拒绝活动版本、被修改的产品控制文件，以及该版本已有或待完成的服务单元发布
+记录；仅删除核验过的自有 payload 和已登记资源别名，保留配置、数据、未知文件、
+当前版本控制文件和空包登记元数据。产品进度先记录 `removing`，完成后记录
+`removed`。包事务中断后先执行 `release recover`，再重试同一清理命令。
+历史 AW 所有的版本保留原 AW 卸载权限，此命令不会接管。
+
+### 服务预设与前台运行
+
+安装 system raw 产品并准备好组件配置后，使用相同归档和 profile 发布选定的
+system unit：
+
+```bash
+sudo anolisa release services --bundle /absolute/unpacked-release --profile standard-system --scope system --service ws-ckpt --service agent-sec-core --service agentsight --json
+sudo anolisa release services --bundle /absolute/unpacked-release --profile standard-system --scope system --service ws-ckpt --service agent-sec-core --service agentsight --apply --json
+```
+
+第一条命令检查目标路径和模板摘要，`--apply` 登记已验证的 unit 并 reload
+systemd，包含所需的 unit 依赖。未知原生 unit 和管理员覆盖会被保留并拒绝
+覆盖。发布不会启用或启动服务。RPM 包的 unit 已由原生包管理器安装。
+
+`preset` 使用已安装的服务目录和显式选择的 systemd manager。先预览，再应用：
+
+```bash
+sudo anolisa preset plan --preset host --scope system --initialize --json
+sudo anolisa preset apply --preset host --scope system --initialize --json
+```
+
+`--initialize` 允许尚无部署记录的 unit 通过 systemd preset policy 初始化
+启用状态，保留管理员覆盖与已有记录中的选择。启用和立即启动是独立动作，
+预设可以请求立即启动。unit、配置、用户和宿主运行条件必须事先准备完成。
+安装包不会应用 `host` 预设。用户 manager 操作应由实际用户执行，不使用
+`sudo`。
+
+容器或没有 systemd 的环境可以运行允许的前台组合：
+
+```bash
+anolisa serve --preset container --dry-run --json
+anolisa serve --preset container
+```
+
+内置 `container` 预设以调用用户身份运行 AW，要求该用户的 AW 配置、runtime
+目录及其他预检条件就绪。它不会启动 root 后端或 agent-memory MCP stdio
+会话。服务继承 stdout/stderr；只有配合 `--dry-run` 才支持 `--json`。
+容器应使用 init 或运行时的 `--init` 回收 PID 1 子进程。管理器等待服务就绪，
+转发终止信号，并在必要进程失败时停止整组。
+
+两类命令均从当前产品资源或已安装的原生策略包发现服务目录。可通过
+`--config /absolute/services.json` 显式指定已审阅的目录。root 后端仍需要
+独立的宿主服务或明确配置的特权部署。
+
+### 迁移历史 raw 安装
+
+迁移支持同一 scope 内、具有可信 `installed.toml` 文件清单的 ANOLISA raw
+安装。先生成固定计划，再执行修改：
+
+```bash
+./packages/anolisa-cli/payload/bin/anolisa migrate plan --bundle "$PWD" --profile standard-user --scope user --output "$HOME/anolisa-migration.json" --json
+./packages/anolisa-cli/payload/bin/anolisa migrate apply --plan "$HOME/anolisa-migration.json" --json
+```
+
+计划检查不安装包、不停止服务、不改写旧状态；`--output` 只发布指定的计划
+文件。先处理所有 blocker，再重新生成计划并执行。原生 adapter 必须禁用，
+已记录的 daemon unit 必须能确认处于 inactive。RPM 管理记录、缺少归属清单、
+未知命令文件以及跨 scope 转移均阻止自动接管。system 来源可指定
+`--source-prefix`；user 来源使用实际调用用户的 HOME/XDG 目录。
+
+旧独立 `anolisa` 可执行文件没有组件归属记录。审阅实际文件及其 SHA-256 后，
+可在 `migrate plan` 增加 `--legacy-cli-sha256 <reviewed-sha256>`，接受这些
+准确的 CLI 字节。该选项不会接管其他未知命令。
+只有这个独立 CLI、没有 `installed.toml` 的安装也可以迁移。计划记录状态
+文件缺失这一事实，不虚构旧组件记录；计划生成后若出现状态文件，需重新规划。
+
+执行绑定计划中的调用者、归档摘要、包选择、旧状态与命令以及目标目录。
+原状态和被替换命令会备份到报告的迁移目录，再调用正常产品安装器。只有成功
+激活后才退役旧 raw 记录；旧组件文件、配置和数据保留用于回退。安装失败
+保留旧记录与持久化进度，使用同一计划重试 `migrate apply`。来源证据或选择
+变化时需生成新计划。迁移不会将原生 Agent 配置转换成 AW，也不会转移 RPM
+所有权。
+
+## 已有组件的 scope 与可见性
 
 `--install-mode user` 写入当前用户目录，`--install-mode system` 写入
 system state，通常需要 root。未指定时，root 默认使用 system mode，普通
@@ -40,7 +276,7 @@ system state，通常需要 root。未指定时，root 默认使用 system mode�
 
 ---
 
-## 命令
+## 已有组件命令
 
 ### install
 
@@ -95,6 +331,9 @@ anolisa update --check
 
 `update all` 不更新 CLI 本身。delegated 成员会在可行时合并成一次 native
 transaction，但每个组件仍保留独立的 recovery journal 和 record。
+
+`update self` 拒绝直接替换 产品管理的 CLI，应通过已校验的产品发行更新
+该 CLI。独立 CLI 保留原有自更新流程；RPM 管理的 CLI 仍由原生包管理器更新。
 
 ### list 与 status
 
@@ -322,8 +561,8 @@ journal 会有意保持 pending，等待人工检查。
 
 | 选项 | 说明 |
 |------|------|
-| `--install-mode user\|system` | 选择修改 scope |
-| `--prefix <PATH>` | 覆盖所选 scope 的安装前缀 |
+| `--install-mode user\|system` | 选择已有组件命令的修改 scope |
+| `--prefix <PATH>` | 覆盖已有组件命令的安装前缀 |
 | `--dry-run` | 输出计划但不执行 |
 | `--json` | 输出机器可读的 JSON |
 | `-v, --verbose` | 增加详细程度 |
@@ -334,13 +573,13 @@ journal 会有意保持 pending，等待人工检查。
 
 ---
 
-## 示例流程
+## 已有组件流程示例
 
 先安装需要使用的 Agent，再扫描它的 adapter，并用扫描结果中的名称替换
 `<framework>`：
 
 ```bash
-curl -fsSL https://get.agentic-os.sh | bash
+curl -fsSL https://get.agentic-os.sh | bash -s -- --cli-only
 anolisa env
 anolisa install tokenless
 anolisa adapter scan

@@ -44,6 +44,11 @@ sudo env AGENT_SEC_DATA_DIR=/var/lib/aw-preview/sec-data OTEL_SDK_DISABLED=true 
 Keep the terminal running and use Ctrl-C to stop it after the trial. A root backend must not execute
 programs from a user-writable prefix.
 
+The template path must refer to the unpacked Provider or all-in-one bundle;
+keep that bundle available for configuration generation. These instructions use
+AW-owned Preview installations. ANOLISA product installations retain their own
+package records and supply their own component paths and templates.
+
 ## Generate configuration and run
 
 Return to the ordinary-user terminal with `AW_PREFIX`, `AW_HOME` and `AW_QODER` from installation.
@@ -51,15 +56,16 @@ Set `AW_SEC_SOCKET` to the actual backend; this example uses the socket started 
 
 ```bash
 export AW_SEC_SOCKET=/run/aw-preview-sec/daemon.sock
+export AW_TEMPLATE_DIR="/absolute/path/to/unpacked-provider-or-all-in-one-bundle/templates"
 aw config init --prefix "$AW_PREFIX" \
   --config "$AW_HOME/security.yaml" --state-dir "$AW_HOME/security-state" \
-  --provider sec-core --socket "$AW_SEC_SOCKET" --qoder "$AW_QODER"
+  --template "$AW_TEMPLATE_DIR/sec-core.json" --template-var "SOCKET=$AW_SEC_SOCKET" --qoder "$AW_QODER"
 aw validate --config "$AW_HOME/security.yaml"
 cd "$AW_HOME/workspace"
 aw run --config "$AW_HOME/security.yaml" --agent qoder
 ```
 
-For compression too, install Tokenless and select `--provider sec-core+tokenless`.
+For compression too, install Tokenless and select `--template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var "SOCKET=$AW_SEC_SOCKET"`.
 OpenClaw uses its [corresponding launch arguments](configuration.md#openclaw).
 
 ## Verify checks

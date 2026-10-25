@@ -213,13 +213,14 @@ success by retrying or omitting a framework.
 
 ## Crate boundaries
 
-Local package changes enter `aw-package::plan`, which derives a read-only plan,
+Local AW extension changes enter `aw-package::plan`, a facade over the independent
+`distribution/crates/local-package` library, which derives a read-only plan,
 then `plan::execute` uses the shared durable transaction backend. Queries and
 dry runs must not create records or locks. Exercise these paths on Linux:
 
 ```bash
 cargo test --locked -p aw-package --test management --test database
-cargo test --locked -p aw-package transaction::tests
+cargo test --locked --manifest-path ../../distribution/crates/local-package/Cargo.toml transaction::tests
 cargo test --locked -p aw-exec --test packages
 ```
 
@@ -227,8 +228,11 @@ The package tests cover independent tools, exact same-prefix dependencies,
 legacy record archival, conflicts and replay. Package leases in `aw-exec` are
 reused by the CLI, service and Host without adding a runtime dependency on the
 package database. Keep database-before-prefix lock ordering in mutation and
-configuration publication. System scope is explicit raw management, not a native
-package backend. See [local package management](docs/design/en/packaging/package-management.md)
+configuration publication. ANOLISA directly calls the same library using its own package database; AW
+queries and writes reject ANOLISA-owned locators. Shared runtime leases do not
+read either database. System scope is explicit raw management, not a native
+package backend. Preview packaging and concrete Provider templates belong to
+`distribution/tooling/aw-preview`; `aw-build` is a source compatibility forwarder. See [local package management](docs/design/en/packaging/package-management.md)
 for commit/recovery rules and remaining runtime discovery limits. The focused
 commands do not replace the full AW gate or native acceptance.
 

@@ -52,9 +52,10 @@ out-of-tree Provider builds against pinned public AW libraries. Third parties
 need only the public process protocol and YAML, not a Rust SDK or OS checkout.
 The bundled implementations still use local SDK paths. Preview delivers one
 build set and checks matching versions and source commits for common origin.
-Independent SDK publication and native RPM/DEB delivery remain later work.
-Local package changes use the central database, read-only plans and durable
-recovery in `aw-package`; the Linux gate builds a pinned historical installer
+Independent SDK publication remains later work. Native RPM/DEB delivery and
+product installation belong to ANOLISA distribution. Local AW extension changes
+use read-only plans and durable recovery in the shared
+`distribution/crates/local-package` library through `aw-package`; the Linux gate builds a pinned historical installer
 to verify record migration. Preserve existing package and binary
 names when moving source directories. New Provider directories
 do not automatically join the installer: inclusion requires explicit packaging
@@ -65,7 +66,7 @@ crates separately from concrete Providers:
 
 | Responsibility | Framework crates | Boundary |
 | --- | --- | --- |
-| Build and install | `aw-package` | Package composition, installation and configuration generation |
+| Local extension compatibility and configuration | `aw-package` | AW configuration generation/editing and local extension APIs over the shared installation library |
 | Native dialects | `aw-adapter` | Catalog, registration, callbacks, native phases and effect adoption |
 | Unified user entrypoint | `aw-cli` | CLI parsing, presentation, compatibility and command orchestration |
 | Local runtime | `aw-service` | Client, bindings, events, deadlines, cancellation and audit |
@@ -82,11 +83,18 @@ through dev-dependencies. `aw-adapter` must not depend on `aw-service`, `aw-host
 or CLI internals. Keep Client, wire DTOs and full Binding in `aw-service`;
 serialized HookBinding, argument parsing, launch signal handling and CLI-owned
 resources belong in `aw-cli`. The CLI calls `aw-package` Rust APIs directly for
-software installation and offline configuration; libraries must not depend on
+local AW extension compatibility and offline configuration; libraries must not depend on
 the CLI or print its user-facing output. The standalone `aw-package` executable
 has been removed; do not reintroduce a second installer CLI. Bundles carry `aw`
 at their root for bootstrap, and software installation requires an explicit
-absolute `--bundle` path. `aw-build` remains in the `aw-package` Rust crate.
+absolute `--bundle` path. The historical `aw-build` source entrypoint delegates to the Preview builder
+under `distribution/tooling/aw-preview`; component composition, concrete
+Provider defaults and backend builds belong to distribution.
+ANOLISA calls `local-package` directly for product raw installation, with its
+own user/system database. AW operations reject ANOLISA-owned locators; runtime
+file leases remain compatible without reading either database. Existing AW-owned
+product installations retain their original authority when explicitly verified;
+do not duplicate ownership or automatically transfer them between databases.
 Preserve legacy native `aw install --config ... --agent ...` semantics while
 offering `aw agent connect`; reject mixed package/native options before writes.
 Pass only NativeContext and typed options into the Adapter. The caller supplies

@@ -62,5 +62,9 @@ cargo test --locked --manifest-path providers/tokenless/Cargo.toml
 桥接库，尚不能脱离仓库独立构建。固定版本 SDK、独立发布及产物级组合测试留待后续。
 Preview 将 core 与 Provider 作为一批构建产物交付，安装时校验版本和源码提交一致。
 
-`aw-build` 和 `aw install` 当前只打包、安装内置组件，不能自动安装任意社区 Provider。
+`distribution/tooling/aw-preview` 构建历史内置 Preview 组合，`aw-build` 源码入口
+转调该工具。本地 AW 扩展安装可接受已核验的独立 `package.json`，不下载社区
+Provider 或解析产品名称。ANOLISA 直接调用共享安装库管理产品软件；原生包保留
+原管理者。外部安装的 Provider 通过配置中的 `transport.argv` 接入协议，不要求
+拥有 AW 安装记录。
 独立安装不影响协议接入；加入统一安装包需另补打包清单和安装验收。

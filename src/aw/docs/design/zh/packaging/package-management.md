@@ -2,9 +2,15 @@
 
 [English](../../en/packaging/package-management.md)
 
-`codex/aw-design-d2` 分支中的 `aw-cli` 调用 `aw-package` 库，生成并提交本地软件包
-变更。实现位于 `database.rs`、`open_bundle.rs`、`plan.rs`、`transaction.rs` 及其
-同名目录。CLI 仍是唯一的软件管理命令；`aw-build` 负责生成现有 Preview 包。
+`aw-cli` 通过 `aw-package` 兼容封装管理本地 AW 扩展。文件校验、清单、计划和
+持久事务位于独立的 `distribution/crates/local-package` Rust 库；ANOLISA 直接
+调用该库安装产品软件。Preview 构建器及具体 Provider 模板位于
+`distribution/tooling/aw-preview`。
+
+新 ANOLISA raw 数据库使用 `$XDG_STATE_HOME/anolisa/packages` 或
+`/var/lib/anolisa/packages`；AW 数据库保留下面的位置。共享引擎区分
+`PackageManager::Aw` 与 `PackageManager::Anolisa`，复用代码不合并文件管理权。
+已有产品记录核验匹配时可按原 AW 所有的安装续做，不自动转移所有权或重复登记。
 
 ## 文件与记录来源
 
@@ -21,7 +27,9 @@
 | `transactions/<transaction_id>/` | 中断操作的持久日志与数据库发布证据 |
 | `legacy/<installation_id>/<transaction_id>/` | 每次登记尝试保留的原始旧 JSON 字节 |
 
-安装目录中唯一的 `.aw-packages/aw-core.json` 保存数据库位置、scope 和安装编号，
+安装目录中唯一的 `.aw-packages/aw-core.json` 保存数据库位置、scope 和安装编号；
+新产品记录还明确标记管理者，旧记录未标记时按 AW 解释。AW 查询和写入拒绝
+ANOLISA 所有的指针，运行读锁不赋予包管理权。
 不重复保存软件包信息。旧 `Component` 解码器在旧写入程序改变文件前就会拒绝这种
 严格格式。查询核对该文件与数据库，拒绝它与旧组件记录混用。集中清单在安装目录
 丢失时仍保留记录，由 `doctor` 报告文件损坏。整安装卸载后保留空登记和位置文件，
@@ -33,6 +41,39 @@
 只有提交成功后，位置文件才以数据库为准。回滚尝试的存档继续保留，不会阻止旧记录
 变化后的再次迁移。旧记录中的版本和来源标签作为原有事实保留，不重写为 SemVer，
 也不伪造 Git 提交。
+
+## 独立资源目录
+
+`aw install --prefix ABS_PROGRAM_DIR --resources-dir ABS_RESOURCE_DIR --bundle ABS_BUNDLE`
+在创建安装时选择独立资源根。库入口为 `plan::install_with_resources`，
+`aw install --dry-run` 只读返回同一计划。已有 `plan::install` 调用和省略参数的
+CLI 用法继续兼容。`Installation.resources` 持久保存可选的绝对路径；没有该字段
+的记录仍将全部逻辑文件映射到 prefix 下。后续追加包时，省略参数沿用已记录映射。
+显式改变资源根会被拒绝，包括把已有合并布局拆开，不会隐式移动文件。
+
+描述和归属记录继续使用逻辑 `bin/`、`libexec/`、`share/` 路径。
+`Installation::file_path` 将 `share/example/schema.json` 映射到
+`RESOURCE_DIR/example/schema.json`，去掉 `share/` 前缀；`bin/` 和 `libexec/`
+下的程序仍位于 prefix。计划中的文件变更保留逻辑路径，同时返回实际绝对
+`destination`。doctor、卸载、配置核验、归属冲突检查和事务恢复均按实际路径
+执行。安装原有的文件数和字节预算合计两个根目录，不为每个设备重新分配额度。
+
+首次使用的资源根必须不存在，已有父目录须通过所有权、禁止他人写入和无符号链接
+检查。资源根必须专用于该应用，不能与数据库、自身程序 prefix 或所选数据库中其他
+安装的程序/资源根重叠。布局属于安装记录，不从任意 `share/` 目录或进程工作目录推断。
+
+两个归属事务的普通文件绑定这两个根，即使首个包没有 `share/` 文件也会创建。
+
+| 元数据文件 | 精确内容 |
+| --- | --- |
+| `PREFIX/.aw-resources-dir` | 资源根的绝对 Unix 路径字节 |
+| `RESOURCES_DIR/.aw-installation-prefix` | 程序 prefix 的绝对 Unix 路径字节 |
+
+这两个文件权限为 `0644`，只有一个硬链接，由安装所有者持有；内容没有尾部换行。
+这些名称属于安装器元数据，不是包内文件。校验同时核对两个方向和数据库映射。
+元数据缺失或冲突时，依赖它的操作会
+阻断，或由 doctor 报告损坏，不会据此接管其他目录。最后一包卸载后，两个根目录
+和位置文件与空安装登记、prefix 锁一起保留。不能通过复制或重命名搬迁已登记目录。
 
 ## 本地输入与计划
 
@@ -66,18 +107,19 @@
 ## 锁与提交
 
 查询持有已有数据库读锁。配置生成先获取数据库读锁，再获取安装目录读锁，持续持有
-到文件核验和私有配置发布完成。只有没有位置文件时才读取旧记录，取得安装目录锁后
+到两个记录根目录中的文件核验和私有配置发布完成。只有没有位置文件时才读取旧记录，取得安装目录锁后
 会重新检查该决定。配置不会因为安装了新的 Provider 就隐式启用它。
 
 执行时按数据库、安装目录的顺序获取非阻塞写锁，并检查计划中的提交编号、元数据
 字节、来源文件、已安装文件和记录目录仍然一致。数据库不存在时，在持锁期间创建
 持久的空编号零数据库，首次写入失败后可留下这个有效空库。每个成功操作仅递增一次
-提交编号。安装元数据和文件在本地暂存，在发布前持久记录操作意图。改变旧文件前
+提交编号。程序/资源元数据和文件在本地暂存，在发布前持久记录操作意图。改变旧文件前
 先发布旧写入程序会拒绝的位置文件；原子替换该文件不会让它短暂消失。
 
-数据库和安装目录所在的文件系统必须支持 Linux `O_TMPFILE`、硬链接、目录 fsync，
-以及 `renameat2` 的 `RENAME_NOREPLACE` 和 `RENAME_EXCHANGE`。两者可以位于不同
-文件系统，各自在本地暂存文件。暂存不受支持时报告操作和目录。当前没有退回普通
+数据库、程序 prefix 和资源目录所在的文件系统必须支持 Linux `O_TMPFILE`、硬链接、目录 fsync，
+以及 `renameat2` 的 `RENAME_NOREPLACE` 和 `RENAME_EXCHANGE`。它们可以位于不同
+设备，各自在本地暂存文件和备份。日志保存资源根及其工作目录的身份，一次数据库
+发布提交跨两个 payload 根的变更。暂存不受支持时报告操作和目录。当前没有退回普通
 命名临时文件的方案；那需要在日志中记录临时文件归属，并支持半写文件的崩溃恢复。
 
 持久替换 `installed.json` 表示提交。提交前，恢复会还原之前的文件，最后才还原
@@ -97,6 +139,10 @@
 命令，服务保护自身可执行文件，每个 Host 持有 Provider 命令的锁直到所属进程停止。
 这样运行时不必依赖包管理库，Hook 调用路径保持不变。存在这些引用时，写锁获取失败。
 
+路径位于独立资源根下时，发现过程读取 `.aw-installation-prefix`，获取对应程序
+prefix 已有读锁，再校验反向 `.aw-resources-dir` 并重新核验两个文件。因此同一个
+锁同时保护程序与资源引用，不增加资源锁，也不依赖包数据库。
+
 这些锁协调当前实现，不能证明任意外部进程、shell 动态生成路径或旧 AW 运行时已经
 不存在。如果记录中的 AW 可执行文件摘要与当前命令不同，破坏性计划和第一次写入
 旧安装的登记计划都会报告 `runtime_unknown`。在写入前拒绝后者，可让旧工具继续
@@ -110,5 +156,7 @@
 过期证据、旧记录存档、最后一包卸载与重装，以及从已登记包生成配置。
 `tests/database.rs` 覆盖有界清单、doctor 读取和数据库位置核对。
 配置单元测试检查发布期间仍持有两个读锁；事务单元测试覆盖中断和恢复。运行引用
-测试位于 `aw-exec` 和 `aw-host`。按[贡献指南](../../../../CONTRIBUTING_zh.md)执行 Linux
+测试位于 `aw-exec` 和 `aw-host`。资源映射用例位于 `tests/management/resources.rs`
+及 `src/transaction/tests/resources.rs`，资源引用用例位于 `aw-exec/tests/packages.rs`。
+这些 fixture 验证本地合同，不代表产品组合已经发布。按[贡献指南](../../../../CONTRIBUTING_zh.md)执行 Linux
 检查；这些测试不代表原生 Agent 效果已被采用，也不证明能发现任意外部进程。

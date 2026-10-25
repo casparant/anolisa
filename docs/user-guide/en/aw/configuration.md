@@ -18,11 +18,27 @@ aw config init --prefix "$AW_PREFIX" \
 | Capability | Add to the generation command |
 | --- | --- |
 | Launch the Agent only | No Provider arguments |
-| Compress tool output | `--provider tokenless` |
-| Check tool safety | `--provider sec-core --socket /run/agent-sec-core/daemon.sock` |
-| Safety checks and compression | `--provider sec-core+tokenless --socket /run/agent-sec-core/daemon.sock` |
+| Compress tool output | `--template "$AW_TEMPLATE_DIR/tokenless.json"` |
+| Check tool safety | `--template "$AW_TEMPLATE_DIR/sec-core.json" --template-var SOCKET=/run/agent-sec-core/daemon.sock` |
+| Safety checks and compression | `--template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var SOCKET=/run/agent-sec-core/daemon.sock` |
 
-Install the selected Providers first; the generator supplies executable paths and integrity metadata.
+Install the selected Preview Providers first. Set `AW_TEMPLATE_DIR` to the
+absolute `templates/` directory in the unpacked Provider or all-in-one bundle.
+The distribution supplies these templates; AW does not contain backend-specific
+defaults. `--template ABS_FILE` selects one template, and repeated
+`--template-var NAME=VALUE` supplies literal values. AW supplies `PREFIX`, `STATE`
+and required recorded file hashes. Missing variables or files fail configuration
+generation. `--provider` now accepts only `none` or `command`; the former
+`tokenless`, `sec-core` and combined names are rejected. Existing YAML remains
+readable. For ANOLISA product installations, use the product's supplied templates
+and resolved component paths; the AW local-extension generator does not manage
+ANOLISA-owned package records.
+
+For a native or otherwise unregistered prefix, base and command configuration
+and explicit templates without package requirements can be generated without
+creating an AW package database. Templates that require recorded packages still
+need verified AW-owned package records. Product configuration must use actual
+ANOLISA component paths rather than treating its files as AW-owned packages.
 
 ## Edit existing configuration
 

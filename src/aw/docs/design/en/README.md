@@ -9,8 +9,11 @@ Read [Architecture boundaries](architecture-boundaries.md) for source ownership,
 internal interfaces and release work deferred from this migration.
 
 `aw-cli` owns the unified `aw` frontend. The standalone `aw-package` executable
-has been removed; its Rust library remains. Software
-installation and offline edits call `aw-package` APIs directly; runtime commands
+has been removed; its Rust library remains. AW extension
+compatibility and offline edits call `aw-package` APIs; product software
+installation calls `distribution/crates/local-package` directly from ANOLISA.
+The shared library owns local file verification, database transactions and recovery.
+Runtime commands
 call `aw-service`. The extraction preserves the Hook path and protocol versions.
 
 ```mermaid

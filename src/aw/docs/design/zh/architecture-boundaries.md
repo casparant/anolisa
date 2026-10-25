@@ -23,7 +23,7 @@ ANOLISA/
 │   │   ├── aw-core/                # 计划执行 API 与 Journal
 │   │   ├── aw-cli/                 # 统一 aw 命令入口
 │   │   ├── aw-service/             # 客户端、服务与运行状态
-│   │   └── aw-package/             # 当前 Preview 构建、安装和配置编辑
+│   │   └── aw-package/             # AW 扩展兼容与配置编辑
 │   ├── tests/                     # 回归矩阵、原生验收清单与共享检查
 │   └── scripts/                   # 统一检查入口
 ├── providers/                     # 具体 Provider 的独立协作目录
@@ -41,12 +41,13 @@ AW workspace 的普通依赖和测试依赖均不引用它们。
 ## Adapter 与服务之间传什么
 
 `aw-cli` 提供统一 `aw` 命令；独立 `aw-package` 可执行文件已删除，Rust crate 保留。
-CLI 直接调用 `aw-package`
-库完成安装与离线编辑；`aw-build` 仍是 `aw-package` 中的维护者工具。
+CLI 通过 `aw-package` 完成本地 AW 扩展兼容与离线编辑；ANOLISA 产品 raw 直接
+调用独立 `local-package` 库。历史 `aw-build` 入口转调
+`distribution/tooling/aw-preview`，具体后端打包和配置默认值由 distribution 管理。
 `aw-service` 以库形式提供客户端与服务；底层库不依赖 `aw-cli`。
 启动器和服务共同使用 `aw-adapter`；Adapter 不依赖 service、Host 或 CLI 内部类型。
 
-软件安装使用 `aw install --prefix ... --bundle ...`，原生 Hook 注册使用
+本地 AW 扩展安装使用 `aw install --prefix ... --bundle ...`，原生 Hook 注册使用
 `aw agent connect --config ... --agent ...`，旧的 `aw install --config ... --agent ...`
 仍兼容。混用安装和原生注册选项会在写入前失败。Preview 仍仅接受现有本地包；
 此次拆分不增加 URL 安装器、系统包后端、自动激活或安装记录迁移。

@@ -22,8 +22,9 @@ sudo apt-get install -y git build-essential pkg-config libssl-dev
 
 ```bash
 git clone https://github.com/agentic-os-org/ANOLISA.git anolisa
-cd anolisa/src/aw
-cargo run --locked --release -p aw-package --bin aw-build -- \
+cd anolisa
+cargo run --locked --release --manifest-path distribution/tooling/aw-preview/Cargo.toml \
+  --bin anolisa-aw-preview -- \
   --version 0.1.0-preview.1 --component core \
   --output "$PWD/target/aw-preview-packages"
 cd target/aw-preview-packages
@@ -41,6 +42,14 @@ sha256sum -c SHA256SUMS
 
 需要安全检查和压缩时选 `all`，并换一个空输出目录。包内提供 RTK 和 TOON 编码，
 无需客户另行安装。Agent 本身、模型凭据和 AgentSight 需单独准备。
+
+Preview 构建器位于 `distribution/tooling/aw-preview`，具体后端组合和 Provider
+配置模板在这里维护。历史 `aw-build` Cargo binary 在源码树中转调该工具，不是
+第二个已安装包管理器。Provider 包携带 `templates/<provider>.json`，all-in-one
+携带 Tokenless、sec-core 及组合模板；core-only 不含后端模板。
+
+完整 ANOLISA 产品发行使用[distribution 入口](../../../distribution/README_zh.md)。
+产品 raw 直接调用共享库，使用 ANOLISA 包记录；独立 Preview 流程保留原 AW 管理权。
 
 ## 交付与验收
 

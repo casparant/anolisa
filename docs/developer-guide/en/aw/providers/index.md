@@ -76,7 +76,10 @@ yet build outside the repository. Pinned SDKs, independent releases and artifact
 composition tests are deferred. Preview delivers core and Providers as one build
 set, with installation checking matching versions and source commits.
 
-`aw-build` and `aw install` currently package and install built-in components only;
-they do not automatically install arbitrary community Providers. Independent
-installation works with the same protocol. Bundling requires package manifest
-and installation acceptance support.
+`distribution/tooling/aw-preview` builds the historical built-in Preview
+combinations; the `aw-build` source entrypoint forwards to it. Local AW extension
+installation accepts verified independent `package.json` bundles, but does not
+download community Providers or resolve product names. ANOLISA directly uses the
+shared installation library for product software, and native packages retain
+their own manager. An externally installed Provider connects through its declared
+`transport.argv`; protocol use does not require an AW-owned installation record.

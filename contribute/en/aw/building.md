@@ -25,8 +25,9 @@ Use a clean source checkout and an empty output directory.
 
 ```bash
 git clone https://github.com/agentic-os-org/ANOLISA.git anolisa
-cd anolisa/src/aw
-cargo run --locked --release -p aw-package --bin aw-build -- \
+cd anolisa
+cargo run --locked --release --manifest-path distribution/tooling/aw-preview/Cargo.toml \
+  --bin anolisa-aw-preview -- \
   --version 0.1.0-preview.1 --component core \
   --output "$PWD/target/aw-preview-packages"
 cd target/aw-preview-packages
@@ -46,6 +47,18 @@ Every checksum should report `OK`. Output contains
 Choose `all` for security checks and compression, using a new empty output
 directory. The package supplies RTK and TOON encoding. Prepare the Agent, model
 credentials, and AgentSight separately.
+
+The Preview builder belongs to `distribution/tooling/aw-preview`, where
+concrete backend composition and Provider configuration templates are maintained.
+The historical `aw-build` Cargo binary forwards to that tool in a source
+checkout; it is not a second installed package manager. Provider bundles carry
+`templates/<provider>.json`, and all-in-one carries the Tokenless, sec-core and
+combined templates. Core-only output contains no backend template.
+
+For complete ANOLISA product releases, use the
+[distribution entrypoint](../../../distribution/README.md). Product raw
+installation calls the shared library directly and uses ANOLISA package records;
+the independent Preview workflow retains its existing AW ownership.
 
 ## Deliver and verify
 

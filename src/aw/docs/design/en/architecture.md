@@ -39,23 +39,29 @@ maintained separately under `providers/`.
 | `aw-config` | Parse configuration and validate fields and static references | None |
 | `aw-core` | Capability plan executor, Host/Journal ports, and FileJournal | contracts |
 | `aw-contracts` | Schemas, canonical encoding, and cross-record validation | None |
-| `aw-package` | Local package database, plans, durable transactions and configuration APIs; `aw-build` | config, exec |
+| `aw-package` | AW configuration and local extension compatibility over the shared package library | config, exec |
 
 The dependency column omits the `aw-` prefix. Tests in `aw-package` also depend
 on `aw-service`; CLI integration tests also use `aw-contracts` and `reqwest`. Libraries do not
-depend on `aw-cli`. The `aw` frontend calls package APIs in-process. The standalone
-`aw-package` executable has been removed; the crate and `aw-build` remain.
+depend on `aw-cli`. The `aw` frontend calls AW configuration and local-extension APIs in-process.
+The standalone `aw-package` executable has been removed; its crate remains.
+The historical `aw-build` source entrypoint delegates to the distribution-owned
+Preview builder. `local-package` and `local-package-runtime` are independent
+Rust libraries under `distribution/crates/local-package`; they do not depend
+on AW or concrete Providers.
 
 The public `aw` tree uses one typed Clap declaration for parsing and help.
 Admitted options call existing handlers without reparsing argv. Internal Hook
 and lifecycle callbacks retain their protocol parser and failure replies.
-Software installation, configuration and removal all use this `aw` tree;
+AW extension installation, configuration and removal use this `aw` tree;
 the removal of the other executable does not change service messages,
 Provider effects or existing file ownership records.
 
 ### Local package operations
 
-`aw-cli` calls `aw-package::plan` to inspect a local bundle or selected removal.
+`aw-cli` calls the `aw-package::plan` compatibility facade over `local-package`
+to inspect a local AW extension bundle or selected removal. ANOLISA directly
+calls `local-package` for product software; AW CLI is not in that call path.
 The plan contains package/version decisions, exact file changes and blockers;
 planning never creates a prefix, lock or database. `plan::execute` reacquires
 database then prefix write locks, rechecks the snapshot and runs the shared
@@ -63,9 +69,15 @@ transaction backend. A durable `installed.json` replacement commits the change.
 Unfinished operations require explicit `aw recover`, which finishes committed
 cleanup or restores the previous files without overwriting conflicting bytes.
 
-New package facts live in `$XDG_STATE_HOME/aw/packages` (HOME fallback) or the
-explicit root-managed raw scope `/var/lib/aw/packages`. A sole
-`.aw-packages/aw-core.json` locator identifies that database from a prefix.
+AW extension records remain in `$XDG_STATE_HOME/aw/packages` (HOME fallback) or
+the explicit root-managed raw scope `/var/lib/aw/packages`. New ANOLISA raw
+records use `$XDG_STATE_HOME/anolisa/packages` or `/var/lib/anolisa/packages`. A sole
+`.aw-packages/aw-core.json` locator identifies that database and its manager
+from a prefix. An absent manager marker means historical AW ownership. AW
+queries and writes reject an ANOLISA manager; they do not follow its database.
+A matching, verified existing product record may retain its original AW
+authority when ANOLISA resumes the installation. No automatic database transfer
+or duplicate ownership is performed.
 Queries and configuration generation can follow it without guessing another
 user's XDG location. Old component JSON is archived during the first successful
 package write, then replaced by this locator, which old installers reject.
@@ -152,7 +164,9 @@ and packaging scope.
 | `crates/aw-service/src/server.rs`, `crates/aw-service/src/runtime/` | Local service and event execution |
 | `crates/aw-host/src/lib.rs`, `crates/aw-host/src/event.rs` | Provider preparation and invocation |
 | `crates/aw-core/src/journal.rs` | Durable audit storage |
-| `crates/aw-package/src/{database,open_bundle,plan,transaction}.rs` | Package records, local bundle verification, preview and durable file changes |
+| `../../distribution/crates/local-package/src/{database,open_bundle,plan,transaction}.rs` | Shared records, local verification, preview and durable file changes |
+| `crates/aw-package/src/configuration/`, `crates/aw-package/src/config_edit.rs` | AW configuration rendering and safe offline editing |
+| `../../distribution/tooling/aw-preview/` | Preview composition, backend builds and concrete configuration templates |
 | `crates/aw-exec/src/packages.rs` | Shared runtime ownership of known installed files |
 | `crates/aw-contracts/src/registry.rs` | Contract schemas embedded in the program |
 | `../../providers/agent-sec-core/`, `../../providers/tokenless/` | Concrete Providers, configuration examples, and tests |

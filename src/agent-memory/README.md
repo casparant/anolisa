@@ -148,8 +148,9 @@ and bundled OpenClaw adapter. Build the plugin with Node 22.23.2 using
 plugin output directory, target, timestamp and TOML build metadata inputs.
 Metadata binds `version`, `target_os`, `target_arch`,
 `binaries.agent-memory` (SHA256) and `plugin.sha256` to the supplied files.
-The packager does not build or execute binaries. It renders the raw installation
-contract from `.anolisa/component.raw.toml.in` and Cargo.toml; the RPM contract
+The packager does not build or execute binaries. Independent raw packages do not
+require ANOLISA metadata. Product packaging can explicitly provide `--contract PATH`
+to render optional installation metadata against Cargo.toml; the RPM contract
 remains separate. Both installation modes leave the user service stopped.
 Run `python3 tests/test_raw_packaging.py` for packaging regressions.
 

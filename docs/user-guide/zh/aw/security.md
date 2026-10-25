@@ -47,17 +47,22 @@ sudo env AGENT_SEC_DATA_DIR=/var/lib/aw-preview/sec-data OTEL_SDK_DISABLED=true 
 回到普通用户终端，沿用安装页的 `AW_PREFIX`、`AW_HOME` 和 `AW_QODER`。
 `AW_SEC_SOCKET` 应指向实际后台；下例使用上一步启动的 socket。
 
+模板路径应指向已解包的 Provider 或 all-in-one 包；生成配置时须保留该包。
+本页适用于 AW 所有的 Preview 安装。ANOLISA 产品安装使用自身包记录、
+实际组件路径和产品提供的模板。
+
 ```bash
 export AW_SEC_SOCKET=/run/aw-preview-sec/daemon.sock
+export AW_TEMPLATE_DIR="/absolute/path/to/unpacked-provider-or-all-in-one-bundle/templates"
 aw config init --prefix "$AW_PREFIX" \
   --config "$AW_HOME/security.yaml" --state-dir "$AW_HOME/security-state" \
-  --provider sec-core --socket "$AW_SEC_SOCKET" --qoder "$AW_QODER"
+  --template "$AW_TEMPLATE_DIR/sec-core.json" --template-var "SOCKET=$AW_SEC_SOCKET" --qoder "$AW_QODER"
 aw validate --config "$AW_HOME/security.yaml"
 cd "$AW_HOME/workspace"
 aw run --config "$AW_HOME/security.yaml" --agent qoder
 ```
 
-同时需要压缩时，安装 Tokenless 包并将选项改为 `--provider sec-core+tokenless`。
+同时需要压缩时，安装 Tokenless 包并将选项改为 `--template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var "SOCKET=$AW_SEC_SOCKET"`。
 OpenClaw 使用[对应启动参数](configuration.md#openclaw)。
 
 ## 验证检查

@@ -2,27 +2,67 @@
 
 [English](README.md)
 
-ANOLISA 统一 CLI 网关——管理组件生命周期、框架适配器、OS 基础层和系统服务。anolisa 是 [ANOLISA](../../README_zh.md) 项目的主用户入口，通过一条命令完成所有组件的安装、更新、诊断和编排。
+ANOLISA 产品安装和组件管理的统一 CLI 网关。CLI 直接调用共享 local-package 库
+安装经过校验的完整
+Linux 发行，同时保留已有 raw/RPM 组件和 adapter 流程。
+它是 [ANOLISA](../../README_zh.md) 项目的主要用户入口。
 
 ## 快速开始
 
 ```bash
-# 列出可用组件
-anolisa list
-
-# 安装组件
-anolisa install agent-memory
-
-# 检查组件健康
-anolisa status agent-memory
-
-# 更新所有
-anolisa update all
+curl -fsSL https://get.agentic-os.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+anolisa --version
 ```
+
+GNU/Linux x86_64 和 aarch64 默认下载完整产品归档并选择 user scope，下载引导需要
+Python 3.6 或更新版本。macOS 安装独立 CLI；Linux 也可用 `--cli-only` 选择独立 CLI。
+已下载完整归档时，执行其中的 `./install.sh --scope user`，或以 root 执行
+`./install.sh --scope system`。普通安装后调用 `anolisa setup`：管道执行显示可用状态，
+终端执行可引导明确的用户 AW 配置。Linux 的显式 `--rpm` 流程则通过原生 RPM backend
+在 system 模式安装全部已发布组件。安装不会启用 Provider 或服务。已有独立命令
+入口会被保留，需要明确处理冲突后才能激活产品。
+
+新归档在两个 scope 都默认安装 `complete`，包含本平台全部交付包；
+精简组合通过 `--profile` 显式选择。
+使用 `--profile` 可以选择归档声明的其他包组合。
+
+系统 tarball 安装将公共命令放入 `/usr/local/bin`，私有程序放入
+`/usr/local/lib/anolisa`，静态资源放入 `/usr/local/share/anolisa`。用户安装
+将私有程序与 XDG 资源分开，ANOLISA 同时登记两处位置。禁用的 Provider 模板固定
+同版程序路径；运行数据与 socket 必须按实际运行用户解析，与软件安装范围分别决定。
+
+`--release-version`、`--release-url`、目录、兼容性和离线安装说明见
+[安装指南](../../docs/user-guide/zh/getting-started/installation.md)。
+`release inspect`、`release install` 和 `release status` 见
+[CLI 参考](../../docs/user-guide/zh/getting-started/anolisa-cli.md#产品发行命令)。
 
 ## 命令概览
 
-### 一级命令 — 组件生命周期
+产品包记录使用 `anolisa release list --scope user|system` 查询，
+`release doctor --bundle ABS_DIRECTORY --scope user|system` 检查指定发行的文件；
+系统产品记录与检查需要 root。
+已切换到另一版本后，可用 `release uninstall --bundle ABS_DIRECTORY --yes`
+清理不再活动的版本；`--dry-run` 预览不需要确认。
+新 ANOLISA 包数据库的未完成事务使用
+`anolisa release recover --scope user|system` 显式恢复，不需要 bundle。
+已有 AW 所有的产品版本继续使用原数据库和 `aw recover`，不自动转移。
+
+### 完整产品发行
+
+`anolisa release install --bundle ABS_DIRECTORY --scope user|system` 安装或
+继续已校验的解包发行，添加 `--dry-run --json` 可预览。
+`release status` 读取其产品进度。产品 scope 默认 user，即使以 root 执行
+也一样；它与下文旧的 `--install-mode` 选项分开。
+
+`anolisa install --bundle ABS_DIRECTORY --profile standard-user --scope user`
+调用同一产品安装器。按组件选择使用
+`release install --bundle ABS_DIRECTORY --component tokenless`，同时包含依赖。
+Profile 决定交付文件，`preset plan/apply` 和 `serve --preset container`
+分别控制服务。`migrate plan/apply` 提供有记录的受支持旧 raw 安装迁移。
+可选产品配方与组件自有 RPM 分包维护见 [distribution 说明](../README_zh.md)。
+
+### 一级命令 — 已有组件生命周期
 
 | 命令 | 说明 |
 |------|------|
@@ -49,7 +89,12 @@ anolisa update all
 
 | 命令 | 说明 |
 |------|------|
+| `overview` | 显示实际记录的组件版本、可用状态及可选本地候选比较 |
+| `setup` | 引导明确的用户 AW 配置并预览服务策略 |
 | `adapter` | 管理组件到框架的适配器 |
+| `preset` | 查看并显式应用原生服务启用策略 |
+| `serve` | 在没有 systemd 的环境管理允许的前台服务 |
+| `migrate` | 查看并执行固定的旧 raw 到产品发行迁移 |
 | `osbase kernel` | 内核模块与 eBPF 管理 |
 | `osbase sandbox` | 沙箱运行时管理（runc、gvisor、firecracker 等） |
 | `osbase security` | 安全覆盖层管理 |
@@ -72,7 +117,7 @@ ANOLISA 管理插件链接；启用或禁用后需重启 OpenCode。
 `anolisa adapter enable tokenless qwenwork` 接入 Tokenless。完成后重启应用并在应用内
 检查激活状态；CLI 验证文件，但激活状态为 `unknown`。已有脚本安装需先卸载再通过 CLI 启用。
 
-## 安装模式
+## 已有组件安装模式
 
 | 模式 | 前缀 | 使用场景 |
 |------|------|----------|
@@ -80,6 +125,9 @@ ANOLISA 管理插件链接；启用或禁用后需重启 OpenCode。
 | `user` | `~/.local` | 普通用户运行时的默认值 |
 
 可通过 `--install-mode user|system` 显式选择。
+这些模式用于已有组件命令，完整产品发行使用 `--scope` 和按版本分开的目录。
+`update all` 不更新完整产品发行；`update self` 拒绝直接替换产品管理的
+CLI。RPM 管理的 CLI 自更新仍由原生包管理器完成。
 
 只读发现范围比修改范围更广：普通用户可以列出、检查和诊断可见的
 system 安装，也可以让 adapter 识别它；生命周期修改仍然只作用于所选

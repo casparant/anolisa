@@ -4,14 +4,21 @@
 
 本页用于组件接入与维护。安装和日常使用请阅读[用户指南](installation.md)。
 
-本地安装、卸载、初始化和编辑分别使用 `aw install`、`aw uninstall`、`aw config init`
+本地 AW 扩展兼容安装、卸载、初始化和编辑分别使用 `aw install`、`aw uninstall`、`aw config init`
 及 `aw config` 编辑命令。独立 `aw-package` 可执行文件已删除，Rust 库保留。
 每个 bundle 根目录携带 `aw` 用于首次安装，必须显式提供绝对 `--bundle` 路径。
 `aw config validate` 沿用 `aw validate` 的相对路径与 `--against` 语义。
 原独立命令的编辑器验证已移除，没有提供相同所有权检查的 CLI 替代入口；Rust 编辑器 API 保留这些检查。
 原生 Hook 注册使用 `aw agent connect`；旧的 `aw install --config ... --agent ...`
-仍兼容，但不能混用软件安装选项。安装仍只接受解压后的本地 Preview 包，不接受
-URL 或任意组件名称。
+仍兼容，但不能混用软件安装选项。安装接受解压后的本地 bundle，包括 Preview 包；
+不解析 URL 或任意组件名称。新的独立包必须声明 Provider 协议，历史 Preview
+保持格式兼容。普通软件由 ANOLISA 或原生管理器安装；已有 AW 所有的普通工具
+记录继续可查询、可卸载。
+
+ANOLISA 产品软件由 ANOLISA 直接调用共享 `local-package` 库安装，新产品记录
+不属于 AW。本页保留独立 Preview 的操作流程；遇到 ANOLISA 所有的 prefix 时，
+这些命令会拒绝查询或修改产品数据库。具体 Provider 配置模板随包放在
+`templates/`，core-only 包不含后端模板。
 
 只安装 AW core 即可运行已有的 Qoder 或 OpenClaw，无需 Provider。按需添加 sec-core 或自定义布尔判断脚本，使用同一份 AW 配置。AW 和 sec-core 的构建、安装及运行使用 Rust 二进制，不依赖 Python；用户脚本自行承担其运行依赖。OpenClaw 仍需 Node.js，各 Agent 的模型账户由其原生配置管理。
 
@@ -53,6 +60,60 @@ XDG/HOME 下的数据库。普通用户执行 `aw config init` 会跟随前缀�
 
 安装器校验哈希、权限、架构、版本及源码提交，拒绝覆盖，并在 `.aw-packages` 记录文件归属。安装过程中收到 Ctrl-C（SIGINT）或 SIGTERM 会回滚本次写入，随后可重试；强制终止（SIGKILL）不在自动回滚范围内。校验和用于发现损坏，不是发布者签名。安装父目录须归安装用户所有，且不可被其他用户写入。系统后端的安装由 root 管理；若连接已有后端，也支持普通用户安装到自己的目录。
 
+## 将资源与程序分开存放
+
+本地安装需要分别放置程序和资源时，使用 `--resources-dir ABS_DIR`。包描述和
+解包后的 bundle 保留原有逻辑路径；安装器将所选资源目录写入安装记录的可选
+`resources` 字段，并按以下规则确定实际位置。
+
+| 包内逻辑路径 | 安装位置 |
+| --- | --- |
+| `bin/example` | `PREFIX/bin/example` |
+| `libexec/example/helper` | `PREFIX/libexec/example/helper` |
+| `share/example/schema.json` | `RESOURCES_DIR/example/schema.json` |
+
+`share/` 前缀会被去掉，不会再创建 `RESOURCES_DIR/share/`。新安装省略此选项时，
+`share/` 仍位于 prefix 下；没有 `resources` 字段的旧数据库记录保留此布局。
+向已经记录资源目录的安装追加包时，可省略此选项，沿用原位置。显式传入其他目录
+会被拒绝；此选项不迁移已有的合并或分离布局。
+
+请选择两个全新、互相独立且专用于该应用的目录。首次安装时资源根目录必须不存在，
+其父目录由你预先准备。父目录必须属于安装用户，不允许 group/world 写入，也不能
+经过符号链接。资源根不能与程序 prefix、包数据库或该数据库中其他安装的程序/资源根
+相等，也不能互为祖先目录。下面路径由用户自行选择，不代表产品默认目录。
+
+```bash
+AW_EXAMPLE_PREFIX="$HOME/.local/lib/aw-example/1"
+AW_EXAMPLE_RESOURCES="$HOME/.local/share/aw-example/1"
+install -d -m 755 "$HOME/.local/lib/aw-example" "$HOME/.local/share/aw-example"
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle \
+  --dry-run --json
+aw install --scope user --prefix "$AW_EXAMPLE_PREFIX" \
+  --resources-dir "$AW_EXAMPLE_RESOURCES" --bundle /absolute/path/to/unpacked-bundle
+aw doctor --prefix "$AW_EXAMPLE_PREFIX" --json
+aw uninstall --scope user --prefix "$AW_EXAMPLE_PREFIX" --dry-run --json
+```
+
+`--dry-run` 使用相同安装计划器，不创建安装记录、目录或锁。输出的文件变更同时
+包含逻辑 `path` 和实际绝对 `destination`。`aw list --installed --json` 返回记录中的
+`resources`；`doctor`、卸载和 `aw config init` 按该记录定位文件，不需要再次
+提供资源参数。完整性错误会指出实际资源路径。可变配置、state 和凭据应放在
+这两个包属目录之外。
+
+AW 写入两个普通元数据文件：`PREFIX/.aw-resources-dir` 指向资源根，
+`RESOURCES_DIR/.aw-installation-prefix` 指回程序 prefix。即使首个包没有
+`share/` 文件，也会建立这两个文件。不要移动已经登记的目录或编辑这些文件；
+校验会检测元数据缺失或冲突。显式命令或绝对参数引用资源时，运行时包读锁会
+通过资源侧的位置文件，找到相同的 prefix 锁。
+
+程序和资源根可以位于不同设备。两个文件系统各自暂存 payload 和备份，使用同一
+持久事务，数据库提交仍是唯一提交点。两个文件系统都须支持 Linux `O_TMPFILE`、
+硬链接、目录 fsync 和所需的 `renameat2` 操作；不支持时明确失败，不退回不安全的
+暂存方式。卸载只从实际位置删除所选包已校验的文件，未知文件保留。最后一个包
+卸载后，两个根目录、双向位置元数据及空安装登记仍然保留，可在同一记录布局中
+继续安装。跨两个根目录的操作中断后，`aw recover` 按保留的事务记录恢复。
+
 ## 无 Provider 使用 core
 
 只需安装所选 Agent：保留[原生命令 Hook 合同](../../../developer-guide/zh/aw/native-agents.md#构建并启动-qoder)的 Qoder CLI >=1.1.64，或 OpenClaw **2026.9.6** 与 Node.js。以普通用户生成 Qoder 的基础配置：
@@ -72,7 +133,7 @@ install -d -m 700 "$AW_DEMO" "$AW_DEMO/workspace"
 只使用 OpenClaw 时，将 `--qoder "$AW_QODER"` 换成 `--node "$AW_NODE" --openclaw "$AW_OPENCLAW"`；启动时按第 5 步提供原生配置和状态目录。也可同时提供两个 Agent 入口。不需要 sec-core socket 或 Provider 包。空 `providers` 和 `events` 表示没有 AW 策略检查或每次工具调用的 AW 审计；原生权限和已有 Hook/插件继续生效。AW 仍创建实例并启动或复用共享服务。退出 Agent 后用 `aw stop --config "$AW_DEMO/aw-core.yaml"` 停止该服务。
 
 `aw config init` 就是初始化命令：安装 core 后，它生成包含 Agent、daemon、execution
-和 audit 设置的完整 `aw.yaml`。不传 `--provider`（或传 `--provider none`），
+和 audit 设置的完整 `aw.yaml`。同时不传 `--provider` 与 `--template`（或传 `--provider none`），
 `providers` 和 `events` 都为空。它只创建新文件，拒绝覆盖已有配置。若要一次生成
 带策略的配置，按[布尔脚本指南](../../../developer-guide/zh/aw/native-agents.md#布尔判断脚本)选择 `--provider command`。
 后续逐项添加规则则按 `aw config init` → `aw config add-provider` → `aw config add-event` →
@@ -248,13 +309,15 @@ export AW_NODE=/absolute/path/to/node
 export AW_OPENCLAW=/absolute/path/to/openclaw/openclaw.mjs
 export AW_DEMO="$HOME/aw-preview"
 install -d -m 700 "$AW_DEMO" "$AW_DEMO/workspace" "$AW_DEMO/openclaw"
+export AW_TEMPLATE_DIR="/absolute/path/to/unpacked-provider-or-all-in-one-bundle/templates"
 "$AW_PREVIEW_PREFIX/bin/aw" config init --prefix "$AW_PREVIEW_PREFIX" \
   --config "$AW_DEMO/aw.yaml" --state-dir "$AW_DEMO/state" \
-  --provider sec-core --socket /run/aw-preview-sec/daemon.sock --qoder "$AW_QODER" \
+  --template "$AW_TEMPLATE_DIR/sec-core.json" \
+  --template-var SOCKET=/run/aw-preview-sec/daemon.sock --qoder "$AW_QODER" \
   --node "$AW_NODE" --openclaw "$AW_OPENCLAW"
 ```
 
-Qoder 和 Node 入口须可由当前用户执行；OpenClaw `.mjs` 文件须可读，无需执行权限。配置和 state 路径需为 Unix socket 留出空间（socket 路径少于 108 字节）。配置文件不能与 state 目录同路径或位于其祖先路径；已有 state 路径须为当前用户所有、权限为 `0700` 的目录。`aw config init` 从校验到发布全程持有包的共享锁，普通用户读取 root 所有的安装前缀时也适用；安装或卸载正在进行时，会报告可重试的锁错误。它仅复核 core 与显式选用的 Provider 文件哈希及权限，必需文件缺失或被修改时拒绝生成配置；未选用的 Provider 不成为初始化依赖。默认无策略；`--socket` 必须显式搭配 `--provider sec-core`，避免旧安全命令静默生成空策略。配置先写入私有临时文件，再排他提交；写入失败不会留下半份配置，可直接重试。两个 Agent 共用同一个 Provider 和 before/after 步骤：Qoder 的 `Bash`、OpenClaw 的 `exec` 都将 `/command` 输入交给 sec-core Bash 扫描。风险命令或执行前检查失败会阻断；执行后记录框架上报的结果（OpenClaw 也会上报被阻断的工具结果），其他工具未扫描。这里提供原生 Hook 拦截，不是 OS 沙箱或跨框架审批。
+Qoder 和 Node 入口须可由当前用户执行；OpenClaw `.mjs` 文件须可读，无需执行权限。配置和 state 路径需为 Unix socket 留出空间（socket 路径少于 108 字节）。配置文件不能与 state 目录同路径或位于其祖先路径；已有 state 路径须为当前用户所有、权限为 `0700` 的目录。`aw config init` 从校验到发布全程持有包的共享锁，普通用户读取 root 所有的安装前缀时也适用；安装或卸载正在进行时，会报告可重试的锁错误。它仅复核 core 与显式选用的 Provider 文件哈希及权限，必需文件缺失或被修改时拒绝生成配置；未选用的 Provider 不成为初始化依赖。不传 `--provider` 或 `--template` 时无策略。具体后端默认值来自显式选择的发行模板，`SOCKET` 是字面模板变量；已移除的后端选择会被拒绝，已有 YAML 保持可读，不会静默生成空策略。配置先写入私有临时文件，再排他提交；写入失败不会留下半份配置，可直接重试。两个 Agent 共用同一个 Provider 和 before/after 步骤：Qoder 的 `Bash`、OpenClaw 的 `exec` 都将 `/command` 输入交给 sec-core Bash 扫描。风险命令或执行前检查失败会阻断；执行后记录框架上报的结果（OpenClaw 也会上报被阻断的工具结果），其他工具未扫描。这里提供原生 Hook 拦截，不是 OS 沙箱或跨框架审批。
 
 ## 4. 测试 Qoder
 
@@ -324,8 +387,8 @@ sudo "$AW_PREVIEW_PREFIX/bin/aw" uninstall --scope system --prefix "$AW_PREVIEW_
 
 ```bash
 cargo test --locked --manifest-path src/aw/Cargo.toml -p aw-package
-cargo run --locked --release --manifest-path src/aw/Cargo.toml \
-  -p aw-package --bin aw-build -- --version 0.1.0-preview.1 \
+cargo run --locked --release --manifest-path distribution/tooling/aw-preview/Cargo.toml \
+  --bin anolisa-aw-preview -- --version 0.1.0-preview.1 \
   --output "$PWD/target/aw-preview-packages"
 ```
 
@@ -337,6 +400,6 @@ CI / AW Integration 每晚运行，也可针对确切源码提交手动触发；
 
 `--component tokenless` 构建 `aw-provider-tokenless`；`--component all` 也将它纳入
 `aw-all-in-one`。扩展包含桥接、Tokenless CLI 和固定版本带补丁的 RTK，要求匹配的 core，沿用 sec-core 的
-安装记录与完整性规则。通过 `aw config init --provider tokenless` 或
-`aw config init --provider sec-core+tokenless --socket ABS_FILE` 显式启用压缩。四框架配置、原生
+安装记录与完整性规则。通过 `aw config init --template "$AW_TEMPLATE_DIR/tokenless.json"` 或
+`aw config init --template "$AW_TEMPLATE_DIR/sec-core-tokenless.json" --template-var SOCKET=ABS_FILE` 显式启用压缩。四框架配置、原生
 结果槽和故障行为见 [Tokenless 指南](tokenless.md)。

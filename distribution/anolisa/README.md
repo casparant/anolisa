@@ -2,27 +2,68 @@
 
 [中文版](README_zh.md)
 
-Unified CLI gateway for ANOLISA — manages component lifecycle, framework adapters, OS base layer, and system services. anolisa is the primary user entry point of the [ANOLISA](../../README.md) project, providing a single command to install, update, diagnose, and orchestrate all components.
+Unified CLI gateway for ANOLISA product installation and component management.
+The CLI installs verified complete Linux releases directly through the shared
+local-package library and retains existing
+raw/RPM component and adapter workflows. It is the primary user entry point of
+the [ANOLISA](../../README.md) project.
 
 ## Quick Start
 
 ```bash
-# List available components
-anolisa list
-
-# Install a component
-anolisa install agent-memory
-
-# Check component health
-anolisa status agent-memory
-
-# Update everything
-anolisa update all
+curl -fsSL https://get.agentic-os.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+anolisa --version
 ```
+
+GNU/Linux x86_64 and aarch64 download the complete product archive in user scope;
+the bootstrap requires Python 3.6 or newer. macOS installs the standalone CLI, which can
+also be selected on Linux with `--cli-only`. For a downloaded complete archive,
+run its `./install.sh --scope user` or, as root, `./install.sh --scope system`.
+New bundles default to `complete` in both scopes, installing every delivered
+platform package. Reduced profiles require explicit `--profile` selection.
+After ordinary installation, the installer runs `anolisa setup`: piped use prints availability,
+while a terminal can guide explicit user AW configuration. Linux `--rpm` is an
+explicit alternative that runs the complete published component set through the
+native RPM backend in system mode. Installation does not enable Providers or
+services. Existing standalone command
+entries are preserved and must be explicitly resolved before product activation.
+
+System tarball installation places public commands in `/usr/local/bin`, private
+programs in `/usr/local/lib/anolisa`, and static resources in
+`/usr/local/share/anolisa`. User installation separates private programs from
+XDG resources. ANOLISA records both locations. Disabled Provider templates retain
+versioned program paths; runtime data and sockets must be resolved for the user
+who will run them, independently of the software installation scope.
+
+See the [installation guide](../../docs/user-guide/en/getting-started/installation.md)
+for `--release-version`, `--release-url`, layout, compatibility, and offline use.
+The [CLI reference](../../docs/user-guide/en/getting-started/anolisa-cli.md#product-release-commands)
+covers `release inspect`, `release install`, `release status`, package
+`release list` / `release doctor`, inactive-version cleanup through
+`release uninstall --bundle ABS_DIRECTORY --yes`, and explicit
+`release recover --scope user|system` for the new ANOLISA package database.
+Existing AW-owned product versions retain their original database and use
+`aw recover`; ownership is not automatically transferred.
 
 ## Command Overview
 
-### Tier 1 — Component Lifecycle
+### Complete product releases
+
+`anolisa release install --bundle ABS_DIRECTORY --scope user|system` installs
+or resumes a verified unpacked release; add `--dry-run --json` to preview it.
+`release status` reads its product progress. Product scope defaults to user,
+even as root, and is separate from the legacy `--install-mode` option below.
+
+`anolisa install --bundle ABS_DIRECTORY --profile standard-user --scope user`
+uses the same product installer. Component selection uses
+`release install --bundle ABS_DIRECTORY --component tokenless`; dependencies
+are included. Profiles select installed files, while `preset plan/apply` and
+`serve --preset container` separately manage services. `migrate plan/apply`
+provides explicit, recorded transfer for supported legacy raw installations.
+See [distribution maintenance](../README.md) for optional product recipes and component-owned RPM splits.
+
+### Tier 1 — Existing component lifecycle
 
 | Command | Description |
 |---------|-------------|
@@ -50,7 +91,12 @@ only when `--since` is set.
 
 | Command | Description |
 |---------|-------------|
+| `overview` | Show recorded component versions, qualified availability and optional local candidate comparison |
+| `setup` | Guide explicit user AW configuration and preview service policy |
 | `adapter` | Manage component-to-framework adapters (scan / enable / disable / status) |
+| `preset` | Review and explicitly apply native service activation policy |
+| `serve` | Supervise allowlisted foreground services without systemd |
+| `migrate` | Review and apply a fixed legacy raw-to-product migration |
 | `osbase kernel` | Kernel modules and eBPF management |
 | `osbase sandbox` | Sandbox runtime management (runc, gvisor, firecracker, etc.) |
 | `osbase security` | Security overlay management (loongshield, seccomp-profiles) |
@@ -75,7 +121,7 @@ Enable Tokenless in QwenWorkCN native Bash and macOS workspace Shell sessions wi
 check activation there; CLI status verifies files but reports activation as
 `unknown`. Existing script installations must be uninstalled before CLI enable.
 
-## Install Modes
+## Existing Component Install Modes
 
 | Mode | Prefix | When |
 |------|--------|------|
@@ -83,6 +129,10 @@ check activation there; CLI status verifies files but reports activation as
 | `user` | `~/.local` | Running as non-root (default) |
 
 Override with `--install-mode user|system`.
+These modes apply to existing component commands. Complete product releases use
+`--scope` and versioned directories instead. `update all` does not update a complete
+product release; `update self` refuses direct replacement of its product-managed CLI.
+RPM-owned CLI self-update continues through the native package manager.
 
 Read-only discovery is broader than mutation scope: a user invocation can
 list, inspect, diagnose, and attach adapters to a visible system installation.

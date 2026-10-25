@@ -33,28 +33,36 @@ AW 框架包含 `crates/` 下的 10 个 crate。具体 Provider 在 `providers/`
 | `aw-config` | 解析配置，校验字段和静态引用 | 无 |
 | `aw-core` | 能力计划执行器、Host/Journal 接口和 FileJournal | contracts |
 | `aw-contracts` | Schema、规范编码和记录间一致性校验 | 无 |
-| `aw-package` | 本地包数据库、计划、持久事务和配置 API，以及 `aw-build` | config、exec |
+| `aw-package` | AW 配置与本地扩展兼容接口，复用共享安装库 | config、exec |
 
 依赖列省略 `aw-` 前缀。`aw-package` 的测试还依赖 `aw-service`，CLI 集成测试还使用
-`aw-contracts` 和 `reqwest`。底层库不依赖 `aw-cli`；`aw` 在进程内调用安装 API。
-独立 `aw-package` 可执行文件已删除，Rust crate 和 `aw-build` 保留。
+`aw-contracts` 和 `reqwest`。底层库不依赖 `aw-cli`；`aw` 在进程内调用配置与本地扩展兼容 API。
+独立 `aw-package` 可执行文件已删除，Rust crate 保留。历史 `aw-build` 源码入口
+转调 distribution 的 Preview 构建器。`local-package` 与 `local-package-runtime`
+是 `distribution/crates/local-package` 下的独立 Rust 库，不依赖 AW 或具体 Provider。
 
 公开 `aw` 命令树使用一份 typed Clap 声明生成解析与帮助；准入后的选项直接
 调用现有处理逻辑，不重新解析 argv。内部 Hook 与生命周期回调保留协议解析器
-和失败回复。软件安装、配置和卸载全部使用同一棵 `aw` 命令树；
+和失败回复。AW 扩展安装、配置和卸载使用同一棵 `aw` 命令树；
 移除另一个可执行文件不改变服务消息、Provider 效果或已有文件归属记录。
 
 ### 本地软件包操作
 
-`aw-cli` 调用 `aw-package::plan` 检查本地 bundle 或所选卸载内容。计划保存包与版本
+`aw-cli` 通过 `aw-package::plan` 兼容封装调用 `local-package`，检查本地 AW 扩展
+bundle 或所选卸载内容。ANOLISA 直接调用 `local-package` 安装产品软件，
+AW CLI 不处于该调用链。计划保存包与版本
 决定、精确文件变更和阻碍；生成计划不创建安装目录、锁或数据库。`plan::execute`
 按数据库、安装目录的顺序重新获取写锁，复查记录并调用同一事务实现。
 持久替换 `installed.json` 表示提交。中断的操作需要显式执行 `aw recover`，完成
 已提交操作的清理，或恢复之前的文件，不覆盖发生冲突的字节。
 
-新软件包信息保存在 `$XDG_STATE_HOME/aw/packages`（有 HOME 回退路径），或显式的
-root 管理 raw scope `/var/lib/aw/packages`。安装目录中唯一的
-`.aw-packages/aw-core.json` 标明数据库位置，查询和生成配置按此读取，无需猜测另一个
+AW 扩展记录保留 `$XDG_STATE_HOME/aw/packages`（有 HOME 回退路径），或显式的
+root 管理 raw scope `/var/lib/aw/packages`。新 ANOLISA raw 使用
+`$XDG_STATE_HOME/anolisa/packages` 或 `/var/lib/anolisa/packages`。安装目录中唯一的
+`.aw-packages/aw-core.json` 标明数据库位置和管理者；旧指针未标管理者时按 AW 解释。
+AW 查询和写入拒绝 ANOLISA 管理者，不沿指针进入产品数据库。已有产品记录与
+实际文件核验匹配时，ANOLISA 可按原 AW 权威续做；不自动搬库或重复登记所有权。
+查询和生成配置按此读取，无需猜测另一个
 用户的 XDG 目录。首次成功写入软件包时存档旧组件 JSON，再替换成旧安装器会拒绝的
 位置文件。移除最后一个包后保留空登记和位置文件，便于安全重装。RPM/DEB 后端和
 跨安装目录选择依赖不属于本次实现。
@@ -123,7 +131,9 @@ AgentSight 是独立的可选观测来源；`aw inspect` 的只读视图不参�
 | `crates/aw-service/src/server.rs`、`crates/aw-service/src/runtime/` | 本地服务与事件执行 |
 | `crates/aw-host/src/lib.rs`、`crates/aw-host/src/event.rs` | Provider 准备与调用 |
 | `crates/aw-core/src/journal.rs` | 持久审计实现 |
-| `crates/aw-package/src/{database,open_bundle,plan,transaction}.rs` | 包记录、本地包检查、预览和持久文件变更 |
+| `../../distribution/crates/local-package/src/{database,open_bundle,plan,transaction}.rs` | 共享包记录、本地校验、预览和持久文件变更 |
+| `crates/aw-package/src/configuration/`、`crates/aw-package/src/config_edit.rs` | AW 配置渲染与安全离线编辑 |
+| `../../distribution/tooling/aw-preview/` | Preview 组合、后端构建及具体配置模板 |
 | `crates/aw-exec/src/packages.rs` | 运行时对已知安装文件持有读锁 |
 | `crates/aw-contracts/src/registry.rs` | 编译进程序的契约 Schema 清单 |
 | `../../providers/agent-sec-core/`、`../../providers/tokenless/` | 具体 Provider 实现、配置示例和测试 |

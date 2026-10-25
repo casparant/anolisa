@@ -294,7 +294,7 @@ aw inspect --config "$AW_HOME/anolisa.yaml" --json
 |---|---|
 | [`src/`](src/) | 运行能力组件，包括 AW、cosh-ng，以及提供可观测、安全、记忆和沙箱能力的组件。各组件保留自己的构建与测试入口。 |
 | [`providers/`](providers/README_zh.md) | AW Provider 协作空间，每个 Provider 实现包含独立的 workspace、示例和契约测试。 |
-| [`distribution/`](distribution/) | 发行工具与镜像。`anolisa/` 包含安装 CLI、组件清单和打包资源；`docker/` 定义整套 ANOLISA 容器镜像。 |
+| [`distribution/`](distribution/README_zh.md) | 共享产品封装工具、组合与服务策略；组件／Provider 的可选集成放在各自源码根目录的 `.anolisa/`。`anolisa/` 提供安装 CLI；`containers/` 使用完整发行归档，`docker/` 保留较早的集成镜像。 |
 | [`benchmark/`](benchmark/) | 跨组件评测工具，包括 ClawEval、SWE 和 Terminal Bench runner。组件专用 benchmark 仍保留在各组件内。 |
 | [`deprecated/`](deprecated/) | 保留的旧版实现及其归档文档。 |
 | [`scripts/`](scripts/) | 仓库级构建、打包和校验脚本。 |
