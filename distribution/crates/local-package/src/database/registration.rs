@@ -1,6 +1,6 @@
 //! Explicit prefix locators close the historical writer and identify the database authority.
 
-use super::{paths, DatabasePaths, Scope, SYSTEM_DATABASE_ROOT};
+use super::{paths, DatabasePaths, PackageManager, Scope};
 use crate::{description, require, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -18,6 +18,9 @@ pub struct RegistrationPointer {
     pub scope: Scope,
     /// Absolute database root, preserving the XDG location used for installation.
     pub database_root: PathBuf,
+    /// Owning application; omission preserves the historical AW locator format.
+    #[serde(default, skip_serializing_if = "PackageManager::is_aw")]
+    pub package_manager: PackageManager,
 }
 
 impl RegistrationPointer {
@@ -31,6 +34,7 @@ impl RegistrationPointer {
             installation_id,
             scope: paths.scope(),
             database_root: paths.root.clone(),
+            package_manager: paths.manager(),
         };
         value.database_paths()?;
         Ok(value)
@@ -88,12 +92,14 @@ impl RegistrationPointer {
             "registration requires an explicit user or system scope",
         )?;
         require(
-            self.scope != Scope::System || self.database_root == Path::new(SYSTEM_DATABASE_ROOT),
+            self.scope != Scope::System
+                || self.database_root == Path::new(self.package_manager.system_root()),
             "system registration uses an unexpected database root",
         )?;
         Ok(DatabasePaths {
             root: self.database_root.clone(),
             scope: self.scope,
+            manager: self.package_manager,
         })
     }
 }
@@ -107,7 +113,8 @@ pub(crate) fn check_registered(
         Ok(Some(pointer)) => require(
             pointer.installation_id == installation_id
                 && pointer.database_root == paths.root
-                && pointer.scope == paths.scope(),
+                && pointer.scope == paths.scope()
+                && pointer.package_manager == paths.manager(),
             "prefix registration does not match the central package database",
         ),
         Ok(None) => match paths::entries(&prefix.join(".aw-packages")) {
@@ -148,7 +155,8 @@ pub(super) fn require_registered(
     require(
         pointer.installation_id == installation_id
             && pointer.database_root == paths.root
-            && pointer.scope == paths.scope(),
+            && pointer.scope == paths.scope()
+            && pointer.package_manager == paths.manager(),
         "prefix registration does not match the central package database",
     )
 }

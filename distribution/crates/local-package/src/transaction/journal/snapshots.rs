@@ -73,6 +73,7 @@ mod tests {
             schema_version: 1,
             transaction_id: "txn-1-2-3".into(),
             database_root: paths.root.clone(),
+            package_manager: paths.manager(),
             prefix: "/tmp/aw-payload".into(),
             resources: None,
             installation_id: "example".into(),

@@ -60,7 +60,9 @@ impl Snapshot {
         let pointer = RegistrationPointer::read(prefix)?;
         if let Some(pointer) = &pointer {
             require(
-                pointer.database_root == paths.root && pointer.scope == paths.scope(),
+                pointer.database_root == paths.root
+                    && pointer.scope == paths.scope()
+                    && pointer.package_manager == paths.manager(),
                 "prefix is registered in a different package database; select its recorded scope",
             )?;
             require(
@@ -159,6 +161,7 @@ impl Snapshot {
             problems: Vec::new(),
             changes: None,
             database_root: paths.root.clone(),
+            database_manager: paths.manager(),
         }
     }
 

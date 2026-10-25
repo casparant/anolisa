@@ -205,6 +205,7 @@ fn metadata(
             .unwrap_or(Path::new("/"))
             .into(),
         scope: installation.scope,
+        manager: inventory._manager,
     };
     let marker = installation.prefix.join(".aw-packages/aw-core.json");
     if let Err(error) = super::registration::require_registered(

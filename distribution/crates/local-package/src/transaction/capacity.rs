@@ -216,6 +216,7 @@ fn bounded_journal(
         schema_version: 1,
         transaction_id: format!("txn-{:x}-{:x}-{:x}", u128::MAX, u32::MAX, u64::MAX),
         database_root: paths.root.clone(),
+        package_manager: paths.manager(),
         prefix: changes.prefix.clone(),
         resources: changes
             .resources

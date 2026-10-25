@@ -89,6 +89,7 @@ pub(super) fn begin(paths: &DatabasePaths, changes: &ChangeSet) -> Result<Prepar
         schema_version: 1,
         transaction_id: id,
         database_root: paths.root.clone(),
+        package_manager: paths.manager(),
         prefix: changes.prefix.clone(),
         resources: super::resources::prepare(changes)?,
         installation_id: changes.installation_id.clone(),

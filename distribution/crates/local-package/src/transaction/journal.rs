@@ -7,7 +7,7 @@ use super::{
     fs::{self, Identity},
 };
 use crate::{
-    database::{self, DatabasePaths, MAX_DATABASE_BYTES},
+    database::{self, DatabasePaths, PackageManager, MAX_DATABASE_BYTES},
     require, Error, Result,
 };
 use serde::{Deserialize, Serialize};
@@ -46,6 +46,8 @@ pub(super) struct Journal {
     pub schema_version: u32,
     pub transaction_id: String,
     pub database_root: PathBuf,
+    #[serde(default, skip_serializing_if = "PackageManager::is_aw")]
+    pub package_manager: PackageManager,
     pub prefix: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resources: Option<ResourceRoot>,
@@ -117,6 +119,7 @@ impl Journal {
         require(
             self.schema_version == 1
                 && self.database_root == paths.root
+                && self.package_manager == paths.manager()
                 && self.directory() == directory,
             "unsupported or misplaced transaction journal",
         )?;

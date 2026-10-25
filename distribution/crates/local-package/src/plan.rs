@@ -6,7 +6,7 @@ mod snapshot;
 mod uninstall;
 
 use crate::{
-    database::{DatabasePaths, Scope},
+    database::{DatabasePaths, PackageManager, Scope},
     transaction::ChangeSet,
     Error, MutationFailure, MutationReport, MutationResult, Result,
 };
@@ -110,6 +110,8 @@ pub struct PackagePlan {
     pub(crate) changes: Option<ChangeSet>,
     #[serde(skip)]
     pub(crate) database_root: PathBuf,
+    #[serde(skip)]
+    pub(crate) database_manager: PackageManager,
 }
 
 impl PackagePlan {
@@ -174,7 +176,10 @@ pub fn execute(paths: &DatabasePaths, plan: &PackagePlan, cancel: &AtomicBool) -
             report: MutationReport::default(),
         });
     };
-    if paths.scope() != plan.scope || paths.root != plan.database_root {
+    if paths.scope() != plan.scope
+        || paths.root != plan.database_root
+        || paths.manager() != plan.database_manager
+    {
         return Err(MutationFailure {
             error: Error::Invalid("package plan scope changed".into()),
             report: MutationReport::default(),

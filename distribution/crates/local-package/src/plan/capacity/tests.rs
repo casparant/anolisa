@@ -88,6 +88,7 @@ fn fixture(root: &std::path::Path) -> (DatabasePaths, ChangeSet, PackagePlan) {
         problems: Vec::new(),
         changes: Some(changes.clone()),
         database_root: paths.root.clone(),
+        database_manager: paths.manager(),
     };
     (paths, changes, plan)
 }

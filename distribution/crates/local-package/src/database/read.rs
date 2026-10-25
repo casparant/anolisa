@@ -20,6 +20,7 @@ pub(super) fn inventory(paths: &DatabasePaths, prefix: Option<&Path>) -> Result<
         _locks: Vec::new(),
         _database_generation: None,
         _dependency_targets: BTreeSet::new(),
+        _manager: paths.manager(),
     };
     match paths::directory(&paths.root) {
         Err(error) if paths::missing(&error) => {}

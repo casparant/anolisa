@@ -11,7 +11,9 @@ pub(crate) mod resources;
 mod validation;
 
 pub use doctor::{DoctorIssue, DoctorIssueCode, DoctorReport};
-pub use paths::{DatabasePaths, SYSTEM_DATABASE_ROOT};
+pub use paths::{
+    DatabasePaths, PackageManager, ANOLISA_SYSTEM_DATABASE_ROOT, SYSTEM_DATABASE_ROOT,
+};
 pub use registration::RegistrationPointer;
 
 use crate::{description::ProviderDeclaration, Payload, Result};
@@ -194,6 +196,8 @@ pub struct Inventory {
     _database_generation: Option<u64>,
     #[serde(skip)]
     _dependency_targets: BTreeSet<(String, String, String)>,
+    #[serde(skip)]
+    _manager: PackageManager,
 }
 
 pub(crate) fn read_description(path: &Path, limit: u64) -> Result<Vec<u8>> {
