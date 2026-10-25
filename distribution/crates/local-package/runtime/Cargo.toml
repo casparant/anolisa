@@ -1,0 +1,13 @@
+[package]
+name = "local-package-runtime"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Cooperating package runtime leases independent of package databases and Agent frameworks"
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { workspace = true }

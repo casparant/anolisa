@@ -1,6 +1,6 @@
 //! Descriptor-relative mutation refuses symlinks and never overwrites an unclaimed file.
 
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 #[cfg(test)]
 mod faults;
 #[cfg(test)]

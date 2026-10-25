@@ -5,7 +5,7 @@ use super::{
     SourceEvidence, MAX_PACKAGES,
 };
 use crate::{description, require, Component, Result};
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 use std::{collections::BTreeSet, os::unix::fs::MetadataExt, path::Path};
 
 pub(super) fn installation(prefix: &Path) -> Result<Option<(Installation, PackageLock)>> {

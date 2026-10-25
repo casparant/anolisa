@@ -1,7 +1,8 @@
 //! Nonblocking shared flock over stable installation directories and lock inodes.
 
+use super::CommandReference;
 use super::{LeaseError, PackageLeases};
-use crate::{CommandSpec, PackageLock};
+use crate::PackageLock;
 use std::{
     collections::BTreeSet,
     ffi::{CString, OsStr},
@@ -33,11 +34,11 @@ fn absolute(path: &Path) -> Result<PathBuf> {
     Ok(path.to_owned())
 }
 
-fn resolved(command: &CommandSpec) -> Result<(PathBuf, PathBuf)> {
+fn resolved(command: &CommandReference<'_>) -> Result<(PathBuf, PathBuf)> {
     if !command.cwd.is_absolute() {
         return Err(LeaseError::Invalid("working directory must be absolute"));
     }
-    let program = &command.program;
+    let program = &*command.program;
     let selected = if program.is_absolute() {
         program.clone()
     } else if program.as_os_str().as_bytes().contains(&b'/') {
@@ -76,7 +77,7 @@ fn resolved(command: &CommandSpec) -> Result<(PathBuf, PathBuf)> {
 }
 
 pub(super) fn commands<'a>(
-    commands: impl IntoIterator<Item = &'a mut CommandSpec>,
+    commands: impl IntoIterator<Item = CommandReference<'a>>,
 ) -> Result<PackageLeases> {
     let mut references = Vec::new();
     for command in commands {
@@ -88,9 +89,9 @@ pub(super) fn commands<'a>(
         let (selected, resolved) = resolved(command)?;
         references.push(resolved);
         // Preserve symlink-sensitive invocation, including Python virtualenvs.
-        command.program = selected;
+        *command.program = selected;
         references.push(command.program.clone());
-        for argument in &command.args {
+        for argument in command.args {
             let bytes = argument.as_bytes();
             let value = if bytes.starts_with(b"/") {
                 Some(argument.as_os_str())

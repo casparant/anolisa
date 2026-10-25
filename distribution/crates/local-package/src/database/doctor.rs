@@ -2,7 +2,7 @@
 
 use super::{paths, read, Installation, Inventory, InventorySource, Manager, Registration};
 use crate::{Error, Payload, Result};
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{

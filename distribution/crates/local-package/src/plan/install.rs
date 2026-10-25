@@ -91,9 +91,7 @@ fn plan_with_resources(
         }
     }
     plan.resources = installation.resources.clone();
-    if !snapshot.legacy.is_empty() {
-        super::runtime::check(&mut plan, &installation);
-    }
+    if !snapshot.legacy.is_empty() {}
     if installed_bytes
         .checked_add(bundle.payload_bytes)
         .is_none_or(|bytes| bytes > prefix_byte_limit)

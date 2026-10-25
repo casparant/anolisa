@@ -8,7 +8,7 @@ use crate::{
     },
     require, Error, Payload, Result,
 };
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, os::unix::fs::MetadataExt, path::Path};
 

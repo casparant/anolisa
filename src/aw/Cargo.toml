@@ -14,6 +14,8 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
+local-package = { path = "../../distribution/crates/local-package" }
+local-package-runtime = { path = "../../distribution/crates/local-package/runtime" }
 clap = { version = "4.6.1", features = ["derive", "string"] }
 clap_complete = "4.6.0"
 aw-package = { path = "crates/aw-package" }

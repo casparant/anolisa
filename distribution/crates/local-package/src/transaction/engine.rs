@@ -9,7 +9,7 @@ use crate::{
     database::DatabasePaths, require, Error, MutationFailure, MutationNotice, MutationReport,
     MutationResult, NoticeCode, RecoveryState, Result,
 };
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 use std::{path::Path, sync::atomic::AtomicBool};
 
 pub(super) fn apply(

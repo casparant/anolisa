@@ -9,7 +9,7 @@ use crate::{
     database::{self, DatabasePaths, Scope},
     require, Error, Result,
 };
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 use std::{collections::BTreeMap, path::Path};
 
 pub(super) struct Prepared {

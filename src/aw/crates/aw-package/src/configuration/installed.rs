@@ -87,13 +87,14 @@ impl Selection {
         for package in self.packages.values() {
             for (name, metadata) in &package.files {
                 let path = crate::database::payload_path(prefix, self.resources.as_deref(), name);
-                crate::open_bundle::verify(&path, metadata, &mut budget).map_err(|error| {
-                    crate::Error::Invalid(format!(
-                        "installed file modified or missing: {} (package {}): {error}",
-                        path.display(),
-                        package.package_id
-                    ))
-                })?;
+                local_package::compatibility::verify_payload_file(&path, metadata, &mut budget)
+                    .map_err(|error| {
+                        crate::Error::Invalid(format!(
+                            "installed file modified or missing: {} (package {}): {error}",
+                            path.display(),
+                            package.package_id
+                        ))
+                    })?;
             }
         }
         Ok(())

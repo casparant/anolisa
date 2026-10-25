@@ -111,7 +111,6 @@ pub(super) fn plan_with_limits(
             }
         }
     }
-    super::runtime::check(&mut plan, &installation);
     let mut removes = BTreeMap::new();
     for package in &removed {
         plan.removed.push(snapshot::summary(package));

@@ -2,7 +2,7 @@
 
 use super::Scope;
 use crate::{require, Error, Result};
-use aw_exec::PackageLock;
+use local_package_runtime::PackageLock;
 use std::{
     ffi::CString,
     fs::{self, File, Metadata},

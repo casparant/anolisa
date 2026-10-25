@@ -8,11 +8,9 @@ use std::{
 
 #[cfg(target_os = "linux")]
 mod linux;
-#[cfg(target_os = "linux")]
-mod package_lock;
 mod packages;
 #[cfg(target_os = "linux")]
-pub use package_lock::PackageLock;
+pub use local_package_runtime::PackageLock;
 
 pub use packages::{LeaseError, PackageLeases};
 

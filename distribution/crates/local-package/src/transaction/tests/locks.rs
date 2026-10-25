@@ -125,7 +125,7 @@ fn runtime_leases_release_while_an_unrelated_child_is_before_exec() {
     let path = fixture.prefix.join(".aw-install.lock");
     fixture.record(&path, b"", 0o644);
     released_before_child_exec(&path, || {
-        aw_exec::PackageLeases::for_paths([fixture.prefix.clone()]).unwrap()
+        local_package_runtime::PackageLeases::for_paths([fixture.prefix.clone()]).unwrap()
     });
 }
 
@@ -135,14 +135,14 @@ fn dropping_a_fork_copy_does_not_unlock_the_parent_owner() {
     let path = fixture.root.join("lock");
     fixture.record(&path, b"", 0o644);
     let mut held = Box::new(fs::lock(&path, false).unwrap());
-    let address = (&mut *held as *mut aw_exec::PackageLock) as usize;
+    let address = (&mut *held as *mut local_package_runtime::PackageLock) as usize;
     let contender = disk::File::open(&path).unwrap();
     during_fork(
         move || {
             // SAFETY: only the fork child drops its private copy at this stable
             // address. PackageLock/File drop use only getpid/flock/close; the Box
             // allocation is left intact until exec. The parent retains its guard.
-            unsafe { std::ptr::drop_in_place(address as *mut aw_exec::PackageLock) };
+            unsafe { std::ptr::drop_in_place(address as *mut local_package_runtime::PackageLock) };
         },
         || assert!(contender.try_lock().is_err(), "parent still owns the lock"),
     );

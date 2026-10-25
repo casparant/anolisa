@@ -177,6 +177,7 @@ name = "aw-exec"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "local-package-runtime",
  "thiserror",
 ]
 
@@ -201,6 +202,7 @@ dependencies = [
  "aw-service",
  "flate2",
  "libc",
+ "local-package",
  "serde",
  "serde_json",
  "serde_yaml_ng",
@@ -994,6 +996,28 @@ name = "litemap"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
+
+[[package]]
+name = "local-package"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "local-package-runtime",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "local-package-runtime"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "thiserror",
+]
 
 [[package]]
 name = "lock_api"
