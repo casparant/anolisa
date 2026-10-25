@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assemble prebuilt AgentSight binaries into the ANOLISA raw-package layout.
+# Assemble prebuilt AgentSight binaries and service templates into a portable archive.
 set -euo pipefail
 
 die() {
@@ -50,13 +50,6 @@ require_file() {
     [ -f "$1" ] || die "missing packaging input: $1"
 }
 
-default_contract_path() {
-    case "$TARGET_OS" in
-        linux) printf '%s/.anolisa/component.toml\n' "$SOURCE_ROOT" ;;
-        macos) printf '%s/.anolisa/component.macos.toml\n' "$SOURCE_ROOT" ;;
-    esac
-}
-
 verify_native_binary_version() {
     local output reported
 
@@ -83,11 +76,14 @@ stage_payload() {
         die "DESTDIR must be empty: $stage"
     fi
 
-    install -d -m 0755 "$stage/.anolisa" "$stage/bin"
-    install -p -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    install -d -m 0755 "$stage/bin"
+    if [ -n "$CONTRACT" ]; then
+        install -d -m 0755 "$stage/.anolisa"
+        install -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    fi
     install -p -m 0755 "$BIN_DIR/agentsight" "$stage/bin/agentsight"
     if [ "$TARGET_OS" = "linux" ]; then
-        install -d -m 0755 "$stage/share/anolisa/agentsight"
+        install -d -m 0755 "$stage/share/agentsight/templates"
         python3 "$DEFAULT_ROOT/scripts/copy-enforcer.py" "$ENFORCER_BIN" \
             "$stage/bin/agentsight-enforcer"
         install -p -m 0755 "$SOURCE_ROOT/scripts/agentsight-start.sh" \
@@ -95,7 +91,7 @@ stage_payload() {
         install -p -m 0644 \
             "$SOURCE_ROOT/scripts/agentsight.service" \
             "$SOURCE_ROOT/scripts/agentsight-enforcer.service" \
-            "$stage/share/anolisa/agentsight/"
+            "$stage/share/agentsight/templates/"
     fi
     normalize_modes "$stage"
 
@@ -117,18 +113,17 @@ COMMAND="${1:-}"
 [ "$COMMAND" = "stage" ] || [ "$COMMAND" = "package" ] || \
     die "usage: $0 {stage|package}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+DEFAULT_ROOT="${COMPONENT_SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd -P)}"
 SOURCE_ROOT="${AGENTSIGHT_SOURCE_DIR:-$DEFAULT_ROOT}"
 BIN_DIR="${BIN_DIR:-$SOURCE_ROOT/target/release}"
 TARGET_OS="$(normalize_os "${TARGET_OS:-$(detect_os)}")"
 TARGET_ARCH="$(normalize_arch "${TARGET_ARCH:-$(detect_arch)}")"
-CONTRACT="${RAW_CONTRACT:-$(default_contract_path)}"
+CONTRACT="${RAW_CONTRACT:-}"
 BUILD_METADATA="${AGENTSIGHT_BUILD_METADATA:-$BIN_DIR/agentsight-build.toml}"
 
 validate_target
 for input in \
-    "$CONTRACT" \
     "$SOURCE_ROOT/Cargo.toml"; do
     require_file "$input"
 done
@@ -182,13 +177,12 @@ if [ "$COMMAND" = "stage" ]; then
     exit 0
 fi
 
+ARCHIVE_TOOL="$SCRIPT_DIR/archive.py"
 OUTPUT_DIR="${OUTPUT_DIR:-$SOURCE_ROOT/target/raw}"
 EPOCH="$(resolve_epoch)"
 case "$EPOCH" in
     '' | *[!0-9]*) die "SOURCE_DATE_EPOCH must be a non-negative integer" ;;
 esac
-tar --version 2>/dev/null | grep -q 'GNU tar' || \
-    die "GNU tar is required for reproducible raw packages"
 
 WORK="$(mktemp -d)"
 TEMP_ARTIFACT=""
@@ -205,16 +199,7 @@ stage_payload "$STAGE"
 install -d -m 0755 "$OUTPUT_DIR"
 ARTIFACT="agentsight-${VERSION}-${TARGET_OS}-${TARGET_ARCH}.tar.gz"
 TEMP_ARTIFACT="$OUTPUT_DIR/.${ARTIFACT}.tmp.$$"
-LC_ALL=C tar \
-    --sort=name \
-    --mtime="@$EPOCH" \
-    --owner=0 \
-    --group=0 \
-    --numeric-owner \
-    --hard-dereference \
-    --format=gnu \
-    -C "$STAGE" \
-    -cf - . | gzip -n -9 > "$TEMP_ARTIFACT"
+python3 "$ARCHIVE_TOOL" --source "$STAGE" --output "$TEMP_ARTIFACT" --epoch "$EPOCH"
 mv -f "$TEMP_ARTIFACT" "$OUTPUT_DIR/$ARTIFACT"
 TEMP_ARTIFACT=""
 printf '%s\n' "$OUTPUT_DIR/$ARTIFACT"

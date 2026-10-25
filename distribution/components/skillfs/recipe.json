@@ -1,0 +1,63 @@
+{
+  "build": {
+    "package_id": "skillfs",
+    "source": "src/skillfs",
+    "version_file": "src/skillfs/Cargo.toml",
+    "version_key": "workspace.package.version",
+    "builder": "skillfs",
+    "profile": "gnu2.28",
+    "dependencies": [],
+    "entrypoints": {
+      "skillfs": "bin/skillfs"
+    },
+    "required": [
+      "bin/skillfs",
+      "share/anolisa/runtime/skills/skillfs/SKILL.md"
+    ]
+  },
+  "schema_version": 1,
+  "id": "skillfs",
+  "source_dir": "src/skillfs",
+  "resource_namespace": "skillfs",
+  "packages": [
+    {
+      "id": "skillfs-core",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/skillfs/metadata/",
+          "to": "share/skillfs/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/skillfs/",
+          "to": "share/doc/skillfs/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "skillfs": "bin/skillfs"
+      }
+    },
+    {
+      "id": "skillfs-skills",
+      "kind": "skills",
+      "requires": [
+        "skillfs-core"
+      ],
+      "sources": [
+        {
+          "from": "share/skillfs/skills/",
+          "to": "share/skillfs/skills/"
+        }
+      ]
+    }
+  ],
+  "rpm_spec": "src/skillfs/skillfs.spec.in",
+  "raw_script": "src/skillfs/packaging/raw/package.sh"
+}

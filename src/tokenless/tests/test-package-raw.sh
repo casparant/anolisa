@@ -2,6 +2,11 @@
 # Exercise the component-owned raw packer without compiling native binaries.
 set -euo pipefail
 
+file_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
+}
+
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d /tmp/tokenless-raw-package-test.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
@@ -53,22 +58,22 @@ version = "$VERSION"
 framework = "claude-code"
 adapter_type = "plugin"
 plugin_id = "tokenless"
-source = "adapters/claude-code"
-dest = "{datadir}/adapters/{component}/claude-code/"
+source = "share/tokenless/adapters/claude-code"
+dest = "{sharedir}/tokenless/adapters/claude-code/"
 
 [[adapters]]
 framework = "opencode"
 adapter_type = "plugin"
 plugin_id = "tokenless"
-source = "adapters/opencode"
-dest = "{datadir}/adapters/{component}/opencode/"
+source = "share/tokenless/adapters/opencode"
+dest = "{sharedir}/tokenless/adapters/opencode/"
 
 [[adapters]]
 framework = "qwenwork"
 adapter_type = "plugin"
 plugin_id = "tokenless"
-source = "adapters/qwenwork"
-dest = "{datadir}/adapters/{component}/qwenwork/"
+source = "share/tokenless/adapters/qwenwork"
+dest = "{sharedir}/tokenless/adapters/qwenwork/"
 
 [adapters.bundle]
 entry = ".qoder-plugin/plugin.json"
@@ -286,7 +291,7 @@ cmp "$LINUX_X64/rtk" "$EXTRACTED/libexec/anolisa/tokenless/rtk"
 # release workflow creates verbatim) and the normalized version in the wheel
 # filename (the only form pip installs from). A prerelease is the shape where
 # the two differ; verify-release.py already refuses a package that mixes them.
-ARCHIVED_REQUIREMENTS="$EXTRACTED/adapters/qwenpaw/requirements.txt"
+ARCHIVED_REQUIREMENTS="$EXTRACTED/share/tokenless/adapters/qwenpaw/requirements.txt"
 cmp "$ADAPTERS/qwenpaw/requirements.txt" "$ARCHIVED_REQUIREMENTS"
 grep -Fq "/tokenless/v$VERSION/" "$ARCHIVED_REQUIREMENTS"
 grep -Fq "anolisa_tokenless-$WHEEL_VERSION-cp311-abi3-" "$ARCHIVED_REQUIREMENTS"
@@ -315,14 +320,14 @@ for archive in archives:
             assert not member.issym() and not member.islnk(), (archive, name)
             assert "__pycache__" not in PurePosixPath(name).parts, (archive, name)
             assert not name.endswith((".pyc", ".pyo", ".in")), (archive, name)
-        assert members["adapters/qwenwork/hooks/shared"].isdir()
+        assert members["share/tokenless/adapters/qwenwork/hooks/shared"].isdir()
         for relative in required:
-            assert members[f"adapters/qwenwork/{relative}"].isfile(), relative
+            assert members[f"share/tokenless/adapters/qwenwork/{relative}"].isfile(), relative
         for name, member in members.items():
-            if name.startswith("adapters/common/hooks/") and member.isfile():
-                shared = name.replace("adapters/common/hooks/", "adapters/qwenwork/hooks/shared/", 1)
+            if name.startswith("share/tokenless/adapters/common/hooks/") and member.isfile():
+                shared = name.replace("share/tokenless/adapters/common/hooks/", "share/tokenless/adapters/qwenwork/hooks/shared/", 1)
                 assert tar.extractfile(member).read() == tar.extractfile(members[shared]).read(), shared
-        for name in ("adapters/manifest.json", "adapters/qwenwork/.qoder-plugin/plugin.json"):
+        for name in ("share/tokenless/adapters/manifest.json", "share/tokenless/adapters/qwenwork/.qoder-plugin/plugin.json"):
             document = json.load(tar.extractfile(members[name]))
             assert document["version"] == version, (archive, name)
             if name.endswith("/manifest.json"):
@@ -330,25 +335,25 @@ for archive in archives:
 PY
 
 for relative in \
-    adapters/claude-code/hooks/run-hook.sh \
-    adapters/qwencode/hooks/run-hook.sh; do
+    share/tokenless/adapters/claude-code/hooks/run-hook.sh \
+    share/tokenless/adapters/qwencode/hooks/run-hook.sh; do
     test -f "$EXTRACTED/$relative"
     test ! -L "$EXTRACTED/$relative"
     cmp "$ADAPTERS/common/hooks/run-hook.sh" "$EXTRACTED/$relative"
 done
 for relative in \
-    adapters/opencode/plugin.js \
-    adapters/opencode/scripts/detect.sh \
-    adapters/opencode/scripts/install.sh \
-    adapters/opencode/scripts/uninstall.sh; do
+    share/tokenless/adapters/opencode/plugin.js \
+    share/tokenless/adapters/opencode/scripts/detect.sh \
+    share/tokenless/adapters/opencode/scripts/install.sh \
+    share/tokenless/adapters/opencode/scripts/uninstall.sh; do
     test -f "$EXTRACTED/$relative"
 done
-test -f "$EXTRACTED/adapters/dsh/package.json"
-test -f "$EXTRACTED/adapters/dsh/cordis.patch.yml"
-test -f "$EXTRACTED/adapters/dsh/dist/index.js"
-test -f "$EXTRACTED/extensions/tokenless/cosh-extension.json"
-test -f "$EXTRACTED/extensions/tokenless/hooks/run-hook.sh"
-test ! -e "$EXTRACTED/adapters/agentscope"
+test -f "$EXTRACTED/share/tokenless/adapters/dsh/package.json"
+test -f "$EXTRACTED/share/tokenless/adapters/dsh/cordis.patch.yml"
+test -f "$EXTRACTED/share/tokenless/adapters/dsh/dist/index.js"
+test -f "$EXTRACTED/share/tokenless/adapters/cosh/cosh-extension.json"
+test -f "$EXTRACTED/share/tokenless/adapters/cosh/hooks/run-hook.sh"
+test ! -e "$EXTRACTED/share/tokenless/adapters/agentscope"
 test -z "$(find "$EXTRACTED" -type l -print -quit)"
 test -z "$(find "$EXTRACTED" \( \
     -name '*.in' -o \
@@ -360,58 +365,44 @@ test -z "$(find "$EXTRACTED" \( \
     -name '*.pyc' -o \
     -name '*.pyo' \
 \) -print -quit)"
-test "$(stat -c '%a' "$EXTRACTED/bin/tokenless")" = 755
-test "$(stat -c '%a' "$EXTRACTED/adapters/manifest.json")" = 644
-test "$(stat -c '%a' "$EXTRACTED/adapters/common/hooks/run-hook.sh")" = 755
-test "$(stat -c '%a' "$EXTRACTED/adapters/opencode/plugin.js")" = 644
-test "$(stat -c '%a' "$EXTRACTED/adapters/opencode/scripts/install.sh")" = 755
+test "$(file_mode "$EXTRACTED/bin/tokenless")" = 755
+test "$(file_mode "$EXTRACTED/share/tokenless/adapters/manifest.json")" = 644
+test "$(file_mode "$EXTRACTED/share/tokenless/adapters/common/hooks/run-hook.sh")" = 755
+test "$(file_mode "$EXTRACTED/share/tokenless/adapters/opencode/plugin.js")" = 644
+test "$(file_mode "$EXTRACTED/share/tokenless/adapters/opencode/scripts/install.sh")" = 755
 
-grep -Fq 'source = "bin/tokenless"' "$ROOT/.anolisa/component.toml.in"
-grep -Fq 'source = "extensions/tokenless"' "$ROOT/.anolisa/component.toml.in"
-test "$(grep -o '@VERSION@' "$ROOT/.anolisa/component.toml.in" | wc -l)" = 1
-grep -Fq 'framework = "opencode"' "$ROOT/.anolisa/component.toml.in"
-OPENCODE_CONTRACT="$(sed -n '/^framework = "opencode"$/,/^\[\[adapters\]\]$/p' "$ROOT/.anolisa/component.toml.in")"
-grep -Fq 'when = "post_enable"' <<< "$OPENCODE_CONTRACT"
-grep -Fq 'when = "post_disable"' <<< "$OPENCODE_CONTRACT"
-grep -Fq 'source = "adapters/manifest.json"' "$ROOT/.anolisa/component.toml.in"
+# The ordinary component archive needs no repository-level metadata or tools.
+mkdir -p "$SOURCE/packaging"
+cp -R "$ROOT/packaging/raw" "$SOURCE/packaging/raw"
+rm -rf "$SOURCE/.anolisa"
+TOKENLESS_SOURCE_DIR= COMPONENT_SOURCE_DIR= RAW_CONTRACT= \
+    BIN_DIR="$LINUX_X64" TARGET_OS=linux TARGET_ARCH=x86_64 \
+    OUTPUT_DIR="$TMP/standalone" SOURCE_DATE_EPOCH=1700000000 \
+    "$SOURCE/packaging/raw/package.sh" package >/dev/null
+tar -tzf "$TMP/standalone/$LINUX_ARTIFACT" > "$TMP/standalone-members"
+! grep -Eq '^\./(\.anolisa|share/anolisa)(/|$)' "$TMP/standalone-members"
+grep -Fxq './bin/tokenless' "$TMP/standalone-members"
+grep -Fxq './libexec/anolisa/tokenless/rtk' "$TMP/standalone-members"
 
-# Every adapter target the manifest ships needs a matching [[adapters]] entry,
-# otherwise the raw install silently drops that adapter. verify-release.py
-# enforces this while packaging; assert it on the shipped sources as well.
-python3 - "$ROOT/adapters/tokenless/manifest.json.in" \
-    "$ROOT/.anolisa/component.toml.in" \
-    "$ROOT/../../distribution/anolisa/manifests/components/tokenless/component.toml" <<'DRIFT_PY'
-import json
-import re
+# Source RPM input is assembled locally and matches the spec's versioned root.
+cp "$ROOT/Makefile" "$ROOT/tokenless.spec.in" "$SOURCE/"
+mkdir "$TMP/source-tools"
+printf '#!/bin/sh\nexit 0\n' > "$TMP/source-tools/just"
+chmod 0755 "$TMP/source-tools/just"
+PATH="$TMP/source-tools:$PATH" make --no-print-directory -C "$SOURCE" \
+    -o clean MAKE=true NATIVE_NPM_TARGET=linux-x64 VERSION="$VERSION" dist >/dev/null
+python3 - "$TMP/tokenless-$VERSION.tar.gz" "$VERSION" <<'SOURCE_PY'
+import pathlib
 import sys
+import tarfile
 
-manifest_path, contract_path, seed_path = sys.argv[1:]
-with open(manifest_path, encoding="utf-8") as handle:
-    targets = set(json.load(handle).get("targets", {}))
-assert "qwenwork" in targets
-with open(contract_path, encoding="utf-8") as handle:
-    contract_text = handle.read()
-blocks = re.findall(r"(?ms)^\[\[adapters\]\]\s*$.*?(?=^\[|\Z)", contract_text)
-frameworks = {re.search(r'(?m)^framework\s*=\s*"([^"]+)"', b).group(1) for b in blocks}
-undeclared = sorted(targets - frameworks)
-unshipped = sorted(frameworks - targets)
-if undeclared or unshipped:
-    sys.exit(
-        "ERROR: adapter contract drift: undeclared={} unshipped={}".format(undeclared, unshipped)
-    )
-expected = {
-    "framework": "qwenwork", "adapter_type": "plugin", "plugin_id": "tokenless",
-    "source": "adapters/qwenwork", "dest": "{datadir}/adapters/{component}/qwenwork/",
-    "entry": ".qoder-plugin/plugin.json",
-}
-for path in (contract_path, seed_path):
-    with open(path, encoding="utf-8") as handle:
-        blocks = handle.read().split("[[adapters]]")[1:]
-    matches = [b for b in blocks if re.search(r'^framework\s*=\s*"qwenwork"$', b, re.M)]
-    assert len(matches) == 1, path
-    for key, value in expected.items():
-        match = re.search(r'^' + key + r'\s*=\s*"([^"]+)"$', matches[0], re.M)
-        assert match and match.group(1) == value, (path, key)
-DRIFT_PY
+with tarfile.open(sys.argv[1]) as archive:
+    members = {member.name: member for member in archive}
+    prefix = f"tokenless-{sys.argv[2]}/"
+    for name in ("tokenless.spec.in", "packaging/raw/package.sh", "packaging/raw/archive.py"):
+        assert members[prefix + name].isfile(), name
+    assert not any(".anolisa" in pathlib.PurePosixPath(name).parts for name in members)
+    assert not any(member.issym() for member in members.values())
+SOURCE_PY
 
 echo "tokenless component-owned raw package tests passed"

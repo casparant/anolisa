@@ -207,12 +207,11 @@ def _verify_requirements_references(relative: str, expected: str, text: str) -> 
         )
 
 
-def verify_versions(root: Path, contract: Path) -> str:
+def verify_versions(root: Path, contract: Path | None) -> str:
     """Return the source version after checking packaged release metadata."""
     cargo_path = root / "Cargo.toml"
     try:
         cargo_text = cargo_path.read_text(encoding="utf-8")
-        contract_text = contract.read_text(encoding="utf-8")
     except OSError as error:
         raise SystemExit(f"ERROR: cannot read release metadata: {error}") from error
 
@@ -221,18 +220,20 @@ def verify_versions(root: Path, contract: Path) -> str:
         raise SystemExit(f"ERROR: {cargo_path} has no workspace package version")
     expected = cargo_match.group(1)
 
-    component_match = COMPONENT.search(contract_text)
-    if component_match is None:
-        raise SystemExit(f"ERROR: {contract} has no [component] table")
-    component_text = component_match.group(0)
-    if match_field(component_text, "name", contract) != "tokenless":
-        raise SystemExit(f"ERROR: {contract} is not a tokenless contract")
-    contract_version = match_field(component_text, "version", contract)
-    if contract_version != expected:
-        raise SystemExit(
-            f"ERROR: {contract} version {contract_version} does not match "
-            f"Cargo.toml version {expected}"
-        )
+    if contract is not None:
+        contract_text = contract.read_text(encoding="utf-8")
+        component_match = COMPONENT.search(contract_text)
+        if component_match is None:
+            raise SystemExit(f"ERROR: {contract} has no [component] table")
+        component_text = component_match.group(0)
+        if match_field(component_text, "name", contract) != "tokenless":
+            raise SystemExit(f"ERROR: {contract} is not a tokenless contract")
+        contract_version = match_field(component_text, "version", contract)
+        if contract_version != expected:
+            raise SystemExit(
+                f"ERROR: {contract} version {contract_version} does not match "
+                f"Cargo.toml version {expected}"
+            )
 
     adapters = root / "adapters" / "tokenless"
     json_manifests = (
@@ -294,7 +295,7 @@ def parse_args() -> argparse.Namespace:
     """Parse source and contract paths."""
     parser = argparse.ArgumentParser()
     parser.add_argument("source_root", type=Path)
-    parser.add_argument("contract", type=Path)
+    parser.add_argument("contract", nargs="?", default="")
     return parser.parse_args()
 
 
@@ -302,9 +303,10 @@ def main() -> int:
     """Print the verified release version for the packaging shell script."""
     args = parse_args()
     root = args.source_root.resolve()
-    contract = args.contract.resolve()
+    contract = Path(args.contract).resolve() if args.contract else None
     version = verify_versions(root, contract)
-    verify_adapter_coverage(root, contract)
+    if contract is not None:
+        verify_adapter_coverage(root, contract)
     print(version)
     return 0
 

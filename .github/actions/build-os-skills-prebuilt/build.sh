@@ -68,13 +68,13 @@ git -C "$SOURCE_REPO" worktree add --detach "$WORKTREE" "$SOURCE_COMMIT"
 WORKTREE_READY=1
 git -C "$SOURCE_REPO" worktree lock --reason 'os-skills raw package build' "$WORKTREE"
 SOURCE="$WORKTREE/src/os-skills"
-ACTUAL_VERSION="$(python3 - "$SOURCE/component.toml" <<'PY'
+ACTUAL_VERSION="$(python3 - "$SOURCE/packaging/raw/layout.toml" <<'PY'
 import sys, tomllib
 with open(sys.argv[1], 'rb') as stream:
-    print(tomllib.load(stream)['component']['version'])
+    print(tomllib.load(stream)['package']['version'])
 PY
 )"
-[ "$VERSION" = "$ACTUAL_VERSION" ] || die "requested version differs from component.toml"
+[ "$VERSION" = "$ACTUAL_VERSION" ] || die "requested version differs from the component layout"
 if [ -e "$OUTPUT_DIR" ] && [ -n "$(find "$OUTPUT_DIR" -mindepth 1 -print -quit)" ]; then
     die "output directory must be empty"
 fi
@@ -83,7 +83,8 @@ printf 'Source commit: %s\n' "$SOURCE_COMMIT"
 for attempt in 1 2; do
     python3 "$SOURCE/packaging/raw/package.py" --source-dir "$SOURCE" \
         --output-dir "$OUTPUT_DIR" --version "$VERSION" \
-        --target-arch "$TARGET_ARCH" --epoch "$EPOCH"
+        --target-arch "$TARGET_ARCH" --epoch "$EPOCH" \
+        --contract "$WORKTREE/distribution/components/os-skills/component.toml.in"
     archive="$OUTPUT_DIR/os-skills-$VERSION-linux-$TARGET_ARCH.tar.gz"
     digest="$(sha256sum "$archive" | awk '{print $1}')"
     if [ "$attempt" = 1 ]; then first_digest="$digest"

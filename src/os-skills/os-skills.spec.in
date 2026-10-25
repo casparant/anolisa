@@ -1,8 +1,9 @@
+%bcond_with anolisa_integration
 %undefine __brp_mangle_shebangs
 
 Name:           os-skills
 Version:        @VERSION@
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        OS Skill for ANOLISA Agentic OS
 
 License:        Apache-2.0
@@ -10,7 +11,9 @@ URL:            https://github.com/alibaba/anolisa
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
+%if %{with anolisa_integration}
 Provides:       anolisa-component(os-skills)
+%endif
 
 %description
 A collection of agentic OS skills for Copilot Shell, providing capabilities
@@ -25,32 +28,51 @@ workflows, kernel development, security auditing, and system administration.
 
 %install
 rm -rf %{buildroot}
-install -d -m 0755 %{buildroot}%{_datadir}/anolisa/skills
+install -d -m 0755 %{buildroot}%{_datadir}/os-skills/skills
+%if %{with anolisa_integration}
 install -d -m 0755 %{buildroot}%{_datadir}/anolisa/components/os-skills
 install -p -m 0644 component.toml \
     %{buildroot}%{_datadir}/anolisa/components/os-skills/component.toml
+%endif
 
 # Find each skill directory (identified by containing SKILL.md) and copy it
 # flattened into the target skills directory.
 find . -name 'SKILL.md' | sort | while IFS= read -r skillmd; do
     skill_dir=$(dirname "$skillmd")
-    cp -rp "$skill_dir" %{buildroot}%{_datadir}/anolisa/skills/
+    cp -rp "$skill_dir" %{buildroot}%{_datadir}/os-skills/skills/
 done
 
 # Set permissions
-find %{buildroot}%{_datadir}/anolisa/skills -type d -exec chmod 0755 {} +
-find %{buildroot}%{_datadir}/anolisa/skills -type f -name '*.sh' -exec chmod 0755 {} +
-find %{buildroot}%{_datadir}/anolisa/skills -type f -name '*.py' -exec chmod 0755 {} +
-find %{buildroot}%{_datadir}/anolisa/skills -type f \
+find %{buildroot}%{_datadir}/os-skills/skills -type d -exec chmod 0755 {} +
+find %{buildroot}%{_datadir}/os-skills/skills -type f -name '*.sh' -exec chmod 0755 {} +
+find %{buildroot}%{_datadir}/os-skills/skills -type f -name '*.py' -exec chmod 0755 {} +
+find %{buildroot}%{_datadir}/os-skills/skills -type f \
     ! -name '*.sh' ! -name '*.py' -exec chmod 0644 {} +
+
+install -d %{buildroot}%{_datadir}/anolisa/skills
+for skill in %{buildroot}%{_datadir}/os-skills/skills/*; do
+    cp -rp "$skill" %{buildroot}%{_datadir}/anolisa/skills/
+done
+
+%if %{with anolisa_integration}
+for agent in openclaw hermes; do
+    install -D -m 0644 component.toml %{buildroot}%{_datadir}/os-skills/adapters/$agent/component.toml
+done
+%endif
 
 %files
 %license LICENSE
+%if %{with anolisa_integration}
 %dir %{_datadir}/anolisa
 %dir %{_datadir}/anolisa/components
 %dir %{_datadir}/anolisa/components/os-skills
 %{_datadir}/anolisa/components/os-skills/component.toml
-%dir %{_datadir}/anolisa/skills
+%endif
+%dir %{_datadir}/os-skills/skills
+%{_datadir}/os-skills/skills/*
+%if %{with anolisa_integration}
+%{_datadir}/os-skills/adapters/
+%endif
 %{_datadir}/anolisa/skills/*
 
 %changelog

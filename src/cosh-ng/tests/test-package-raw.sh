@@ -2,6 +2,18 @@
 # Exercise the component-owned raw packer without compiling native binaries.
 set -euo pipefail
 
+replace_version() {
+    python3 - "$1" "$2" "$3" <<'PY_REPLACE'
+from pathlib import Path
+import sys
+text = Path(sys.argv[1]).read_text()
+old = 'version = "' + sys.argv[2] + '"'
+assert old in text
+print(text.replace(old, 'version = "' + sys.argv[3] + '"', 1), end="")
+PY_REPLACE
+}
+
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d /tmp/cosh-ng-raw-package-test.XXXXXX)"
 trap 'rm -rf "$TMP"' EXIT
@@ -246,7 +258,7 @@ fi
 test_native_without_metadata() {
     local host_arch native_version native_source native_bins native_stage python_bin
 
-    [ "$(uname -s)" = Linux ] || return
+    [ "$(uname -s)" = Linux ] || return 0
     case "$(uname -m)" in
         x86_64 | amd64) host_arch=x86_64 ;;
         aarch64 | arm64) host_arch=aarch64 ;;
@@ -263,10 +275,8 @@ test_native_without_metadata() {
         "$native_source/packaging/systemd" \
         "$native_source/skills/manage-task-checkpoints" \
         "$native_bins"
-    sed "0,/version = \"$VERSION\"/s//version = \"$native_version\"/" \
-        "$ROOT/Cargo.toml" > "$native_source/Cargo.toml"
-    sed "0,/version = \"$VERSION\"/s//version = \"$native_version\"/" \
-        "$ROOT/.anolisa/component.toml" > "$native_source/.anolisa/component.toml"
+    replace_version "$ROOT/Cargo.toml" "$VERSION" "$native_version" > "$native_source/Cargo.toml"
+    replace_version "$ROOT/.anolisa/component.toml" "$VERSION" "$native_version" > "$native_source/.anolisa/component.toml"
     install -p -m 0644 "$ROOT/LICENSE" "$native_source/LICENSE"
     install -p -m 0644 "$ROOT/README.md" "$native_source/README.md"
     install -p -m 0644 "$ROOT/packaging/systemd/cosh-gateway@.service.in" \
@@ -322,8 +332,7 @@ if COSH_NG_SOURCE_DIR="$SOURCE" \
 fi
 
 MISMATCH="$TMP/mismatched-component.toml"
-sed "0,/version = \"$VERSION\"/s//version = \"9.8.7\"/" \
-    "$LINUX_CONTRACT" > "$MISMATCH"
+replace_version "$LINUX_CONTRACT" "$VERSION" "9.8.7" > "$MISMATCH"
 if COSH_NG_SOURCE_DIR="$SOURCE" \
     RAW_CONTRACT="$MISMATCH" \
     BIN_DIR="$LINUX_X64" \
@@ -336,8 +345,7 @@ if COSH_NG_SOURCE_DIR="$SOURCE" \
 fi
 
 MISMATCHED_BUILD="$TMP/mismatched-build.toml"
-sed "0,/version = \"$VERSION\"/s//version = \"9.8.7\"/" \
-    "$LINUX_ARM64/cosh-ng-build.toml" > "$MISMATCHED_BUILD"
+replace_version "$LINUX_ARM64/cosh-ng-build.toml" "$VERSION" "9.8.7" > "$MISMATCHED_BUILD"
 if COSH_NG_SOURCE_DIR="$SOURCE" \
     COSH_NG_BUILD_METADATA="$MISMATCHED_BUILD" \
     BIN_DIR="$LINUX_ARM64" \
@@ -358,31 +366,31 @@ cmp "$LINUX_X64/cosh-core" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-core"
 cmp "$LINUX_X64/cosh-gateway" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-gateway"
 cmp "$LINUX_X64/cosh-shell" "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-shell"
 cmp "$ROOT/packaging/systemd/cosh-gateway@.service.in" \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"
 cmp "$ROOT/skills/manage-task-checkpoints/SKILL.md" \
-    "$EXTRACTED/share/anolisa/skills/manage-task-checkpoints/SKILL.md"
-test ! -e "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway-acp@.service.in"
+    "$EXTRACTED/share/cosh-ng/skills/manage-task-checkpoints/SKILL.md"
+test ! -e "$EXTRACTED/share/cosh-ng/templates/cosh-gateway-acp@.service.in"
 grep -Fqx 'EnvironmentFile=/etc/cosh/gateway-%i.env' \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"
 if grep -Fq 'Environment=COSH_GATEWAY_WORKSPACE=' \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"; then
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"; then
     echo "ERROR: packaged Gateway unit must require an explicit workspace" >&2
     exit 1
 fi
 grep -Fqx 'Conflicts=cosh-gateway-acp@%i.service' \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"
 if grep -Fq 'ws-ckpt.service' \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"; then
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"; then
     echo "ERROR: packaged Gateway unit depends on ws-ckpt" >&2
     exit 1
 fi
 if grep -Fq -- '--checkpoint-socket=' \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"; then
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"; then
     echo "ERROR: packaged Gateway unit configures a checkpoint socket" >&2
     exit 1
 fi
 if grep -Fq -- '--security-audit=' \
-    "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"; then
+    "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"; then
     echo "ERROR: packaged Gateway unit configures checkpoint audit" >&2
     exit 1
 fi
@@ -402,8 +410,8 @@ file_mode() {
 test "$(file_mode "$EXTRACTED/bin/cosh")" = 755
 test "$(file_mode "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-gateway")" = 755
 test "$(file_mode "$EXTRACTED/libexec/anolisa/cosh-ng/cosh-shell")" = 755
-test "$(file_mode "$EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in")" = 644
-test "$(file_mode "$EXTRACTED/share/anolisa/skills/manage-task-checkpoints/SKILL.md")" = 644
+test "$(file_mode "$EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in")" = 644
+test "$(file_mode "$EXTRACTED/share/cosh-ng/skills/manage-task-checkpoints/SKILL.md")" = 644
 test "$(file_mode "$EXTRACTED/share/doc/cosh-ng/README.md")" = 644
 test ! -e "$EXTRACTED/share/anolisa/hooks"
 cmp "$STAGED/bin/cosh" "$EXTRACTED/bin/cosh"
@@ -423,7 +431,8 @@ test "$("$EXTRACTED/bin/cosh" agent doctor --profile codex)" = \
     $'4\nagent\ndoctor\n--profile\ncodex'
 READLINK_STUB="$TMP/readlink-without-f"
 install -d -m 0755 "$READLINK_STUB"
-install -p -m 0755 /bin/false "$READLINK_STUB/readlink"
+printf '#!/bin/sh\nexit 1\n' > "$READLINK_STUB/readlink"
+chmod 0755 "$READLINK_STUB/readlink"
 test "$(PATH="$READLINK_STUB:/usr/bin:/bin" \
     "$EXTRACTED/bin/cosh" --version)" = $'1\n--version'
 LINKED_BIN="$TMP/linked-bin"
@@ -464,8 +473,8 @@ with macos_path.open("rb") as stream:
 assert linux["component"]["platform"]["os"] == ["linux"]
 assert macos["component"]["platform"]["os"] == ["macos"]
 assert macos["component"]["platform"]["arch"] == ["aarch64", "x86_64"]
-assert linux["component"]["contract"]["min_anolisa_version"] == "0.2.17"
-assert macos["component"]["contract"]["min_anolisa_version"] == "0.2.17"
+assert linux["component"]["contract"]["min_anolisa_version"] == "0.3.19"
+assert macos["component"]["contract"]["min_anolisa_version"] == "0.3.19"
 assert linux["component"]["conflicts"] == ["cosh"]
 assert macos["component"]["conflicts"] == ["cosh"]
 linux_dependencies = {
@@ -482,14 +491,14 @@ for component in (linux_common, macos_common):
     component.pop("platform")
     component.pop("dependencies")
 gateway_service_file = {
-    "source": "share/anolisa/cosh-ng/cosh-gateway@.service.in",
+    "source": "share/cosh-ng/templates/cosh-gateway@.service.in",
     "target": "{unitdir}/cosh-gateway@.service",
     "mode": "0644",
     "render": "anolisa-paths-v1",
 }
 task_checkpoint_skill_file = {
-    "source": "share/anolisa/skills/manage-task-checkpoints/SKILL.md",
-    "target": "{datadir}/anolisa/skills/manage-task-checkpoints/SKILL.md",
+    "source": "share/cosh-ng/skills/manage-task-checkpoints/SKILL.md",
+    "target": "{sharedir}/cosh-ng/skills/manage-task-checkpoints/SKILL.md",
     "mode": "0644",
 }
 assert gateway_service_file in linux_common["layout"]["files"]
@@ -516,7 +525,7 @@ assert linux.get("backends") == macos.get("backends")
 PY
 
 LEGACY_CONFLICT_CONTRACT="$TMP/legacy-conflict-component.toml"
-sed 's/min_anolisa_version = "0.2.17"/min_anolisa_version = "0.2.16"/' \
+sed 's/min_anolisa_version = "0.3.19"/min_anolisa_version = "0.2.16"/' \
     "$LINUX_CONTRACT" > "$LEGACY_CONFLICT_CONTRACT"
 if python3 "$ROOT/packaging/raw/verify-release.py" \
     "$SOURCE" "$LEGACY_CONFLICT_CONTRACT" \
@@ -528,8 +537,8 @@ MACOS_EXTRACTED="$TMP/extracted-macos"
 install -d -m 0755 "$MACOS_EXTRACTED"
 tar -xzf "$TMP/out-macos-arm64/$MACOS_ARTIFACT" -C "$MACOS_EXTRACTED"
 cmp "$MACOS_CONTRACT" "$MACOS_EXTRACTED/.anolisa/component.toml"
-test ! -e "$MACOS_EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"
-test ! -e "$MACOS_EXTRACTED/share/anolisa/cosh-ng/cosh-gateway-acp@.service.in"
+test ! -e "$MACOS_EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"
+test ! -e "$MACOS_EXTRACTED/share/cosh-ng/templates/cosh-gateway-acp@.service.in"
 
 MACOS_X64_EXTRACTED="$TMP/extracted-macos-x64"
 mkdir "$MACOS_X64_EXTRACTED"
@@ -539,8 +548,8 @@ cmp "$MACOS_X64/cosh-cli" "$MACOS_X64_EXTRACTED/bin/cosh-cli"
 for binary in cosh-core cosh-gateway cosh-shell; do
     cmp "$MACOS_X64/$binary" "$MACOS_X64_EXTRACTED/libexec/anolisa/cosh-ng/$binary"
 done
-test ! -e "$MACOS_X64_EXTRACTED/share/anolisa/cosh-ng/cosh-gateway@.service.in"
-test ! -e "$MACOS_EXTRACTED/share/anolisa/skills/manage-task-checkpoints"
+test ! -e "$MACOS_X64_EXTRACTED/share/cosh-ng/templates/cosh-gateway@.service.in"
+test ! -e "$MACOS_EXTRACTED/share/cosh-ng/skills/manage-task-checkpoints"
 test -z "$(grep -F 'libssl' "$ROOT/.anolisa/component.toml" || true)"
 grep -Fq 'source = "bin/cosh"' "$ROOT/.anolisa/component.toml"
 grep -Fq 'source = "libexec/anolisa/cosh-ng/cosh-shell"' \

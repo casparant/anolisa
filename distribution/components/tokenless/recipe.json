@@ -1,0 +1,106 @@
+{
+  "build": {
+    "package_id": "tokenless",
+    "source": "src/tokenless",
+    "version_file": "src/tokenless/Cargo.toml",
+    "version_key": "workspace.package.version",
+    "builder": "tokenless",
+    "profile": "gnu2.17",
+    "dependencies": [],
+    "entrypoints": {
+      "tokenless": "bin/tokenless",
+      "rtk": "bin/rtk"
+    },
+    "required": [
+      "bin/tokenless",
+      "bin/rtk",
+      "libexec/anolisa/tokenless/rtk",
+      "share/anolisa/adapters/tokenless/manifest.json",
+      "share/anolisa/adapters/tokenless/openclaw/dist/index.js",
+      "share/anolisa/extensions/tokenless/cosh-extension.json",
+      "libexec/anolisa/tokenless/tokenless",
+      "share/anolisa/adapters/tokenless/common/tool-ready-spec.json",
+      "share/anolisa/adapters/tokenless/common/tokenless-env-fix.sh"
+    ]
+  },
+  "schema_version": 1,
+  "id": "tokenless",
+  "source_dir": "src/tokenless",
+  "resource_namespace": "tokenless",
+  "packages": [
+    {
+      "id": "tokenless-core",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "libexec/anolisa/tokenless/",
+          "to": "libexec/anolisa/tokenless/"
+        },
+        {
+          "from": "share/tokenless/metadata/",
+          "to": "share/tokenless/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/tokenless/",
+          "to": "share/doc/tokenless/",
+          "optional": true
+        },
+        {
+          "from": "share/tokenless/adapters/common/tool-ready-spec.json",
+          "to": "share/tokenless/adapters/common/tool-ready-spec.json"
+        },
+        {
+          "from": "share/tokenless/adapters/common/tokenless-env-fix.sh",
+          "to": "share/tokenless/adapters/common/tokenless-env-fix.sh"
+        }
+      ],
+      "entrypoints": {
+        "tokenless": "bin/tokenless",
+        "rtk": "bin/rtk"
+      }
+    },
+    {
+      "id": "tokenless-plugins",
+      "kind": "plugin",
+      "agents": [
+        "claude-code",
+        "codex",
+        "cosh",
+        "dsh",
+        "hermes",
+        "openclaw",
+        "opencode",
+        "qoder",
+        "qwencode",
+        "qwenpaw",
+        "qwenwork"
+      ],
+      "requires": [
+        "tokenless-core"
+      ],
+      "sources": [
+        {
+          "from": "share/tokenless/adapters/",
+          "to": "share/tokenless/adapters/",
+          "exclude": [
+            "share/tokenless/adapters/common/tool-ready-spec.json",
+            "share/tokenless/adapters/common/tokenless-env-fix.sh"
+          ]
+        }
+      ],
+      "agent_platforms": {
+        "qwenwork": [
+          "macos"
+        ]
+      }
+    }
+  ],
+  "rpm_spec": "src/tokenless/tokenless.spec.in",
+  "raw_script": "src/tokenless/packaging/raw/package.sh"
+}

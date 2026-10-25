@@ -31,6 +31,8 @@ discover_dir() {
 find_plugin_src() {
     local component="${1:?usage: find_plugin_src COMPONENT}"
     local candidates=()
+    [ -n "${ANOLISA_TARGET_DIR:-}" ] && candidates+=("${ANOLISA_TARGET_DIR}/share/ws-ckpt/adapters/${component}")
+    candidates+=("/usr/share/ws-ckpt/adapters/${component}" "/usr/local/share/ws-ckpt/adapters/${component}" "${XDG_DATA_HOME:-${HOME}/.local/share}/ws-ckpt/adapters/${component}")
     [ -n "${ANOLISA_TARGET_DIR:-}" ] && candidates+=("${ANOLISA_TARGET_DIR}/share/anolisa/runtime/ws-ckpt/plugins/${component}")
     [ -n "${ANOLISA_PROJECT_ROOT:-}" ] && candidates+=("${ANOLISA_PROJECT_ROOT}/src/ws-ckpt/src/plugins/${component}")
     candidates+=("/usr/share/anolisa/runtime/ws-ckpt/plugins/${component}")
@@ -53,6 +55,8 @@ find_plugin_src() {
 #   Searches skill source paths in priority order.
 find_skill_src() {
     local candidates=()
+    [ -n "${ANOLISA_TARGET_DIR:-}" ] && candidates+=("${ANOLISA_TARGET_DIR}/share/ws-ckpt/skills/ws-ckpt")
+    candidates+=("/usr/share/ws-ckpt/skills/ws-ckpt" "/usr/local/share/ws-ckpt/skills/ws-ckpt" "${XDG_DATA_HOME:-${HOME}/.local/share}/ws-ckpt/skills/ws-ckpt")
     [ -n "${ANOLISA_TARGET_DIR:-}" ] && candidates+=("${ANOLISA_TARGET_DIR}/share/anolisa/runtime/skills/ws-ckpt")
     [ -n "${ANOLISA_PROJECT_ROOT:-}" ] && candidates+=("${ANOLISA_PROJECT_ROOT}/src/ws-ckpt/src/skills/ws-ckpt")
     candidates+=("/usr/share/anolisa/runtime/skills/ws-ckpt")

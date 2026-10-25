@@ -10,13 +10,13 @@ PREFIX ?= $(HOME)/.local
 COSH_EXTENSION_DIR ?= $(HOME)/.copilot-shell/extensions/tokenless
 else
 PREFIX ?= /usr
-COSH_EXTENSION_DIR ?= $(PREFIX)/share/anolisa/extensions/tokenless
+COSH_EXTENSION_DIR ?= $(PREFIX)/share/tokenless/adapters/cosh
 endif
 
 BINDIR ?= $(PREFIX)/bin
 LIBEXECDIR ?= $(PREFIX)/libexec/anolisa/tokenless
 DATADIR ?= $(PREFIX)/share
-SHARE_DIR ?= $(DATADIR)/anolisa/adapters/tokenless
+SHARE_DIR ?= $(DATADIR)/tokenless/adapters
 BIN_DIR ?= $(BINDIR)
 LIB_DIR ?= $(LIBEXECDIR)
 ADAPTER_SRC_DIR := adapters/tokenless
@@ -94,7 +94,7 @@ build-tokenless:
 	cargo build --release --locked --manifest-path third_party/rtk/Cargo.toml
 
 # Generate adapter config files from .in templates (VERSION from Cargo.toml).
-stamp-adapter-templates: $(ADAPTER_TEMPLATES) $(COMPONENT_CONTRACT)
+stamp-adapter-templates: $(ADAPTER_TEMPLATES)
 
 stamp-python-packages: $(AGENTSCOPE_PACKAGE_DIR)/pyproject.toml
 
@@ -106,7 +106,9 @@ $(ADAPTER_SRC_DIR)/manifest.json: $(ADAPTER_SRC_DIR)/manifest.json.in Cargo.toml
 
 $(COMPONENT_CONTRACT): $(COMPONENT_CONTRACT).in Cargo.toml
 	@echo "==> Generating component contract (version=$(VERSION))..."
-	sed 's/@VERSION@/$(VERSION)/g' $< > $@
+	@mkdir -p $(@D)
+	sed 's/@VERSION@/$(VERSION)/g' $< > $@.tmp
+	mv -f $@.tmp $@
 
 
 $(ADAPTER_SRC_DIR)/openclaw/package.json: $(ADAPTER_SRC_DIR)/openclaw/package.json.in Cargo.toml
@@ -600,23 +602,21 @@ clean:
 	rm -f  $(AGENTSCOPE_PACKAGE_DIR)/pyproject.toml
 
 # Create source tarball (excludes build artifacts).
-# `clean` must finish before the generated contract and adapter manifests
-# are re-stamped: as sibling prerequisites, `make -jN dist` may run the two
-# concurrently and the cleanup can delete the stamped files, shipping an
-# archive without the embedded install contract. Invoke the stamping
-# sequentially from the recipe instead.
+# Stamp adapter manifests after cleanup so parallel builds cannot remove them
+# while the source archive is being assembled.
 dist: clean
 	$(MAKE) stamp-adapter-templates
 	@echo "==> Creating tarball (with pre-patched rtk source)..."
 	just setup-rtk
-	tar czf ../tokenless-$(VERSION).tar.gz \
-	    --exclude='target' \
-	    --exclude='.git' \
-	    -C .. tokenless
+	@set -e; stage=$$(mktemp -d); trap 'rm -rf "$$stage"' EXIT; \
+	    mkdir "$$stage/tokenless-$(VERSION)"; \
+	    tar -chf - --exclude='target' --exclude='.git' --exclude='.anolisa' --exclude='component.toml' -C . . | tar -xf - -C "$$stage/tokenless-$(VERSION)"; \
+	    tar czf ../tokenless-$(VERSION).tar.gz -C "$$stage" tokenless-$(VERSION)
 	@tar_list=$$(tar -tzf ../tokenless-$(VERSION).tar.gz); \
 	for required in \
-	    tokenless/.anolisa/component.toml \
-	    tokenless/adapters/tokenless/manifest.json; do \
+	    tokenless-$(VERSION)/adapters/tokenless/manifest.json \
+	    tokenless-$(VERSION)/tokenless.spec.in \
+	    tokenless-$(VERSION)/packaging/raw/package.sh; do \
 		echo "$$tar_list" | grep -q "^$$required$$" || { \
 			echo "ERROR: tokenless-$(VERSION).tar.gz is missing $$required" >&2; \
 			exit 1; \

@@ -1,0 +1,284 @@
+manifest_version = 2
+anolisa_min_version = "0.3.19"
+
+[component]
+name = "os-skills"
+version = "0.6.3"
+layer = "runtime"
+domain = "tools"
+description = "Curated OS Skill library for agent runtimes"
+
+[install]
+modes = ["user", "system"]
+
+[backends.rpm]
+package = "os-skills"
+
+[[adapters]]
+framework = "openclaw"
+name = "os-skills-openclaw"
+display_name = "OS Skills for OpenClaw"
+adapter_type = "skill_bundle"
+source = ".anolisa"
+trust = "first-party"
+dest = "{sharedir}/os-skills/adapters/openclaw"
+detect = { binary = "openclaw" }
+
+[[adapters.openclaw.skills]]
+name = "qwenpaw-usage"
+source = "{sharedir}/os-skills/skills/qwenpaw-usage/"
+
+[[adapters.openclaw.skills]]
+name = "install-claude-code"
+source = "{sharedir}/os-skills/skills/install-claude-code/"
+
+[[adapters.openclaw.skills]]
+name = "install-qwenpaw"
+source = "{sharedir}/os-skills/skills/install-qwenpaw/"
+
+[[adapters.openclaw.skills]]
+name = "install-hermes"
+source = "{sharedir}/os-skills/skills/install-hermes/"
+
+[[adapters.openclaw.skills]]
+name = "install-openclaw"
+source = "{sharedir}/os-skills/skills/install-openclaw/"
+
+[[adapters.openclaw.skills]]
+name = "install-tokenless"
+source = "{sharedir}/os-skills/skills/install-tokenless/"
+
+[[adapters.openclaw.skills]]
+name = "setup-mcp"
+source = "{sharedir}/os-skills/skills/setup-mcp/"
+
+[[adapters.openclaw.skills]]
+name = "aliyun-ecs"
+source = "{sharedir}/os-skills/skills/aliyun-ecs/"
+
+[[adapters.openclaw.skills]]
+name = "github"
+source = "{sharedir}/os-skills/skills/github/"
+
+[[adapters.openclaw.skills]]
+name = "kernel-dev"
+source = "{sharedir}/os-skills/skills/kernel-dev/"
+
+[[adapters.openclaw.skills]]
+name = "sysom-agentsight"
+source = "{sharedir}/os-skills/skills/sysom-agentsight/"
+
+[[adapters.openclaw.skills]]
+name = "sysom-diagnosis"
+source = "{sharedir}/os-skills/skills/sysom-diagnosis/"
+
+[[adapters.openclaw.skills]]
+name = "anolisa-guide"
+source = "{sharedir}/os-skills/skills/anolisa-guide/"
+
+[[adapters.openclaw.skills]]
+name = "anolisa-register"
+source = "{sharedir}/os-skills/skills/anolisa-register/"
+
+[[adapters.openclaw.skills]]
+name = "clawhub-skill-mng"
+source = "{sharedir}/os-skills/skills/clawhub-skill-mng/"
+
+[[adapters.openclaw.skills]]
+name = "cosh-guide"
+source = "{sharedir}/os-skills/skills/cosh-guide/"
+
+[[adapters.openclaw.skills]]
+name = "humanizer"
+source = "{sharedir}/os-skills/skills/humanizer/"
+
+[[adapters.openclaw.skills]]
+name = "image-gen"
+source = "{sharedir}/os-skills/skills/image-gen/"
+
+[[adapters.openclaw.skills]]
+name = "pdf-reader"
+source = "{sharedir}/os-skills/skills/pdf-reader/"
+
+[[adapters.openclaw.skills]]
+name = "xlsx"
+source = "{sharedir}/os-skills/skills/xlsx/"
+
+[[adapters.openclaw.skills]]
+name = "alinux-cve-query"
+source = "{sharedir}/os-skills/skills/alinux-cve-query/"
+
+[[adapters.openclaw.skills]]
+name = "alinux-admin"
+source = "{sharedir}/os-skills/skills/alinux-admin/"
+
+[[adapters.openclaw.skills]]
+name = "backup-restore"
+source = "{sharedir}/os-skills/skills/backup-restore/"
+
+[[adapters.openclaw.skills]]
+name = "ktuner"
+source = "{sharedir}/os-skills/skills/ktuner/"
+
+[[adapters.openclaw.skills]]
+name = "regex-mastery"
+source = "{sharedir}/os-skills/skills/regex-mastery/"
+
+[[adapters.openclaw.skills]]
+name = "shell-scripting"
+source = "{sharedir}/os-skills/skills/shell-scripting/"
+
+[[adapters.openclaw.skills]]
+name = "storage-resize"
+source = "{sharedir}/os-skills/skills/storage-resize/"
+
+[[adapters.openclaw.skills]]
+name = "upgrade-alinux-kernel"
+source = "{sharedir}/os-skills/skills/upgrade-alinux-kernel/"
+
+[[adapters]]
+framework = "hermes"
+name = "os-skills-hermes"
+display_name = "OS Skills for Hermes"
+adapter_type = "skill_bundle"
+source = ".anolisa"
+trust = "first-party"
+dest = "{sharedir}/os-skills/adapters/hermes"
+detect = { binary = "hermes" }
+
+[[adapters.hermes.skills]]
+name = "qwenpaw-usage"
+source = "{sharedir}/os-skills/skills/qwenpaw-usage/"
+
+[[adapters.hermes.skills]]
+name = "install-claude-code"
+source = "{sharedir}/os-skills/skills/install-claude-code/"
+
+[[adapters.hermes.skills]]
+name = "install-qwenpaw"
+source = "{sharedir}/os-skills/skills/install-qwenpaw/"
+
+[[adapters.hermes.skills]]
+name = "install-hermes"
+source = "{sharedir}/os-skills/skills/install-hermes/"
+
+[[adapters.hermes.skills]]
+name = "install-openclaw"
+source = "{sharedir}/os-skills/skills/install-openclaw/"
+
+[[adapters.hermes.skills]]
+name = "install-tokenless"
+source = "{sharedir}/os-skills/skills/install-tokenless/"
+
+[[adapters.hermes.skills]]
+name = "setup-mcp"
+source = "{sharedir}/os-skills/skills/setup-mcp/"
+
+[[adapters.hermes.skills]]
+name = "aliyun-ecs"
+source = "{sharedir}/os-skills/skills/aliyun-ecs/"
+
+[[adapters.hermes.skills]]
+name = "github"
+source = "{sharedir}/os-skills/skills/github/"
+
+[[adapters.hermes.skills]]
+name = "kernel-dev"
+source = "{sharedir}/os-skills/skills/kernel-dev/"
+
+[[adapters.hermes.skills]]
+name = "sysom-agentsight"
+source = "{sharedir}/os-skills/skills/sysom-agentsight/"
+
+[[adapters.hermes.skills]]
+name = "sysom-diagnosis"
+source = "{sharedir}/os-skills/skills/sysom-diagnosis/"
+
+[[adapters.hermes.skills]]
+name = "anolisa-guide"
+source = "{sharedir}/os-skills/skills/anolisa-guide/"
+
+[[adapters.hermes.skills]]
+name = "anolisa-register"
+source = "{sharedir}/os-skills/skills/anolisa-register/"
+
+[[adapters.hermes.skills]]
+name = "clawhub-skill-mng"
+source = "{sharedir}/os-skills/skills/clawhub-skill-mng/"
+
+[[adapters.hermes.skills]]
+name = "cosh-guide"
+source = "{sharedir}/os-skills/skills/cosh-guide/"
+
+[[adapters.hermes.skills]]
+name = "humanizer"
+source = "{sharedir}/os-skills/skills/humanizer/"
+
+[[adapters.hermes.skills]]
+name = "image-gen"
+source = "{sharedir}/os-skills/skills/image-gen/"
+
+[[adapters.hermes.skills]]
+name = "pdf-reader"
+source = "{sharedir}/os-skills/skills/pdf-reader/"
+
+[[adapters.hermes.skills]]
+name = "xlsx"
+source = "{sharedir}/os-skills/skills/xlsx/"
+
+[[adapters.hermes.skills]]
+name = "alinux-cve-query"
+source = "{sharedir}/os-skills/skills/alinux-cve-query/"
+
+[[adapters.hermes.skills]]
+name = "alinux-admin"
+source = "{sharedir}/os-skills/skills/alinux-admin/"
+
+[[adapters.hermes.skills]]
+name = "backup-restore"
+source = "{sharedir}/os-skills/skills/backup-restore/"
+
+[[adapters.hermes.skills]]
+name = "ktuner"
+source = "{sharedir}/os-skills/skills/ktuner/"
+
+[[adapters.hermes.skills]]
+name = "regex-mastery"
+source = "{sharedir}/os-skills/skills/regex-mastery/"
+
+[[adapters.hermes.skills]]
+name = "shell-scripting"
+source = "{sharedir}/os-skills/skills/shell-scripting/"
+
+[[adapters.hermes.skills]]
+name = "storage-resize"
+source = "{sharedir}/os-skills/skills/storage-resize/"
+
+[[adapters.hermes.skills]]
+name = "upgrade-alinux-kernel"
+source = "{sharedir}/os-skills/skills/upgrade-alinux-kernel/"
+
+[component.platform]
+os = ["linux"]
+arch = ["x86_64", "aarch64"]
+
+[component.contract]
+schema_version = "1.0"
+min_anolisa_version = "0.3.19"
+
+[component.layout]
+modes = ["user", "system"]
+
+[[component.layout.files]]
+source = ".anolisa/component.toml"
+target = "{datadir}/components/os-skills/component.toml"
+mode = "0644"
+
+[[component.layout.files]]
+source = "share/os-skills/skills/"
+target = "{sharedir}/os-skills/skills"
+
+[[component.layout.files]]
+source = "share/os-skills/adapters/manifest.json"
+target = "{sharedir}/os-skills/adapters/manifest.json"
+mode = "0644"

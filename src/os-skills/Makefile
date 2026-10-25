@@ -1,4 +1,5 @@
 # Makefile for os-skills
+VERSION ?= $(shell sed -n 's/^version = "\(.*\)"$$/\1/p' packaging/raw/layout.toml)
 
 INSTALL_PROFILE ?= system
 DESTDIR ?=
@@ -14,6 +15,7 @@ ifeq ($(INSTALL_PROFILE),system)
 SKILLS_DIR ?= $(DATADIR)/anolisa/skills
 endif
 COMPONENT_DIR ?= $(DATADIR)/anolisa/components/os-skills
+COMPONENT_CONTRACT ?=
 
 .PHONY: build install uninstall clean help
 
@@ -28,8 +30,10 @@ install:
 		install -d -m 0755 "$(DESTDIR)$(SKILLS_DIR)/$$skill_name"; \
 		cp -pr "$$skill_dir/." "$(DESTDIR)$(SKILLS_DIR)/$$skill_name/"; \
 	done
-	install -d -m 0755 "$(DESTDIR)$(COMPONENT_DIR)"
-	install -p -m 0644 component.toml "$(DESTDIR)$(COMPONENT_DIR)/component.toml"
+	@if [ -n "$(COMPONENT_CONTRACT)" ]; then \
+		install -d -m 0755 "$(DESTDIR)$(COMPONENT_DIR)"; \
+		install -p -m 0644 "$(COMPONENT_CONTRACT)" "$(DESTDIR)$(COMPONENT_DIR)/component.toml"; \
+	fi
 
 uninstall:
 	@echo "==> Removing os-skills from $(DESTDIR)$(SKILLS_DIR)"

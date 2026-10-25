@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import struct
 import subprocess
@@ -22,14 +23,17 @@ class RawPackaging(unittest.TestCase):
         self.work = Path(self.tmp.name)
         self.source = self.work / "source"
         self.source.mkdir()
-        for name in (".anolisa", "config", "adapters"):
+        for name in ("config", "adapters", "packaging"):
             shutil.copytree(
                 ROOT / name,
                 self.source / name,
                 ignore=shutil.ignore_patterns("node_modules", "dist", "coverage"),
             )
         shutil.copy2(ROOT / "Cargo.toml", self.source / "Cargo.toml")
-        self.version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
+        self.packager = self.source / "packaging/raw/package.py"
+        self.version = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"][
+            "version"
+        ]
         self.bin = self.work / "private-bin"
         self.bin.mkdir()
         self.plugin = self.work / "private-plugin"
@@ -45,7 +49,9 @@ class RawPackaging(unittest.TestCase):
         struct.pack_into("<H", blob, 18, {"x86_64": 62, "aarch64": 183}[arch])
         (self.bin / "agent-memory").write_bytes(blob)
         (self.bin / "agent-memory").chmod(0o755)
-        plugin_hash = hashlib.sha256((self.plugin / "index.js").read_bytes()).hexdigest()
+        plugin_hash = hashlib.sha256(
+            (self.plugin / "index.js").read_bytes()
+        ).hexdigest()
         self.metadata.write_text(
             f'version = "{self.version}"\ntarget_os = "linux"\ntarget_arch = "{arch}"\n'
             f'[binaries]\nagent-memory = "{hashlib.sha256(blob).hexdigest()}"\n'
@@ -53,12 +59,12 @@ class RawPackaging(unittest.TestCase):
         )
 
     def run_package(
-        self, arch: str = "x86_64", success: bool = True
+        self, arch: str = "x86_64", success: bool = True, contract: Path | None = None
     ) -> subprocess.CompletedProcess:
         result = subprocess.run(
             [
                 "python3",
-                str(PACKAGER),
+                str(self.packager),
                 "--source-dir",
                 str(self.source),
                 "--bin-dir",
@@ -73,6 +79,7 @@ class RawPackaging(unittest.TestCase):
                 str(self.work / "out"),
                 "--epoch",
                 "1700000000",
+                *(["--contract", str(contract)] if contract is not None else []),
             ],
             capture_output=True,
             text=True,
@@ -89,30 +96,77 @@ class RawPackaging(unittest.TestCase):
             self.assertEqual(first, archive.read_bytes())
             with tarfile.open(archive) as tar:
                 files = {
-                    m.name.removeprefix("./"): tar.extractfile(m).read() for m in tar if m.isfile()
+                    m.name.removeprefix("./"): tar.extractfile(m).read()
+                    for m in tar
+                    if m.isfile()
                 }
-                self.assertEqual(len(files), 12)
+                self.assertEqual(len(files), 11)
                 self.assertEqual(
                     files["bin/agent-memory"], (self.bin / "agent-memory").read_bytes()
                 )
                 self.assertEqual(
-                    files["adapters/agent-memory/openclaw/dist/index.js"],
+                    files["share/agent-memory/adapters/openclaw/dist/index.js"],
                     (self.plugin / "index.js").read_bytes(),
                 )
-                contract = tomllib.loads(files[".anolisa/component.toml"].decode())
-                self.assertEqual(contract["component"]["version"], self.version)
-                self.assertIn(arch, contract["component"]["platform"]["arch"])
-                self.assertFalse(contract["component"]["services"][0]["start"])
+                self.assertNotIn(".anolisa/component.toml", files)
+                self.assertIn("share/agent-memory/mcp-servers/agent-memory.json", files)
+                self.assertFalse(any(name.startswith("share/anolisa/") for name in files))
                 for item in tar.getmembers():
-                    self.assertEqual((item.uid, item.gid, item.mtime), (0, 0, 1700000000))
-                    executable = item.name.endswith(".sh") or item.name == "./bin/agent-memory"
-                    self.assertEqual(item.mode, 0o755 if item.isdir() or executable else 0o644)
+                    self.assertEqual(
+                        (item.uid, item.gid, item.mtime), (0, 0, 1700000000)
+                    )
+                    executable = (
+                        item.name.endswith(".sh") or item.name == "./bin/agent-memory"
+                    )
+                    self.assertEqual(
+                        item.mode, 0o755 if item.isdir() or executable else 0o644
+                    )
+
+    def test_optional_contract_is_validated_and_embedded(self) -> None:
+        contract = self.work / "integration.toml"
+        contract.write_text(
+            f'[component]\nname = "agent-memory"\nversion = "{self.version}"\n'
+            '[component.platform]\nos = ["linux"]\narch = ["x86_64"]\n'
+        )
+        archive = Path(self.run_package(contract=contract).stdout.strip())
+        with tarfile.open(archive) as tar:
+            self.assertEqual(tar.extractfile("./.anolisa/component.toml").read(), contract.read_bytes())
+        contract.write_text(contract.read_text().replace(self.version, "99.0.0"))
+        self.assertIn("contract identity", self.run_package(success=False, contract=contract).stderr)
+
+    def test_source_archive_is_self_contained_without_distribution_checkout(self) -> None:
+        for name in ("src", "examples", "tests"):
+            shutil.copytree(ROOT / name, self.source / name)
+        for name in ("Cargo.lock", "Makefile", "agent-memory.spec.in", "CHANGELOG.md", "LICENSE", ".gitignore"):
+            shutil.copyfile(ROOT / name, self.source / name)
+        plugin = self.source / "adapters/agent-memory/openclaw/dist"
+        plugin.mkdir()
+        shutil.copyfile(self.plugin / "index.js", plugin / "index.js")
+        tools = self.work / "tools"
+        tools.mkdir()
+        cargo = tools / "cargo"
+        cargo.write_text('#!/bin/sh\n[ "$1" = vendor ] || exit 42\nmkdir -p "$2"\n')
+        cargo.chmod(0o755)
+        subprocess.run(
+            ["make", "-C", str(self.source), "-o", "clean", "-o", "build-openclaw-plugin", "dist"],
+            env={**os.environ, "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"},
+            check=True, capture_output=True, text=True,
+        )
+        with tarfile.open(self.source / "dist" / f"agent-memory-{self.version}.tar.gz") as tar:
+            members = {member.name: member for member in tar}
+            prefix = f"agent-memory-{self.version}/"
+            for name in ("agent-memory.spec.in", "packaging/raw/package.py", "packaging/raw/verify-release.py"):
+                self.assertTrue(members[prefix + name].isfile(), name)
+            self.assertFalse(any(".anolisa" in Path(name).parts for name in members))
+            self.assertFalse(any(member.issym() for member in members.values()))
 
     def test_missing_and_stale_metadata(self) -> None:
         self.metadata.unlink()
         self.run_package(success=False)
         self.prepare("x86_64")
-        self.metadata.write_text(self.metadata.read_text().replace(self.version, "0.0.0"))
+        self.metadata.write_text(
+            self.metadata.read_text().replace(self.version, "0.0.0")
+        )
         self.assertIn("version", self.run_package(success=False).stderr)
 
     def test_tampered_binary_and_plugin(self) -> None:

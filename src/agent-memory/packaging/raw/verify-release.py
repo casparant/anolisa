@@ -24,15 +24,6 @@ def verify(root: Path) -> str:
     lock = json.loads((root / "adapters/agent-memory/openclaw/package-lock.json").read_text())
     if lock["version"] != version or lock["packages"][""]["version"] != version:
         raise ValueError("plugin lockfile version does not match Cargo")
-    for name in ("component.toml.in", "component.raw.toml.in"):
-        contract = tomllib.loads(
-            (root / ".anolisa" / name).read_text().replace("@VERSION@", version)
-        )
-        if (
-            contract["component"]["name"] != "agent-memory"
-            or contract["component"]["version"] != version
-        ):
-            raise ValueError(f"{name}: component identity does not match Cargo")
     return version
 
 

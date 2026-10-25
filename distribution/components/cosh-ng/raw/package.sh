@@ -108,14 +108,14 @@ stage_payload() {
         "$stage/bin/"
     if [ "$TARGET_OS" = "linux" ]; then
         install -d -m 0755 \
-            "$stage/share/anolisa/cosh-ng" \
-            "$stage/share/anolisa/skills/manage-task-checkpoints"
+            "$stage/share/cosh-ng/templates" \
+            "$stage/share/cosh-ng/skills/manage-task-checkpoints"
         install -p -m 0644 \
             "$SOURCE_ROOT/packaging/systemd/cosh-gateway@.service.in" \
-            "$stage/share/anolisa/cosh-ng/"
+            "$stage/share/cosh-ng/templates/"
         install -p -m 0644 \
             "$SOURCE_ROOT/skills/manage-task-checkpoints/SKILL.md" \
-            "$stage/share/anolisa/skills/manage-task-checkpoints/SKILL.md"
+            "$stage/share/cosh-ng/skills/manage-task-checkpoints/SKILL.md"
     fi
     install -p -m 0644 "$SOURCE_ROOT/LICENSE" "$stage/share/doc/cosh-ng/LICENSE"
     install -p -m 0644 "$SOURCE_ROOT/README.md" "$stage/share/doc/cosh-ng/README.md"
@@ -139,8 +139,8 @@ COMMAND="${1:-}"
 [ "$COMMAND" = "stage" ] || [ "$COMMAND" = "package" ] || \
     die "usage: $0 {stage|package}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+DEFAULT_ROOT="${COMPONENT_SOURCE_DIR:-$(if [ -d "$SCRIPT_DIR/../../../../src/cosh-ng" ]; then cd "$SCRIPT_DIR/../../../../src/cosh-ng"; else cd "$SCRIPT_DIR/../.."; fi; pwd -P)}"
 SOURCE_ROOT="${COSH_NG_SOURCE_DIR:-$DEFAULT_ROOT}"
 BIN_DIR="${BIN_DIR:-$SOURCE_ROOT/target/release}"
 TARGET_OS="$(normalize_os "${TARGET_OS:-$(detect_os)}")"
@@ -201,13 +201,15 @@ if [ "$COMMAND" = "stage" ]; then
     exit 0
 fi
 
+ARCHIVE_TOOL="$SCRIPT_DIR/../../../packaging/archive.py"
+if [ ! -f "$ARCHIVE_TOOL" ]; then
+    ARCHIVE_TOOL="${SOURCE_ROOT}/distribution/packaging/archive.py"
+fi
 OUTPUT_DIR="${OUTPUT_DIR:-$SOURCE_ROOT/target/raw}"
 EPOCH="$(resolve_epoch)"
 case "$EPOCH" in
     '' | *[!0-9]*) die "SOURCE_DATE_EPOCH must be a non-negative integer" ;;
 esac
-tar --version 2>/dev/null | grep -q 'GNU tar' || \
-    die "GNU tar is required for reproducible raw packages"
 
 WORK="$(mktemp -d)"
 TEMP_ARTIFACT=""
@@ -224,16 +226,7 @@ stage_payload "$STAGE"
 install -d -m 0755 "$OUTPUT_DIR"
 ARTIFACT="cosh-ng-${VERSION}-${TARGET_OS}-${TARGET_ARCH}.tar.gz"
 TEMP_ARTIFACT="$OUTPUT_DIR/.${ARTIFACT}.tmp.$$"
-LC_ALL=C tar \
-    --sort=name \
-    --mtime="@$EPOCH" \
-    --owner=0 \
-    --group=0 \
-    --numeric-owner \
-    --hard-dereference \
-    --format=gnu \
-    -C "$STAGE" \
-    -cf - . | gzip -n -9 > "$TEMP_ARTIFACT"
+python3 "$ARCHIVE_TOOL" --source "$STAGE" --output "$TEMP_ARTIFACT" --epoch "$EPOCH"
 mv -f "$TEMP_ARTIFACT" "$OUTPUT_DIR/$ARTIFACT"
 TEMP_ARTIFACT=""
 printf '%s\n' "$OUTPUT_DIR/$ARTIFACT"

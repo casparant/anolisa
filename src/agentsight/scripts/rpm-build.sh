@@ -18,7 +18,7 @@
 #   2. Build the AgentSight binary and attested ActPlane enforcer
 #   3. Create a tarball: agentsight-<version>.tar.gz
 #   4. The tarball contains: agentsight, agentsight-enforcer, agentsight-start,
-#      both systemd units, component.toml, agentsight.json, README.md,
+#      both systemd units, agentsight.json, README.md,
 #      README_zh.md, LICENSE
 # =============================================================================
 
@@ -55,7 +55,7 @@ The script will:
     2. Build the AgentSight binary and attested ActPlane enforcer
     3. Create a tarball: agentsight-<version>.tar.gz
     4. The tarball contains: agentsight, agentsight-enforcer, agentsight-start,
-       both systemd units, component.toml, agentsight.json, README.md,
+       both systemd units, agentsight.json, README.md,
        README_zh.md, LICENSE
 
 Example:

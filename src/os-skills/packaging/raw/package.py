@@ -20,46 +20,42 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def package(source: Path, output: Path, version: str, arch: str, epoch: int) -> Path:
-    source_contract = (source / "component.toml").read_text()
-    manifest = tomllib.loads(source_contract)
-    if manifest["component"]["name"] != "os-skills" or manifest["component"]["version"] != version:
-        raise ValueError("component.toml identity does not match the requested release")
-    old_adapter = 'trust = "first-party"\ndest = "{datadir}/skills"'
-    new_adapter = (
-        'trust = "first-party"\nsource = ".anolisa"\n'
-        'dest = "{datadir}/adapters/os-skills/{framework}"'
-    )
-    if (
-        source_contract.count('anolisa_min_version = "0.1.15"') != 1
-        or source_contract.count('modes = ["system"]') != 1
-        or source_contract.count(old_adapter) != 2
-    ):
-        raise ValueError("component.toml raw contract source has changed")
-    contract = source_contract.replace(
-        'anolisa_min_version = "0.1.15"', 'anolisa_min_version = "0.1.16"'
-    )
-    contract = contract.replace('modes = ["system"]', 'modes = ["user", "system"]')
-    for framework in ("openclaw", "hermes"):
-        contract = contract.replace(old_adapter, new_adapter.replace("{framework}", framework), 1)
-    contract += "\n" + (Path(__file__).with_name("layout.toml")).read_text()
-    raw_manifest = tomllib.loads(contract)
-    platform = raw_manifest["component"]["platform"]
-    if "linux" not in platform["os"] or arch not in platform["arch"]:
-        raise ValueError(f"raw contract does not support linux/{arch}")
-    for adapter in raw_manifest["adapters"]:
-        if adapter["source"] != ".anolisa" or adapter["dest"] != (
-            f"{{datadir}}/adapters/os-skills/{adapter['framework']}"
-        ):
-            raise ValueError("raw adapter path does not match the package layout")
-    result = subprocess.run(
-        ["git", "ls-files", "-z", "--", "."], cwd=source, check=True, capture_output=True
-    )
-    tracked = sorted(Path(os.fsdecode(name)) for name in result.stdout.split(b"\0") if name)
-    skills = {path.parent.name: path.parent for path in tracked if path.name == "SKILL.md"}
+def package(source: Path, output: Path, version: str, arch: str, epoch: int, contract_path: Path | None = None) -> Path:
+    layout = tomllib.loads((source / "packaging/raw/layout.toml").read_text())
+    if layout["package"]["name"] != "os-skills" or layout["package"]["version"] != version:
+        raise ValueError("package layout identity does not match the requested release")
+    skills_dir = layout["payload"]["skills_dir"]
+    if skills_dir != "share/os-skills/skills":
+        raise ValueError("unsupported skill payload directory")
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "-z", "--", "."], cwd=source,
+            check=True, capture_output=True,
+        )
+        tracked = sorted(Path(os.fsdecode(name)) for name in result.stdout.split(b"\0") if name)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        # Unpacked component source archives have no Git index.
+        tracked = sorted(path.relative_to(source) for path in source.rglob("*")
+                         if path.is_file() and not {".git", "__pycache__", "node_modules", "target"}.intersection(path.relative_to(source).parts))
+    skills = {
+        path.parent.name: path.parent for path in tracked if path.name == "SKILL.md"
+    }
     if len(skills) != sum(path.name == "SKILL.md" for path in tracked) or not skills:
         raise ValueError("skill names are missing or duplicated")
-    files = {".anolisa/component.toml": contract.encode()}
+    files = {}
+    if contract_path is not None:
+        contract = contract_path.read_text().replace("@VERSION@", version)
+        raw_manifest = tomllib.loads(contract)
+        component = raw_manifest["component"]
+        if component["name"] != "os-skills" or component["version"] != version:
+            raise ValueError("integration contract identity does not match package version")
+        platform = component["platform"]
+        if "linux" not in platform["os"] or arch not in platform["arch"]:
+            raise ValueError(f"raw contract does not support linux/{arch}")
+        inventory = {"component": "os-skills", "version": version, "targets": {
+            item["framework"]: {"compatibleVersions": "*"} for item in raw_manifest["adapters"]}}
+        files[".anolisa/component.toml"] = contract.encode()
+        files["share/os-skills/adapters/manifest.json"] = (json.dumps(inventory, sort_keys=True) + "\n").encode()
     for name, directory in skills.items():
         for path in tracked:
             if not path.is_relative_to(directory):
@@ -67,7 +63,7 @@ def package(source: Path, output: Path, version: str, arch: str, epoch: int) -> 
             source_file = source / path
             if not source_file.is_file() or source_file.is_symlink():
                 raise ValueError(f"skill payload must be a regular file: {path}")
-            destination = f"share/anolisa/skills/{name}/{path.relative_to(directory)}"
+            destination = f"{skills_dir}/{name}/{path.relative_to(directory)}"
             if destination in files:
                 raise ValueError(f"duplicate package path: {destination}")
             files[destination] = source_file.read_bytes()
@@ -82,7 +78,9 @@ def package(source: Path, output: Path, version: str, arch: str, epoch: int) -> 
         with staged.open("wb") as raw, gzip.GzipFile(
             filename="", mode="wb", fileobj=raw, mtime=0
         ) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as tar:
+            with tarfile.open(
+                fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT
+            ) as tar:
                 for name in sorted(directories | files.keys()):
                     entry = tarfile.TarInfo("." if name == "." else f"./{name}")
                     entry.mtime = epoch
@@ -113,8 +111,12 @@ def package(source: Path, output: Path, version: str, arch: str, epoch: int) -> 
         "serialNumber": f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, archive_hash)}",
         "version": 1,
         "metadata": {
-            "timestamp": datetime.datetime.fromtimestamp(epoch, datetime.UTC).isoformat(),
-            "tools": [{"vendor": "ANOLISA", "name": "os-skills-packager", "version": "1"}],
+            "timestamp": datetime.datetime.fromtimestamp(
+                epoch, datetime.UTC
+            ).isoformat(),
+            "tools": [
+                {"vendor": "ANOLISA", "name": "os-skills-packager", "version": "1"}
+            ],
             "component": {
                 "type": "application",
                 "name": "os-skills",
@@ -129,7 +131,9 @@ def package(source: Path, output: Path, version: str, arch: str, epoch: int) -> 
             },
         },
         "components": components,
-        "dependencies": [{"ref": identity, "dependsOn": [c["bom-ref"] for c in components]}]
+        "dependencies": [
+            {"ref": identity, "dependsOn": [c["bom-ref"] for c in components]}
+        ]
         + [{"ref": c["bom-ref"], "dependsOn": []} for c in components],
     }
     sbom_path = output / f"{archive_name}.cdx.json"
@@ -142,15 +146,29 @@ def package(source: Path, output: Path, version: str, arch: str, epoch: int) -> 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-dir", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument(
+        "--source-dir",
+        type=Path,
+        default=Path(__file__).resolve().parents[2],
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--version", required=True)
+    parser.add_argument("--contract", type=Path, help="Optional distribution integration metadata")
     parser.add_argument("--target-arch", choices=("x86_64", "aarch64"), required=True)
     parser.add_argument("--epoch", type=int, required=True)
     args = parser.parse_args()
     if args.epoch < 0:
         parser.error("epoch must be non-negative")
     try:
-        print(package(args.source_dir, args.output_dir, args.version, args.target_arch, args.epoch))
+        print(
+            package(
+                args.source_dir,
+                args.output_dir,
+                args.version,
+                args.target_arch,
+                args.epoch,
+                args.contract,
+            )
+        )
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"ERROR: {error}\n")

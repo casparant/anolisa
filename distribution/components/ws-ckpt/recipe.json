@@ -1,0 +1,93 @@
+{
+  "build": {
+    "package_id": "ws-ckpt",
+    "source": "src/ws-ckpt",
+    "version_file": "src/ws-ckpt/.anolisa/component.toml",
+    "version_key": "component.version",
+    "builder": "ws-ckpt",
+    "profile": "gnu2.28",
+    "dependencies": [],
+    "entrypoints": {
+      "ws-ckpt": "bin/ws-ckpt"
+    },
+    "required": [
+      "bin/ws-ckpt",
+      "share/anolisa/ws-ckpt/ws-ckpt.service",
+      "share/anolisa/adapters/ws-ckpt/manifest.json",
+      "share/anolisa/runtime/ws-ckpt/plugins/openclaw/openclaw.plugin.json",
+      "share/anolisa/runtime/ws-ckpt/plugins/openclaw/dist/src/index.js",
+      "share/anolisa/runtime/ws-ckpt/plugins/hermes/plugin.yaml",
+      "share/anolisa/runtime/skills/ws-ckpt/SKILL.md"
+    ]
+  },
+  "schema_version": 1,
+  "id": "ws-ckpt",
+  "source_dir": "src/ws-ckpt",
+  "resource_namespace": "ws-ckpt",
+  "packages": [
+    {
+      "id": "ws-ckpt-core",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/ws-ckpt/templates/",
+          "to": "share/ws-ckpt/templates/"
+        },
+        {
+          "from": "share/ws-ckpt/hooks/",
+          "to": "share/ws-ckpt/hooks/"
+        },
+        {
+          "from": "share/ws-ckpt/metadata/",
+          "to": "share/ws-ckpt/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/ws-ckpt/",
+          "to": "share/doc/ws-ckpt/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "ws-ckpt": "bin/ws-ckpt"
+      }
+    },
+    {
+      "id": "ws-ckpt-plugins",
+      "kind": "plugin",
+      "agents": [
+        "hermes",
+        "openclaw"
+      ],
+      "requires": [
+        "ws-ckpt-core"
+      ],
+      "sources": [
+        {
+          "from": "share/ws-ckpt/adapters/",
+          "to": "share/ws-ckpt/adapters/"
+        }
+      ]
+    },
+    {
+      "id": "ws-ckpt-skills",
+      "kind": "skills",
+      "requires": [
+        "ws-ckpt-core"
+      ],
+      "sources": [
+        {
+          "from": "share/ws-ckpt/skills/",
+          "to": "share/ws-ckpt/skills/"
+        }
+      ]
+    }
+  ],
+  "rpm_spec": "src/ws-ckpt/ws-ckpt.spec.in",
+  "raw_script": "src/ws-ckpt/packaging/raw/package.sh"
+}

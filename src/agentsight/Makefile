@@ -125,7 +125,7 @@ bench: ## Run stable userspace performance benchmarks
 
 .PHONY: test-rpm-packaging
 test-rpm-packaging: ## Validate the portable RPM payload contract
-	cd $(CURDIR) && bash scripts/test-rpm-packaging.sh
+	cd $(CURDIR) && python3 -m unittest discover -s tests -p test_rpm_payload.py -v
 
 .PHONY: lint
 lint: ## Check formatting + architecture + clippy

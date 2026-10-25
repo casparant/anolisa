@@ -5,10 +5,10 @@ import argparse
 from pathlib import Path
 
 RAW_HOOK_MANIFESTS = (
-    Path("adapters/sec-core/codex/hooks/hooks.json"),
-    Path("adapters/sec-core/qoder/hooks/hooks.json"),
-    Path("adapters/sec-core/qwencode/qwen-extension.json"),
-    Path("adapters/sec-core/cosh/cosh-extension.json"),
+    Path("share/agent-sec-core/adapters/codex/hooks/hooks.json"),
+    Path("share/agent-sec-core/adapters/qoder/hooks/hooks.json"),
+    Path("share/agent-sec-core/adapters/qwencode/qwen-extension.json"),
+    Path("share/agent-sec-core/adapters/cosh/cosh-extension.json"),
 )
 
 

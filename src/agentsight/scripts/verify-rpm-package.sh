@@ -33,7 +33,6 @@ required_paths=(
     "/usr/lib/systemd/system/agentsight.service"
     "/usr/lib/systemd/system/agentsight-enforcer.service"
     "/etc/agentsight/config.json"
-    "/usr/share/anolisa/components/agentsight/component.toml"
 )
 
 missing=0

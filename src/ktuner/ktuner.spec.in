@@ -1,3 +1,4 @@
+%bcond_with anolisa_integration
 %define anolis_release 1
 %global         rustflags -C opt-level=3 -C codegen-units=1
 %global         debug_package %{nil}
@@ -19,7 +20,9 @@ BuildRequires:  cargo
 # Required by Rust crates with C build scripts (libc bindings).
 BuildRequires:  gcc
 
+%if %{with anolisa_integration}
 Provides:       anolisa-component(ktuner)
+%endif
 
 %description
 ktuner is a deterministic kernel-tuning engine that diagnoses the running
@@ -39,16 +42,20 @@ rm -rf %{buildroot}
 install -d -m 0755 %{buildroot}%{_localbindir}
 install -p -m 0755 target/release/ktuner %{buildroot}%{_localbindir}/ktuner
 
+%if %{with anolisa_integration}
 install -d -m 0755 %{buildroot}%{_datadir}/anolisa/components/ktuner
 install -p -m 0644 component.toml \
     %{buildroot}%{_datadir}/anolisa/components/ktuner/component.toml
+%endif
 
 %files
 %license LICENSE
 %doc README.md CHANGELOG.md
 %attr(0755,root,root) %{_localbindir}/ktuner
+%if %{with anolisa_integration}
 %dir %{_datadir}/anolisa/components/ktuner
 %{_datadir}/anolisa/components/ktuner/component.toml
+%endif
 
 %changelog
 * Sat Jul 25 2026 Jiangtian Feng <jiangtianf97@163.com> - 0.1.0-1

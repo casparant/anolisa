@@ -1,0 +1,48 @@
+{
+  "build": {
+    "package_id": "ktuner",
+    "source": "src/ktuner",
+    "version_file": "src/ktuner/Cargo.toml",
+    "version_key": "package.version",
+    "builder": "cargo",
+    "binary": "ktuner",
+    "dependencies": [],
+    "entrypoints": {
+      "ktuner": "bin/ktuner"
+    },
+    "required": [
+      "bin/ktuner"
+    ]
+  },
+  "schema_version": 1,
+  "id": "ktuner",
+  "source_dir": "src/ktuner",
+  "resource_namespace": "ktuner",
+  "packages": [
+    {
+      "id": "ktuner",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/ktuner/metadata/",
+          "to": "share/ktuner/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/ktuner/",
+          "to": "share/doc/ktuner/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "ktuner": "bin/ktuner"
+      }
+    }
+  ],
+  "rpm_spec": "src/ktuner/ktuner.spec.in"
+}

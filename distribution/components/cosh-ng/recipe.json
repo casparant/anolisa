@@ -1,0 +1,80 @@
+{
+  "build": {
+    "package_id": "cosh-ng",
+    "source": "src/cosh-ng",
+    "version_file": "src/cosh-ng/Cargo.toml",
+    "version_key": "workspace.package.version",
+    "builder": "cosh-ng",
+    "profile": "gnu2.28",
+    "dependencies": [],
+    "entrypoints": {
+      "cosh": "bin/cosh",
+      "cosh-cli": "bin/cosh-cli",
+      "cosh-switch": "bin/cosh-switch"
+    },
+    "required": [
+      "bin/cosh",
+      "bin/cosh-cli",
+      "bin/cosh-switch",
+      "libexec/anolisa/cosh-ng/cosh-core",
+      "libexec/anolisa/cosh-ng/cosh-gateway",
+      "libexec/anolisa/cosh-ng/cosh-shell",
+      "share/anolisa/cosh-ng/cosh-gateway@.service.in"
+    ]
+  },
+  "schema_version": 1,
+  "id": "cosh-ng",
+  "source_dir": "src/cosh-ng",
+  "resource_namespace": "cosh-ng",
+  "packages": [
+    {
+      "id": "cosh-ng-core",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "libexec/anolisa/cosh-ng/",
+          "to": "libexec/anolisa/cosh-ng/"
+        },
+        {
+          "from": "share/cosh-ng/templates/",
+          "to": "share/cosh-ng/templates/"
+        },
+        {
+          "from": "share/cosh-ng/metadata/",
+          "to": "share/cosh-ng/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/cosh-ng/",
+          "to": "share/doc/cosh-ng/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "cosh": "bin/cosh",
+        "cosh-cli": "bin/cosh-cli",
+        "cosh-switch": "bin/cosh-switch"
+      }
+    },
+    {
+      "id": "cosh-ng-skills",
+      "kind": "skills",
+      "requires": [
+        "cosh-ng-core"
+      ],
+      "sources": [
+        {
+          "from": "share/cosh-ng/skills/",
+          "to": "share/cosh-ng/skills/"
+        }
+      ]
+    }
+  ],
+  "rpm_spec": "distribution/components/cosh-ng/rpm/cosh-ng.spec.in",
+  "raw_script": "distribution/components/cosh-ng/raw/package.sh"
+}

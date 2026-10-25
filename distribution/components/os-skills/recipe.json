@@ -1,0 +1,48 @@
+{
+  "build": {
+    "package_id": "os-skills",
+    "source": "src/os-skills",
+    "version_file": "src/os-skills/packaging/raw/layout.toml",
+    "version_key": "package.version",
+    "builder": "os-skills",
+    "profile": "static-linux",
+    "dependencies": [],
+    "entrypoints": {},
+    "required": [
+      "share/anolisa/skills/anolisa-guide/SKILL.md"
+    ]
+  },
+  "schema_version": 1,
+  "id": "os-skills",
+  "source_dir": "src/os-skills",
+  "resource_namespace": "os-skills",
+  "packages": [
+    {
+      "id": "os-skills",
+      "kind": "skills",
+      "requires": [],
+      "sources": [
+        {
+          "from": "share/os-skills/skills/",
+          "to": "share/os-skills/skills/"
+        },
+        {
+          "from": "share/os-skills/metadata/",
+          "to": "share/os-skills/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/os-skills/",
+          "to": "share/doc/os-skills/",
+          "optional": true
+        },
+        {
+          "from": "share/os-skills/adapters/",
+          "to": "share/os-skills/adapters/"
+        }
+      ]
+    }
+  ],
+  "rpm_spec": "src/os-skills/os-skills.spec.in",
+  "raw_script": "src/os-skills/packaging/raw/package.py"
+}

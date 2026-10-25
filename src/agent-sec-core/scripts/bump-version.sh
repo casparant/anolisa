@@ -14,7 +14,7 @@
 #   3. openclaw-plugin/openclaw.plugin.json  ("version" field)
 #   4. cosh-extension/cosh-extension.json    ("version" field)
 #   5. hermes-plugin/src/plugin.yaml          (version field)
-#   6. .anolisa/component.toml                (component.version)
+#   6. Optional local .anolisa/component.toml (component.version; symlinks skipped)
 #   7. codex-plugin/hooks-plugin/.codex-plugin/plugin.json ("version" field)
 #   8. qoder-plugin/.qoder-plugin/plugin.json ("version" field)
 #   9. qwen-code-extension/qwen-extension.json ("version" field)
@@ -145,10 +145,13 @@ bump_file "$PROJECT_ROOT/hermes-plugin/src/plugin.yaml" \
     "version: $NEW_VERSION" \
     "hermes-plugin/src/plugin.yaml"
 
-bump_file "$PROJECT_ROOT/.anolisa/component.toml" \
-    "^version = \"$OLD_VERSION\"" \
-    "version = \"$NEW_VERSION\"" \
-    ".anolisa/component.toml"
+# Distribution metadata is optional and may link into a separately maintained project.
+if [[ -f "$PROJECT_ROOT/.anolisa/component.toml" && ! -L "$PROJECT_ROOT/.anolisa/component.toml" ]]; then
+    bump_file "$PROJECT_ROOT/.anolisa/component.toml" \
+        "^version = \"$OLD_VERSION\"" \
+        "version = \"$NEW_VERSION\"" \
+        ".anolisa/component.toml"
+fi
 
 bump_file "$PROJECT_ROOT/codex-plugin/hooks-plugin/.codex-plugin/plugin.json" \
     "\"version\": \"$OLD_VERSION\"" \

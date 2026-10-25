@@ -44,10 +44,21 @@ validate_bundled_python() {
     cmp -s "$runtime/PROVENANCE.toml" \
         "$ROOT/packaging/raw/assets/python-runtime/PROVENANCE.toml" || \
         die "bundled Python provenance does not match the pinned runtime"
-    (
-        cd "$runtime"
-        sha256sum --check --strict --status LICENSES.sha256
-    ) || die "bundled Python license manifest is invalid"
+    python3 - "$runtime" <<'PY_CHECK' || die "bundled Python license manifest is invalid"
+import hashlib
+from pathlib import Path
+import sys
+runtime = Path(sys.argv[1]).resolve()
+entries = (runtime / "LICENSES.sha256").read_text().splitlines()
+if not entries:
+    raise SystemExit("empty bundled Python license manifest")
+for line in entries:
+    expected, separator, relative = line.partition("  ")
+    path = runtime / relative
+    if (not separator or len(expected) != 64 or not path.resolve().is_relative_to(runtime)
+            or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected):
+        raise SystemExit(f"invalid bundled Python license digest: {relative}")
+PY_CHECK
 }
 
 normalize_modes() {
@@ -56,9 +67,9 @@ normalize_modes() {
     find "$stage" -type d -exec chmod 0755 {} +
     find "$stage" -type f -exec chmod 0644 {} +
     find "$stage/bin" -type f -exec chmod 0755 {} +
-    find "$stage/lib/anolisa/sec-core/python3.11/runtime/bin" \
+    find "$stage/lib/agent-sec-core/python3.11/runtime/bin" \
         -type f -exec chmod 0755 {} +
-    find "$stage/adapters" "$stage/share/anolisa/skills" \
+    find "$stage/share/agent-sec-core/adapters" "$stage/share/agent-sec-core/skills" \
         -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod 0755 {} +
 }
 
@@ -70,20 +81,23 @@ stage_payload() {
     fi
 
     install -d -m 0755 \
-        "$stage/.anolisa" \
+        \
         "$stage/bin" \
-        "$stage/lib/anolisa/sec-core/python3.11/runtime" \
-        "$stage/adapters/sec-core/openclaw" \
-        "$stage/adapters/sec-core/hermes" \
-        "$stage/adapters/sec-core/codex" \
-        "$stage/adapters/sec-core/qoder" \
-        "$stage/adapters/sec-core/qwencode" \
-        "$stage/adapters/sec-core/cosh" \
-        "$stage/share/anolisa/skills" \
-        "$stage/share/anolisa/sec-core" \
+        "$stage/lib/agent-sec-core/python3.11/runtime" \
+        "$stage/share/agent-sec-core/adapters/openclaw" \
+        "$stage/share/agent-sec-core/adapters/hermes" \
+        "$stage/share/agent-sec-core/adapters/codex" \
+        "$stage/share/agent-sec-core/adapters/qoder" \
+        "$stage/share/agent-sec-core/adapters/qwencode" \
+        "$stage/share/agent-sec-core/adapters/cosh" \
+        "$stage/share/agent-sec-core/skills" \
+        "$stage/share/agent-sec-core/templates" \
         "$stage/share/doc/sec-core"
 
-    install -p -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    if [ -n "$CONTRACT" ]; then
+        install -d -m 0755 "$stage/.anolisa"
+        install -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    fi
     install -p -m 0755 "$BUILD_DIR/linux-sandbox" "$stage/bin/linux-sandbox"
     install -p -m 0755 "$BUILD_DIR/v2/bin/agent-sec-cli" "$stage/bin/agent-sec-cli"
     install -p -m 0755 "$BUILD_DIR/v2/bin/agent-sec-daemon" "$stage/bin/agent-sec-daemon"
@@ -92,29 +106,29 @@ stage_payload() {
         "$stage/bin/agent-sec-python"
     install -p -m 0644 \
         "$ROOT/packaging/systemd/agent-sec-core-v2.service.in" \
-        "$stage/share/anolisa/sec-core/agent-sec-core.service.in"
+        "$stage/share/agent-sec-core/templates/agent-sec-core.service.in"
     install -p -m 0644 "$ROOT/LICENSE" "$stage/share/doc/sec-core/LICENSE"
 
     validate_bundled_python "$BUILD_DIR/python-runtime"
     copy_tree_dereferenced "$BUILD_DIR/python-runtime" \
-        "$stage/lib/anolisa/sec-core/python3.11/runtime"
-    copy_tree "$BUILD_DIR/openclaw-plugin" "$stage/adapters/sec-core/openclaw"
-    copy_tree "$BUILD_DIR/hermes-plugin/src" "$stage/adapters/sec-core/hermes"
+        "$stage/lib/agent-sec-core/python3.11/runtime"
+    copy_tree "$BUILD_DIR/openclaw-plugin" "$stage/share/agent-sec-core/adapters/openclaw"
+    copy_tree "$BUILD_DIR/hermes-plugin/src" "$stage/share/agent-sec-core/adapters/hermes"
     if [ -d "$BUILD_DIR/hermes-plugin/scripts" ]; then
         copy_tree "$BUILD_DIR/hermes-plugin/scripts" \
-            "$stage/adapters/sec-core/hermes/scripts"
+            "$stage/share/agent-sec-core/adapters/hermes/scripts"
     fi
-    copy_tree "$BUILD_DIR/codex-plugin/hooks-plugin" "$stage/adapters/sec-core/codex"
-    copy_tree "$BUILD_DIR/qoder-plugin" "$stage/adapters/sec-core/qoder"
-    copy_tree "$BUILD_DIR/qwen-code-extension" "$stage/adapters/sec-core/qwencode"
-    copy_tree "$BUILD_DIR/cosh-extension" "$stage/adapters/sec-core/cosh"
-    copy_tree "$BUILD_DIR/skills" "$stage/share/anolisa/skills"
+    copy_tree "$BUILD_DIR/codex-plugin/hooks-plugin" "$stage/share/agent-sec-core/adapters/codex"
+    copy_tree "$BUILD_DIR/qoder-plugin" "$stage/share/agent-sec-core/adapters/qoder"
+    copy_tree "$BUILD_DIR/qwen-code-extension" "$stage/share/agent-sec-core/adapters/qwencode"
+    copy_tree "$BUILD_DIR/cosh-extension" "$stage/share/agent-sec-core/adapters/cosh"
+    copy_tree "$BUILD_DIR/skills" "$stage/share/agent-sec-core/skills"
 
     python3 "$ROOT/packaging/raw/adapt_payload.py" "$stage"
 
     validate_bundled_python \
-        "$stage/lib/anolisa/sec-core/python3.11/runtime"
-    if [ -n "$(find "$stage/lib/anolisa/sec-core/python3.11/runtime" \
+        "$stage/lib/agent-sec-core/python3.11/runtime"
+    if [ -n "$(find "$stage/lib/agent-sec-core/python3.11/runtime" \
         -type l -print -quit)" ]; then
         die "bundled Python runtime contains a symbolic link"
     fi
@@ -136,16 +150,16 @@ COMMAND="${1:-}"
 [ "$COMMAND" = "stage" ] || [ "$COMMAND" = "package" ] || \
     die "usage: $0 {stage|package}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="${COMPONENT_SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd -P)}"
 BUILD_DIR="${BUILD_DIR:-$ROOT/target}"
-CONTRACT="${RAW_CONTRACT:-$ROOT/.anolisa/component.toml}"
+CONTRACT="${RAW_CONTRACT:-}"
 TARGET_OS="${TARGET_OS:-linux}"
 TARGET_ARCH="${TARGET_ARCH:-$(uname -m)}"
 
 [ "$TARGET_OS" = "linux" ] || die "raw packages support Linux only"
 [ "$TARGET_ARCH" = "x86_64" ] || die "raw packages currently support x86_64 only"
-[ -f "$CONTRACT" ] || die "raw contract not found: $CONTRACT"
+[ -z "$CONTRACT" ] || [ -f "$CONTRACT" ] || die "raw contract not found: $CONTRACT"
 [ -x "$BUILD_DIR/v2/bin/agent-sec-cli" ] || \
     die "missing V2 build output $BUILD_DIR/v2/bin/agent-sec-cli"
 [ -x "$BUILD_DIR/v2/bin/agent-sec-daemon" ] || \
@@ -163,6 +177,7 @@ if [ "$COMMAND" = "stage" ]; then
     exit 0
 fi
 
+ARCHIVE_TOOL="$SCRIPT_DIR/archive.py"
 OUTPUT_DIR="${OUTPUT_DIR:-$BUILD_DIR/raw}"
 EPOCH="$(resolve_epoch)"
 case "$EPOCH" in
@@ -184,16 +199,7 @@ stage_payload "$STAGE"
 install -d -m 0755 "$OUTPUT_DIR"
 ARTIFACT="sec-core-${VERSION}-${TARGET_OS}-${TARGET_ARCH}.tar.gz"
 TEMP_ARTIFACT="$OUTPUT_DIR/.${ARTIFACT}.tmp.$$"
-LC_ALL=C tar \
-    --sort=name \
-    --mtime="@$EPOCH" \
-    --owner=0 \
-    --group=0 \
-    --numeric-owner \
-    --hard-dereference \
-    --format=gnu \
-    -C "$STAGE" \
-    -cf - . | gzip -n -9 > "$TEMP_ARTIFACT"
+python3 "$ARCHIVE_TOOL" --source "$STAGE" --output "$TEMP_ARTIFACT" --epoch "$EPOCH"
 mv -f "$TEMP_ARTIFACT" "$OUTPUT_DIR/$ARTIFACT"
 TEMP_ARTIFACT=""
 printf '%s\n' "$OUTPUT_DIR/$ARTIFACT"

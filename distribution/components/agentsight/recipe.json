@@ -1,0 +1,61 @@
+{
+  "build": {
+    "package_id": "agentsight",
+    "source": "src/agentsight",
+    "version_file": "src/agentsight/Cargo.toml",
+    "version_key": "package.version",
+    "builder": "agentsight",
+    "profile": "gnu2.28",
+    "dependencies": [],
+    "entrypoints": {
+      "agentsight": "bin/agentsight",
+      "agentsight-start": "bin/agentsight-start",
+      "agentsight-enforcer": "bin/agentsight-enforcer"
+    },
+    "required": [
+      "bin/agentsight",
+      "bin/agentsight-start",
+      "bin/agentsight-enforcer",
+      "share/anolisa/agentsight/agentsight.service",
+      "share/anolisa/agentsight/agentsight-enforcer.service"
+    ]
+  },
+  "schema_version": 1,
+  "id": "agentsight",
+  "source_dir": "src/agentsight",
+  "resource_namespace": "agentsight",
+  "packages": [
+    {
+      "id": "agentsight",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/agentsight/templates/",
+          "to": "share/agentsight/templates/"
+        },
+        {
+          "from": "share/agentsight/metadata/",
+          "to": "share/agentsight/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/agentsight/",
+          "to": "share/doc/agentsight/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "agentsight": "bin/agentsight",
+        "agentsight-start": "bin/agentsight-start",
+        "agentsight-enforcer": "bin/agentsight-enforcer"
+      }
+    }
+  ],
+  "rpm_spec": "src/agentsight/agentsight.spec.in",
+  "raw_script": "src/agentsight/packaging/raw/package.sh"
+}

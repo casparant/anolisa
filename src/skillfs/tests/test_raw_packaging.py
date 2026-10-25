@@ -14,8 +14,6 @@ import unittest
 from pathlib import Path
 
 COMPONENT = Path(__file__).resolve().parents[1]
-CONTRACT = COMPONENT / ".anolisa/component.toml"
-PACKER = COMPONENT / "packaging/raw/package.sh"
 
 
 class SkillfsPackagingTests(unittest.TestCase):
@@ -25,11 +23,23 @@ class SkillfsPackagingTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.source = self.root / "source"
         shutil.copytree(COMPONENT / "docs/skills", self.source / "docs/skills")
-        for name in ("Cargo.toml", "component.toml", "LICENSE", "README.md"):
+        shutil.copytree(COMPONENT / "packaging/raw", self.source / "packaging/raw")
+        self.packer = self.source / "packaging/raw/package.sh"
+        for name in ("Cargo.toml", "LICENSE", "README.md"):
             shutil.copyfile(COMPONENT / name, self.source / name)
-        self.contract = CONTRACT
-        self.manifest = tomllib.loads(CONTRACT.read_text())
-        self.version = self.manifest["component"]["version"]
+        self.version = tomllib.loads((COMPONENT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+        self.contract = self.root / "optional-integration.toml"
+        self.contract_text = (
+            Path(os.environ["PACKAGING_TEST_CONTRACT"]).read_text()
+            if os.environ.get("PACKAGING_TEST_CONTRACT") else
+            f'[component]\nname = "skillfs"\nversion = "{self.version}"\n'
+            '[component.platform]\nos = ["linux"]\narch = ["x86_64", "aarch64"]\n'
+            '[component.layout]\nmodes = ["system"]\nfiles = ['
+            '{source = ".anolisa/component.toml"}, {source = "bin/skillfs"}, '
+            '{source = "share/skillfs/skills/skillfs"}]\n'
+        )
+        self.contract.write_text(self.contract_text)
+        self.manifest = tomllib.loads(self.contract_text)
         self.binary = self.source / "target/release/skillfs"
         self.binary.parent.mkdir(parents=True)
         self.metadata = self.binary.parent / "skillfs-build.toml"
@@ -47,9 +57,11 @@ class SkillfsPackagingTests(unittest.TestCase):
             f'[binaries]\nskillfs = "{hashlib.sha256(blob).hexdigest()}"\n'
         )
 
-    def pack(self, output: str = "output", **overrides: str) -> subprocess.CompletedProcess[str]:
+    def pack(
+        self, output: str = "output", **overrides: str
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [str(PACKER), "package"],
+            [str(self.packer), "package"],
             env={
                 **os.environ,
                 "SKILLFS_SOURCE_DIR": str(self.source),
@@ -70,32 +82,31 @@ class SkillfsPackagingTests(unittest.TestCase):
         return self.root / output / f"skillfs-{self.version}-linux-{self.arch}.tar.gz"
 
     def test_payload_and_permissions_on_both_architectures(self) -> None:
-        distribution = (
-            COMPONENT.parents[1]
-            / "distribution/anolisa/manifests/components/skillfs/component.toml"
-        )
-        self.assertEqual(distribution.read_bytes(), CONTRACT.read_bytes())
         for arch in ("x86_64", "aarch64"):
             with self.subTest(arch=arch):
                 self.prepare_binary(arch)
                 result = self.pack()
                 self.assertEqual(result.returncode, 0, result.stderr)
                 with tarfile.open(self.artifact()) as archive:
-                    members = {member.name.removeprefix("./"): member for member in archive}
+                    members = {
+                        member.name.removeprefix("./"): member for member in archive
+                    }
                     for entry in self.manifest["component"]["layout"]["files"]:
                         self.assertIn(entry["source"].rstrip("/"), members)
                     self.assertEqual(members["bin/skillfs"].mode, 0o755)
                     self.assertEqual(members[".anolisa/component.toml"].mode, 0o644)
                     self.assertEqual(
                         archive.extractfile("./.anolisa/component.toml").read(),
-                        CONTRACT.read_bytes(),
+                        self.contract_text.encode(),
                     )
                     self.assertEqual(
                         archive.extractfile("./share/doc/skillfs/LICENSE").read(),
                         (COMPONENT / "LICENSE").read_bytes(),
                     )
-                    self.assertIn("share/anolisa/runtime/skills/skillfs/SKILL.md", members)
-                    self.assertTrue(all(not member.issym() for member in members.values()))
+                    self.assertIn("share/skillfs/skills/skillfs/SKILL.md", members)
+                    self.assertTrue(
+                        all(not member.issym() for member in members.values())
+                    )
 
     def test_reproducible_archive(self) -> None:
         first = self.pack("first")
@@ -104,21 +115,24 @@ class SkillfsPackagingTests(unittest.TestCase):
             os.utime(path, (1800000000, 1800000000))
         second = self.pack("second")
         self.assertEqual(second.returncode, 0, second.stderr)
-        self.assertEqual(self.artifact("first").read_bytes(), self.artifact("second").read_bytes())
+        self.assertEqual(
+            self.artifact("first").read_bytes(), self.artifact("second").read_bytes()
+        )
 
     def test_contract_version_mismatch(self) -> None:
         self.contract = self.root / "wrong-contract.toml"
-        self.contract.write_text(CONTRACT.read_text().replace(self.version, "99.0.0"))
+        self.contract.write_text(self.contract_text.replace(self.version, "99.0.0"))
         result = self.pack()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("contract identity", result.stderr)
 
-    def test_rpm_version_mismatch(self) -> None:
-        rpm = self.source / "component.toml"
-        rpm.write_text(rpm.read_text().replace(self.version, "99.0.0"))
-        result = self.pack()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("RPM component identity", result.stderr)
+    def test_standalone_archive_needs_no_distribution_metadata(self) -> None:
+        result = self.pack(RAW_CONTRACT="", SKILLFS_SOURCE_DIR="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with tarfile.open(self.artifact()) as archive:
+            names = archive.getnames()
+            self.assertNotIn("./.anolisa/component.toml", names)
+            self.assertFalse(any(name.startswith("./share/anolisa/") for name in names))
 
     def test_missing_skill(self) -> None:
         (self.source / "docs/skills/skillfs-mount/SKILL.md").unlink()
@@ -139,7 +153,11 @@ class SkillfsPackagingTests(unittest.TestCase):
 
     def test_metadata_identity_mismatch(self) -> None:
         original = self.metadata.read_text()
-        for old, new in ((self.version, "99.0.0"), ("linux", "macos"), ("x86_64", "aarch64")):
+        for old, new in (
+            (self.version, "99.0.0"),
+            ("linux", "macos"),
+            ("x86_64", "aarch64"),
+        ):
             with self.subTest(field=old):
                 self.metadata.write_text(original.replace(old, new))
                 result = self.pack()

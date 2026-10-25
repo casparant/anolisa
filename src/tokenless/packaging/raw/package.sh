@@ -58,7 +58,7 @@ normalize_modes() {
     chmod 0755 \
         "$stage/bin/tokenless" \
         "$stage/libexec/anolisa/tokenless/rtk"
-    find "$stage/adapters" "$stage/extensions/tokenless" \
+    find "$stage/share/tokenless/adapters" "$stage/share/tokenless/adapters/cosh" \
         -type f \( -name '*.py' -o -name '*.sh' -o \
         -path '*/codex/scripts/*' \) -exec chmod 0755 {} +
 }
@@ -66,7 +66,7 @@ normalize_modes() {
 materialize_hook() {
     local stage="$1"
     local relative="$2"
-    local path="$stage/adapters/$relative"
+    local path="$stage/share/tokenless/adapters/$relative"
 
     if [ -L "$path" ]; then
         install -p -m 0755 "$path" "$path.materialized"
@@ -125,30 +125,32 @@ stage_payload() {
     done
 
     install -d -m 0755 \
-        "$stage/.anolisa" \
         "$stage/bin" \
         "$stage/libexec/anolisa/tokenless" \
-        "$stage/adapters" \
-        "$stage/extensions/tokenless/hooks" \
-        "$stage/extensions/tokenless/commands"
-    install -p -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+        "$stage/share/tokenless/adapters" \
+        "$stage/share/tokenless/adapters/cosh/hooks" \
+        "$stage/share/tokenless/adapters/cosh/commands"
+    if [ -n "$CONTRACT" ]; then
+        install -d -m 0755 "$stage/.anolisa"
+        install -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    fi
     install -p -m 0755 "$BIN_DIR/tokenless" "$stage/bin/tokenless"
     install -p -m 0755 "$BIN_DIR/rtk" \
         "$stage/libexec/anolisa/tokenless/"
-    cp -a "$adapters"/. "$stage/adapters"/
+    cp -a "$adapters"/. "$stage/share/tokenless/adapters"/
 
     # A checkout upgraded from the former adapter layout can retain formerly
     # ignored AgentScope build artifacts. They are not part of this payload.
-    rm -rf "$stage/adapters/agentscope"
+    rm -rf "$stage/share/tokenless/adapters/agentscope"
 
-    # ANOLISA intentionally ignores archive symlinks. The source tree shares
+    # Portable archives carry ordinary files. The source tree shares
     # these dispatchers by symlink, so raw packages must carry regular files.
     materialize_hook "$stage" "claude-code/hooks/run-hook.sh"
     materialize_hook "$stage" "qwencode/hooks/run-hook.sh"
 
     # A native desktop sideload must remain self-contained outside the FHS tree.
-    rm -rf "$stage/adapters/qwenwork/hooks/shared"
-    python3 - "$stage/adapters" <<'PY'
+    rm -rf "$stage/share/tokenless/adapters/qwenwork/hooks/shared"
+    python3 - "$stage/share/tokenless/adapters" <<'PY'
 import shutil
 import sys
 from pathlib import Path
@@ -164,21 +166,21 @@ PY
     install -p -m 0644 \
         "$adapters/common/cosh-extension.json" \
         "$adapters/common/tool-ready-spec.json" \
-        "$stage/extensions/tokenless/"
+        "$stage/share/tokenless/adapters/cosh/"
     install -p -m 0755 "$adapters/common/tokenless-env-fix.sh" \
-        "$stage/extensions/tokenless/"
-    cp -a "$adapters/common/hooks"/. "$stage/extensions/tokenless/hooks"/
-    cp -a "$adapters/common/commands"/. "$stage/extensions/tokenless/commands"/
+        "$stage/share/tokenless/adapters/cosh/"
+    cp -a "$adapters/common/hooks"/. "$stage/share/tokenless/adapters/cosh/hooks"/
+    cp -a "$adapters/common/commands"/. "$stage/share/tokenless/adapters/cosh/commands"/
 
     # Match the installed adapter payload and exclude build-only inputs.
-    rm -rf "$stage/adapters/openclaw/node_modules"
+    rm -rf "$stage/share/tokenless/adapters/openclaw/node_modules"
     rm -f \
-        "$stage/adapters/openclaw/package-lock.json" \
-        "$stage/adapters/openclaw/index.ts" \
-        "$stage/adapters/openclaw/tsconfig.json"
-    find "$stage/adapters" "$stage/extensions/tokenless" \
+        "$stage/share/tokenless/adapters/openclaw/package-lock.json" \
+        "$stage/share/tokenless/adapters/openclaw/index.ts" \
+        "$stage/share/tokenless/adapters/openclaw/tsconfig.json"
+    find "$stage/share/tokenless/adapters" "$stage/share/tokenless/adapters/cosh" \
         -type d -name '__pycache__' -prune -exec rm -rf {} +
-    find "$stage/adapters" "$stage/extensions/tokenless" \
+    find "$stage/share/tokenless/adapters" "$stage/share/tokenless/adapters/cosh" \
         \( -name '*.in' -o -name '.gitignore' -o -name '*.pyc' -o -name '*.pyo' \) -delete
     normalize_modes "$stage"
 
@@ -200,11 +202,11 @@ COMMAND="${1:-}"
 [ "$COMMAND" = "stage" ] || [ "$COMMAND" = "package" ] || \
     die "usage: $0 {stage|package}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+DEFAULT_ROOT="${COMPONENT_SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd -P)}"
 SOURCE_ROOT="${TOKENLESS_SOURCE_DIR:-$DEFAULT_ROOT}"
 BIN_DIR="${BIN_DIR:-}"
-CONTRACT="${RAW_CONTRACT:-$SOURCE_ROOT/.anolisa/component.toml}"
+CONTRACT="${RAW_CONTRACT:-}"
 TARGET_OS="$(normalize_os "${TARGET_OS:-$(detect_os)}")"
 TARGET_ARCH="$(normalize_arch "${TARGET_ARCH:-$(detect_arch)}")"
 
@@ -213,7 +215,7 @@ validate_target
 for binary in tokenless rtk; do
     [ -x "$BIN_DIR/$binary" ] || die "missing executable: $BIN_DIR/$binary"
 done
-require_file "$CONTRACT"
+if [ -n "$CONTRACT" ]; then require_file "$CONTRACT"; fi
 
 VERSION="$(python3 "$SCRIPT_DIR/verify-release.py" "$SOURCE_ROOT" "$CONTRACT")"
 python3 "$SCRIPT_DIR/verify-binaries.py" \
@@ -229,13 +231,12 @@ if [ "$COMMAND" = "stage" ]; then
     exit 0
 fi
 
+ARCHIVE_TOOL="$SCRIPT_DIR/archive.py"
 OUTPUT_DIR="${OUTPUT_DIR:-$SOURCE_ROOT/target/raw}"
 EPOCH="$(resolve_epoch)"
 case "$EPOCH" in
     '' | *[!0-9]*) die "SOURCE_DATE_EPOCH must be a non-negative integer" ;;
 esac
-tar --version 2>/dev/null | grep -q 'GNU tar' || \
-    die "GNU tar is required for reproducible raw packages"
 
 WORK="$(mktemp -d)"
 TEMP_ARTIFACT=""
@@ -252,16 +253,7 @@ stage_payload "$STAGE"
 install -d -m 0755 "$OUTPUT_DIR"
 ARTIFACT="tokenless-${VERSION}-${TARGET_OS}-${TARGET_ARCH}.tar.gz"
 TEMP_ARTIFACT="$OUTPUT_DIR/.${ARTIFACT}.tmp.$$"
-LC_ALL=C tar \
-    --sort=name \
-    --mtime="@$EPOCH" \
-    --owner=0 \
-    --group=0 \
-    --numeric-owner \
-    --hard-dereference \
-    --format=gnu \
-    -C "$STAGE" \
-    -cf - . | gzip -n -9 > "$TEMP_ARTIFACT"
+python3 "$ARCHIVE_TOOL" --source "$STAGE" --output "$TEMP_ARTIFACT" --epoch "$EPOCH"
 mv -f "$TEMP_ARTIFACT" "$OUTPUT_DIR/$ARTIFACT"
 TEMP_ARTIFACT=""
 printf '%s\n' "$OUTPUT_DIR/$ARTIFACT"

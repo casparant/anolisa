@@ -217,7 +217,7 @@ test: test-python test-rust test-openclaw-plugin ## Run all tests
 BUILD_DIR ?= target
 CLI_WHEEL_BUILD_DIR ?= agent-sec-cli/target/wheels
 CLI_WHEEL_PATTERN := agent_sec_cli-*.whl
-COMPONENT_CONTRACT ?= .anolisa/component.toml
+COMPONENT_CONTRACT ?=
 
 # The normal targets retain their network-enabled developer workflow. RPM builds
 # select OFFLINE_BUILD through build-all-v2-offline after Source1 supplies every
@@ -337,9 +337,11 @@ stage-tools: ## Stage tools (sign-skill.sh) to BUILD_DIR
 
 .PHONY: stage-component-manifest
 stage-component-manifest: ## Stage the selected component contract into BUILD_DIR
-	install -d -m 0755 $(BUILD_DIR)/share/anolisa/components/sec-core
-	install -p -m 0644 $(COMPONENT_CONTRACT) \
-		$(BUILD_DIR)/share/anolisa/components/sec-core/component.toml
+	@if [ -n "$(COMPONENT_CONTRACT)" ]; then \
+		install -d -m 0755 $(BUILD_DIR)/share/anolisa/components/sec-core; \
+		install -p -m 0644 $(COMPONENT_CONTRACT) \
+			$(BUILD_DIR)/share/anolisa/components/sec-core/component.toml; \
+	fi
 
 # The default build target matches the default install target: both provide
 # the V2 Rust CLI/daemon. V1 RPM builds select build-all-v1 explicitly.
@@ -390,7 +392,7 @@ stage-cli: ## Install all wheels to local staging dir (requires uv)
 OUTPUT_DIR ?= $(BUILD_DIR)/raw
 TARGET_OS ?= linux
 TARGET_ARCH ?= $(shell uname -m)
-RAW_CONTRACT ?= .anolisa/component.toml
+RAW_CONTRACT ?=
 RAW_PYTHON_RUNTIME ?= $(BUILD_DIR)/python-runtime
 RAW_PYTHON_ARCHIVE ?= $(BUILD_DIR)/downloads/cpython-3.11.6+20231002-x86_64-unknown-linux-gnu-install_only.tar.gz
 
@@ -403,7 +405,7 @@ prepare-raw-python: build-all-v2 ## Stage the adapter-only bundled Python runtim
 stage-raw: ## Stage the V2 raw payload under DESTDIR
 	@BUILD_DIR="$(abspath $(BUILD_DIR))" \
 		DESTDIR="$(DESTDIR)" \
-		RAW_CONTRACT="$(abspath $(RAW_CONTRACT))" \
+		RAW_CONTRACT="$(if $(RAW_CONTRACT),$(abspath $(RAW_CONTRACT)),)" \
 		TARGET_OS="$(TARGET_OS)" \
 		TARGET_ARCH="$(TARGET_ARCH)" \
 		./packaging/raw/package.sh stage
@@ -412,7 +414,7 @@ stage-raw: ## Stage the V2 raw payload under DESTDIR
 package-raw: prepare-raw-python ## Build the deterministic V2 raw archive
 	@BUILD_DIR="$(abspath $(BUILD_DIR))" \
 		OUTPUT_DIR="$(abspath $(OUTPUT_DIR))" \
-		RAW_CONTRACT="$(abspath $(RAW_CONTRACT))" \
+		RAW_CONTRACT="$(if $(RAW_CONTRACT),$(abspath $(RAW_CONTRACT)),)" \
 		TARGET_OS="$(TARGET_OS)" \
 		TARGET_ARCH="$(TARGET_ARCH)" \
 		SOURCE_DATE_EPOCH="$(SOURCE_DATE_EPOCH)" \
@@ -602,9 +604,11 @@ install-cosh-hook: ## Install cosh hooks (linux-sandbox + extension)
 
 .PHONY: install-component-manifest
 install-component-manifest: ## Install the selected component contract to DESTDIR
-	install -d -m 0755 $(DESTDIR)$(COMPONENT_DIR)
-	install -m 0644 $(COMPONENT_CONTRACT) \
-		$(DESTDIR)$(COMPONENT_DIR)/component.toml
+	@if [ -n "$(COMPONENT_CONTRACT)" ]; then \
+		install -d -m 0755 $(DESTDIR)$(COMPONENT_DIR); \
+		install -m 0644 $(COMPONENT_CONTRACT) \
+			$(DESTDIR)$(COMPONENT_DIR)/component.toml; \
+	fi
 
 .PHONY: install-systemd-user
 install-systemd-user: ## Install agent-sec-core systemd user service

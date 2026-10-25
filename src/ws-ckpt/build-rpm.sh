@@ -7,6 +7,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="${SCRIPT_DIR}/src"
+DISTRIBUTION_ROOT="$SCRIPT_DIR/../.."
+[ ! -f "$SCRIPT_DIR/distribution/packaging/snapshot.py" ] || DISTRIBUTION_ROOT="$SCRIPT_DIR"
 
 # ── Extract version from Cargo.toml ──
 VERSION=$(grep -m1 '^version' "${SRC_DIR}/Cargo.toml" | sed 's/.*"\(.*\)".*/\1/')
@@ -44,6 +46,9 @@ cp -f "${SCRIPT_DIR}/LICENSE" "${STAGE_ROOT}/"
 cp -f "${SCRIPT_DIR}/README.md" "${STAGE_ROOT}/"
 cp -f "${SCRIPT_DIR}/component.toml" "${STAGE_ROOT}/"
 cp -a "${SCRIPT_DIR}/scripts" "${STAGE_ROOT}/"
+
+python3 "$DISTRIBUTION_ROOT/distribution/packaging/snapshot.py" \
+    --source "$DISTRIBUTION_ROOT" --destination "$STAGE_ROOT" --component ws-ckpt
 
 tar -czf "${RPMBUILD_DIR}/SOURCES/${TARBALL}" -C "${STAGING}" "${NAME}-${VERSION}"
 echo "    source: ${RPMBUILD_DIR}/SOURCES/${TARBALL}"

@@ -35,7 +35,7 @@ endif
 BINDIR ?= $(PREFIX)/bin
 DATADIR ?= $(PREFIX)/share/anolisa
 DOCDIR ?= $(PREFIX)/share/doc/$(NAME)
-SHARE_DIR ?= $(DATADIR)/adapters/agent-memory
+SHARE_DIR ?= $(PREFIX)/share/agent-memory/adapters
 
 # Adapter directories
 ADAPTER_SRC_DIR := adapters/agent-memory
@@ -108,11 +108,13 @@ sync-versions: ## Sync $(VERSION) (from Cargo.toml) into all derived JSON files
 
 $(COMPONENT_CONTRACT): $(COMPONENT_CONTRACT).in Cargo.toml
 	@echo "==> Generating component contract (version=$(VERSION))..."
-	@sed 's/@VERSION@/$(VERSION)/g' $< > $@
+	@mkdir -p $(@D)
+	@sed 's/@VERSION@/$(VERSION)/g' $< > $@.tmp
+	@mv -f $@.tmp $@
 
 generate-component-contract: $(COMPONENT_CONTRACT)
 
-build-openclaw-plugin: sync-versions generate-component-contract ## Build openclaw TS plugin (dist/index.js)
+build-openclaw-plugin: sync-versions ## Build openclaw TS plugin (dist/index.js)
 	@echo "==> Building $(NAME) OpenClaw plugin..."
 	# --legacy-peer-deps: the plugin declares `openclaw: "*"` as a peer
 	# but the dev openclaw resolves to CalVer 2026.5.7, which npm 7+'s
@@ -303,9 +305,9 @@ dist: clean build-openclaw-plugin ## Create source + vendor tarballs for RPM bui
 	# packages CHANGELOG.md only. Listing the removed directory made
 	# `cp -R` exit non-zero, so this target failed outright.
 	@rm -rf dist/$(NAME)-$(VERSION) && mkdir -p dist/$(NAME)-$(VERSION)
-	@cp -R Cargo.toml Cargo.lock src examples config tests \
-		Makefile agent-memory.spec.in CHANGELOG.md LICENSE \
-		.gitignore .anolisa dist/$(NAME)-$(VERSION)/
+	@cp -RL Cargo.toml Cargo.lock src examples config tests \
+		Makefile agent-memory.spec.in CHANGELOG.md LICENSE packaging \
+		.gitignore dist/$(NAME)-$(VERSION)/
 	@mkdir -p dist/$(NAME)-$(VERSION)/.cargo
 	@cp .cargo/config.toml dist/$(NAME)-$(VERSION)/.cargo/config.toml
 	# Adapter: include source + pre-built dist/index.js, exclude
@@ -333,7 +335,7 @@ dist: clean build-openclaw-plugin ## Create source + vendor tarballs for RPM bui
 			$(OPENCLAW_PLUGIN_SRC_DIR)/scripts/detect.sh \
 			$(OPENCLAW_PLUGIN_SRC_DIR)/scripts/install.sh \
 			$(OPENCLAW_PLUGIN_SRC_DIR)/scripts/uninstall.sh \
-			$(COMPONENT_CONTRACT) CHANGELOG.md LICENSE; do \
+			packaging/raw/package.py CHANGELOG.md LICENSE; do \
 		test -e "$$staged/$$f" || { \
 			echo "ERROR: $$f is missing from $$staged but agent-memory.spec.in or Cargo.toml requires it" >&2; \
 			exit 1; \

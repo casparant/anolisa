@@ -17,6 +17,27 @@ with pathlib.Path(sys.argv[1]).open("rb") as stream:
     print(tomllib.load(stream)["package"]["version"])
 PY
 )"
+python3 - "$TMP_ROOT" "$VERSION" <<'CONTRACTS'
+from pathlib import Path
+import sys
+
+root, version = Path(sys.argv[1]), sys.argv[2]
+for os_name, architectures in (("linux", '["x86_64", "aarch64"]'), ("macos", '["aarch64"]')):
+    sources = [".anolisa/component.toml", "bin/agentsight"]
+    if os_name == "linux":
+        sources += ["bin/agentsight-enforcer", "bin/agentsight-start",
+                    "share/agentsight/templates/agentsight.service",
+                    "share/agentsight/templates/agentsight-enforcer.service"]
+    files = ", ".join('{source = "' + source + '"}' for source in sources)
+    (root / f"{os_name}-contract.toml").write_text(
+        f'[component]\nname = "agentsight"\nversion = "{version}"\n'
+        f'[component.platform]\nos = ["{os_name}"]\narch = {architectures}\n'
+        f'[component.layout]\nfiles = [{files}]\n'
+    )
+CONTRACTS
+LINUX_CONTRACT="${PACKAGING_TEST_CONTRACT_LINUX:-$TMP_ROOT/linux-contract.toml}"
+MACOS_CONTRACT="${PACKAGING_TEST_CONTRACT_MACOS:-$TMP_ROOT/macos-contract.toml}"
+export RAW_CONTRACT="$LINUX_CONTRACT"
 LINUX_ARTIFACT="agentsight-$VERSION-linux-x86_64.tar.gz"
 MACOS_ARTIFACT="agentsight-$VERSION-macos-aarch64.tar.gz"
 BIN_DIR="$TMP_ROOT/bin"
@@ -95,12 +116,26 @@ for member in \
     './bin/agentsight' \
     './bin/agentsight-enforcer' \
     './bin/agentsight-start' \
-    './share/anolisa/agentsight/agentsight.service' \
-    './share/anolisa/agentsight/agentsight-enforcer.service'; do
+    './share/agentsight/templates/agentsight.service' \
+    './share/agentsight/templates/agentsight-enforcer.service'; do
     grep -Fxq "$member" "$TMP_ROOT/linux-members"
 done
 tar -xzOf "$TMP_ROOT/linux-one/$LINUX_ARTIFACT" \
-    ./.anolisa/component.toml | cmp - "$SOURCE_ROOT/.anolisa/component.toml"
+    ./.anolisa/component.toml | cmp - "$LINUX_CONTRACT"
+
+# Default discovery and archiving work in a detached component source tree.
+DETACHED="$TMP_ROOT/detached"
+mkdir -p "$DETACHED/packaging"
+cp "$SOURCE_ROOT/Cargo.toml" "$DETACHED/Cargo.toml"
+cp -R "$SOURCE_ROOT/packaging/raw" "$DETACHED/packaging/raw"
+cp -R "$SOURCE_ROOT/scripts" "$DETACHED/scripts"
+AGENTSIGHT_SOURCE_DIR= COMPONENT_SOURCE_DIR= RAW_CONTRACT= \
+    AGENTSIGHT_BUILD_METADATA="$BUILD_METADATA" BIN_DIR="$BIN_DIR" \
+    OUTPUT_DIR="$TMP_ROOT/standalone" TARGET_OS=linux TARGET_ARCH=x86_64 \
+    SOURCE_DATE_EPOCH=1700000000 "$DETACHED/packaging/raw/package.sh" package >/dev/null
+tar -tzf "$TMP_ROOT/standalone/$LINUX_ARTIFACT" > "$TMP_ROOT/standalone-members"
+! grep -Eq '^\./(\.anolisa|share/anolisa)(/|$)' "$TMP_ROOT/standalone-members"
+grep -Fxq './bin/agentsight-enforcer' "$TMP_ROOT/standalone-members"
 
 printf 'stale\n' >> "$BIN_DIR/agentsight"
 if AGENTSIGHT_SOURCE_DIR="$SOURCE_ROOT" \
@@ -169,6 +204,7 @@ done
 
 write_macho "$BIN_DIR/agentsight"
 write_metadata macos aarch64 "$BIN_DIR/agentsight"
+RAW_CONTRACT="$MACOS_CONTRACT" \
 AGENTSIGHT_SOURCE_DIR="$SOURCE_ROOT" \
 AGENTSIGHT_BUILD_METADATA="$BUILD_METADATA" \
 BIN_DIR="$BIN_DIR" \
@@ -187,7 +223,7 @@ if grep -Eq 'agentsight-(start|enforcer)|agentsight(-enforcer)?\.service' \
     exit 1
 fi
 tar -xzOf "$TMP_ROOT/macos/$MACOS_ARTIFACT" \
-    ./.anolisa/component.toml | cmp - "$SOURCE_ROOT/.anolisa/component.macos.toml"
+    ./.anolisa/component.toml | cmp - "$MACOS_CONTRACT"
 
 if AGENTSIGHT_SOURCE_DIR="$SOURCE_ROOT" \
     AGENTSIGHT_BUILD_METADATA="$BUILD_METADATA" \
@@ -215,7 +251,7 @@ ARM_ARTIFACT="agentsight-$VERSION-linux-aarch64.tar.gz"
 cmp "$TMP_ROOT/arm-one/$ARM_ARTIFACT" "$TMP_ROOT/arm-two/$ARM_ARTIFACT"
 tar -tzf "$TMP_ROOT/arm-one/$ARM_ARTIFACT" | cmp - "$TMP_ROOT/linux-members"
 tar -xzOf "$TMP_ROOT/arm-one/$ARM_ARTIFACT" ./.anolisa/component.toml | \
-    cmp - "$SOURCE_ROOT/.anolisa/component.toml"
+    cmp - "$LINUX_CONTRACT"
 # A valid receipt does not make a host-architecture enforcer an ARM64 binary.
 write_elf "$BIN_DIR/agentsight-enforcer"
 sha256sum "$BIN_DIR/agentsight-enforcer" | cut -d ' ' -f 1 > "$BIN_DIR/agentsight-enforcer.sha256"

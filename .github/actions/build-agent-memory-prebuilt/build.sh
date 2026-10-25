@@ -158,6 +158,7 @@ ARCHIVE="agent-memory-$VERSION-linux-$TARGET_ARCH.tar.gz"
 for attempt in 1 2; do
     python3 "$COMPONENT_ROOT/packaging/raw/package.py" \
         --bin-dir "$BIN_DIR" --plugin-dir "$PLUGIN_ROOT/dist" --metadata "$METADATA" \
+        --contract "$COMPONENT_ROOT/.anolisa/component.toml" \
         --target-arch "$TARGET_ARCH" --output-dir "$OUTPUT_DIR" --epoch "$SOURCE_DATE_EPOCH"
     digest="$(sha256sum "$OUTPUT_DIR/$ARCHIVE" | awk '{print $1}')"
     if [ "$attempt" = 1 ]; then first_digest="$digest"

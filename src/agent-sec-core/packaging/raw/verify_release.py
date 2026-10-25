@@ -26,19 +26,19 @@ REQUIRED_RUNTIME_DEPENDENCIES = {
 }
 
 RPM_RESOURCE_ROOTS = {
-    "openclaw": "/opt/agent-sec/openclaw-plugin/",
-    "hermes": "/opt/agent-sec/hermes-plugin/src/",
-    "codex": "/opt/agent-sec/codex-plugin/hooks-plugin/",
-    "qoder": "/opt/agent-sec/qoder-plugin/",
-    "qwencode": "/opt/agent-sec/qwen-code-extension/",
-    "cosh": "{datadir}/extensions/agent-sec-core/",
+    "openclaw": "{sharedir}/agent-sec-core/adapters/openclaw/",
+    "hermes": "{sharedir}/agent-sec-core/adapters/hermes/src/",
+    "codex": "{sharedir}/agent-sec-core/adapters/codex/hooks-plugin/",
+    "qoder": "{sharedir}/agent-sec-core/adapters/qoder/",
+    "qwencode": "{sharedir}/agent-sec-core/adapters/qwencode/",
+    "cosh": "{sharedir}/agent-sec-core/adapters/cosh/",
 }
 
 RAW_HOOK_MANIFESTS = (
-    Path("adapters/sec-core/codex/hooks/hooks.json"),
-    Path("adapters/sec-core/qoder/hooks/hooks.json"),
-    Path("adapters/sec-core/qwencode/qwen-extension.json"),
-    Path("adapters/sec-core/cosh/cosh-extension.json"),
+    Path("share/agent-sec-core/adapters/codex/hooks/hooks.json"),
+    Path("share/agent-sec-core/adapters/qoder/hooks/hooks.json"),
+    Path("share/agent-sec-core/adapters/qwencode/qwen-extension.json"),
+    Path("share/agent-sec-core/adapters/cosh/cosh-extension.json"),
 )
 
 
@@ -119,24 +119,8 @@ def verify_contract_metadata(contract: dict[str, object], contract_path: Path) -
             )
 
 
-def verify_versions(source_root: Path, contract_path: Path) -> str:
-    """Verify the raw contract identity and all packaged component versions."""
-    contract = read_toml(contract_path)
-    component = contract.get("component")
-    if not isinstance(component, dict):
-        raise SystemExit(f"ERROR: {contract_path} has no [component] table")
-    if component.get("name") != "sec-core":
-        raise SystemExit(
-            f"ERROR: {contract_path} component name is {component.get('name')!r}, "
-            "expected 'sec-core'"
-        )
-    expected = component.get("version")
-    if not isinstance(expected, str) or SEMVER_PATTERN.fullmatch(expected) is None:
-        raise SystemExit(
-            f"ERROR: {contract_path} component version is not valid SemVer: {expected!r}"
-        )
-    verify_contract_metadata(contract, contract_path)
-
+def verify_versions(source_root: Path, contract_path: Path | None) -> str:
+    """Verify source versions and, when supplied, optional integration metadata."""
     workspace = read_toml(source_root / "v2" / "Cargo.toml").get("workspace")
     workspace_package = (
         workspace.get("package") if isinstance(workspace, dict) else None
@@ -145,6 +129,29 @@ def verify_versions(source_root: Path, contract_path: Path) -> str:
         workspace_package.get("version"), str
     ):
         raise SystemExit("ERROR: v2/Cargo.toml has no workspace package version")
+
+    expected = workspace_package["version"]
+    if SEMVER_PATTERN.fullmatch(expected) is None:
+        raise SystemExit(f"ERROR: invalid workspace version: {expected!r}")
+    if contract_path is not None:
+        contract = read_toml(contract_path)
+        component = contract.get("component")
+        if not isinstance(component, dict):
+            raise SystemExit(f"ERROR: {contract_path} has no [component] table")
+        if component.get("name") != "sec-core":
+            raise SystemExit(
+                f"ERROR: {contract_path} component name is {component.get('name')!r}, "
+                "expected 'sec-core'"
+            )
+        expected = component.get("version")
+        if not isinstance(expected, str) or SEMVER_PATTERN.fullmatch(expected) is None:
+            raise SystemExit(
+                f"ERROR: {contract_path} component version is not valid SemVer: {expected!r}"
+            )
+        verify_contract_metadata(contract, contract_path)
+
+        if component["version"] != workspace_package["version"]:
+            raise SystemExit("ERROR: contract version does not match V2 workspace")
 
     versions = {
         "v2/Cargo.toml": workspace_package["version"],
@@ -236,7 +243,7 @@ def verify_raw_contract(payload_root: Path) -> None:
 
 def verify_raw_hook_manifests(payload_root: Path) -> None:
     """Verify every staged Python hook uses the bundled runtime launcher."""
-    adapter_root = payload_root / "adapters"
+    adapter_root = payload_root / "share/agent-sec-core/adapters"
     manifest_paths = sorted(adapter_root.rglob("*.json"))
     expected_paths = {payload_root / relative for relative in RAW_HOOK_MANIFESTS}
     missing_paths = sorted(
@@ -286,12 +293,13 @@ def verify_raw_payload(payload_root: Path) -> None:
         path = payload_root / "bin" / binary
         if not path.is_file() or not path.stat().st_mode & 0o100:
             raise SystemExit(f"ERROR: raw payload is missing V2 executable: {path}")
-    if (payload_root / "lib/anolisa/sec-core/python3.11/site-packages").exists():
+    if (payload_root / "lib/agent-sec-core/python3.11/site-packages").exists():
         raise SystemExit("ERROR: raw payload contains the V1 CLI Python runtime")
-    unit = payload_root / "share/anolisa/sec-core/agent-sec-core.service.in"
+    unit = payload_root / "share/agent-sec-core/templates/agent-sec-core.service.in"
     if "WantedBy=multi-user.target" not in unit.read_text(encoding="utf-8"):
         raise SystemExit("ERROR: raw payload does not contain the V2 system service")
-    verify_raw_contract(payload_root)
+    if (payload_root / ".anolisa/component.toml").is_file():
+        verify_raw_contract(payload_root)
     verify_raw_hook_manifests(payload_root)
 
 
@@ -299,7 +307,7 @@ def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("source_root", type=Path)
-    parser.add_argument("contract", type=Path)
+    parser.add_argument("contract", nargs="?", default="")
     parser.add_argument("--payload-root", type=Path)
     return parser.parse_args()
 
@@ -307,7 +315,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     """Validate release metadata and print the canonical version."""
     args = parse_args()
-    version = verify_versions(args.source_root.resolve(), args.contract.resolve())
+    version = verify_versions(
+        args.source_root.resolve(), Path(args.contract).resolve() if args.contract else None
+    )
     if args.payload_root is not None:
         verify_raw_payload(args.payload_root.resolve())
     print(version)

@@ -1,0 +1,226 @@
+{
+  "build": {
+    "package_id": "sec-core",
+    "source": "src/agent-sec-core",
+    "version_file": "src/agent-sec-core/.anolisa/component.toml",
+    "version_key": "component.version",
+    "builder": "sec-core",
+    "profile": "gnu2.28",
+    "dependencies": [],
+    "entrypoints": {
+      "agent-sec-cli": "bin/agent-sec-cli",
+      "agent-sec-daemon": "bin/agent-sec-daemon",
+      "agent-sec-daemon-health": "bin/agent-sec-daemon-health",
+      "agent-sec-python": "bin/agent-sec-python",
+      "linux-sandbox": "bin/linux-sandbox"
+    },
+    "required": [
+      "bin/agent-sec-cli",
+      "bin/agent-sec-daemon",
+      "bin/agent-sec-daemon-health",
+      "bin/agent-sec-python",
+      "bin/linux-sandbox",
+      "libexec/agent-sec-core/python3.11/runtime/bin/python3.11",
+      "share/anolisa/adapters/sec-core/openclaw/package.json",
+      "share/anolisa/sec-core/agent-sec-core.service.in"
+    ]
+  },
+  "schema_version": 1,
+  "id": "sec-core",
+  "source_dir": "src/agent-sec-core",
+  "resource_namespace": "agent-sec-core",
+  "packages": [
+    {
+      "id": "agent-sec-cli",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/",
+          "exclude": [
+            "bin/linux-sandbox",
+            "bin/agent-sec-python"
+          ]
+        },
+        {
+          "from": "share/agent-sec-core/templates/",
+          "to": "share/agent-sec-core/templates/"
+        },
+        {
+          "from": "share/agent-sec-core/metadata/",
+          "to": "share/agent-sec-core/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/agent-sec-core/",
+          "to": "share/doc/agent-sec-core/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/sec-core/",
+          "to": "share/doc/sec-core/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "agent-sec-cli": "bin/agent-sec-cli",
+        "agent-sec-daemon": "bin/agent-sec-daemon",
+        "agent-sec-daemon-health": "bin/agent-sec-daemon-health"
+      }
+    },
+    {
+      "id": "agent-sec-sandbox",
+      "kind": "backend",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/linux-sandbox",
+          "to": "bin/linux-sandbox"
+        }
+      ],
+      "entrypoints": {
+        "linux-sandbox": "bin/linux-sandbox"
+      }
+    },
+    {
+      "id": "agent-sec-python-runtime",
+      "kind": "runtime",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/agent-sec-python",
+          "to": "bin/agent-sec-python"
+        },
+        {
+          "from": "libexec/agent-sec-core/python3.11/",
+          "to": "libexec/agent-sec-core/python3.11/"
+        }
+      ],
+      "entrypoints": {
+        "agent-sec-python": "bin/agent-sec-python"
+      },
+      "formats": [
+        "raw"
+      ]
+    },
+    {
+      "id": "agent-sec-skills",
+      "kind": "skills",
+      "requires": [
+        "agent-sec-cli"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/skills/",
+          "to": "share/agent-sec-core/skills/"
+        }
+      ]
+    },
+    {
+      "id": "agent-sec-openclaw-hook",
+      "kind": "plugin",
+      "requires": [
+        "agent-sec-cli",
+        "agent-sec-python-runtime"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/adapters/openclaw/",
+          "to": "share/agent-sec-core/adapters/openclaw/"
+        }
+      ],
+      "agents": [
+        "openclaw"
+      ]
+    },
+    {
+      "id": "agent-sec-hermes-hook",
+      "kind": "plugin",
+      "requires": [
+        "agent-sec-cli",
+        "agent-sec-python-runtime"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/adapters/hermes/",
+          "to": "share/agent-sec-core/adapters/hermes/"
+        }
+      ],
+      "agents": [
+        "hermes"
+      ]
+    },
+    {
+      "id": "agent-sec-codex-hook",
+      "kind": "plugin",
+      "requires": [
+        "agent-sec-cli",
+        "agent-sec-python-runtime"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/adapters/codex/",
+          "to": "share/agent-sec-core/adapters/codex/"
+        }
+      ],
+      "agents": [
+        "codex"
+      ]
+    },
+    {
+      "id": "agent-sec-qoder-hook",
+      "kind": "plugin",
+      "requires": [
+        "agent-sec-cli",
+        "agent-sec-python-runtime"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/adapters/qoder/",
+          "to": "share/agent-sec-core/adapters/qoder/"
+        }
+      ],
+      "agents": [
+        "qoder"
+      ]
+    },
+    {
+      "id": "agent-sec-qwen-code-hook",
+      "kind": "plugin",
+      "requires": [
+        "agent-sec-cli",
+        "agent-sec-python-runtime"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/adapters/qwencode/",
+          "to": "share/agent-sec-core/adapters/qwencode/"
+        }
+      ],
+      "agents": [
+        "qwencode"
+      ]
+    },
+    {
+      "id": "agent-sec-cosh-hook",
+      "kind": "plugin",
+      "requires": [
+        "agent-sec-cli",
+        "agent-sec-python-runtime",
+        "agent-sec-sandbox"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-sec-core/adapters/cosh/",
+          "to": "share/agent-sec-core/adapters/cosh/"
+        }
+      ],
+      "agents": [
+        "cosh"
+      ]
+    }
+  ],
+  "rpm_spec": "src/agent-sec-core/agent-sec-core.spec.v2.in",
+  "raw_script": "src/agent-sec-core/packaging/raw/package.sh"
+}

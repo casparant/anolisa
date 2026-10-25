@@ -3,8 +3,13 @@
 set -eu
 
 PREFIX=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
-RUNTIME="$PREFIX/lib/anolisa/sec-core/python3.11/runtime"
-SITE_PACKAGES="$PREFIX/lib/anolisa/sec-core/python3.11/site-packages"
+RUNTIME="$PREFIX/lib/agent-sec-core/python3.11/runtime"
+SITE_PACKAGES="$PREFIX/lib/agent-sec-core/python3.11/site-packages"
+if [ ! -d "$RUNTIME" ]; then
+    # Existing raw installations used this private directory before component packaging separated.
+    RUNTIME="$PREFIX/lib/anolisa/sec-core/python3.11/runtime"
+    SITE_PACKAGES="$PREFIX/lib/anolisa/sec-core/python3.11/site-packages"
+fi
 PYTHON="$RUNTIME/bin/python3.11"
 
 if [ ! -x "$PYTHON" ]; then

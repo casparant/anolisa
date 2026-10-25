@@ -16,13 +16,14 @@ endif
 LIBDIR ?= $(PREFIX)/lib
 DATADIR ?= $(PREFIX)/share
 SYSCONFDIR ?= /etc
-RUNTIME_DIR ?= $(DATADIR)/anolisa/runtime
+RUNTIME_DIR ?= $(DATADIR)/ws-ckpt
 RUNTIME_SKILLS_DIR ?= $(RUNTIME_DIR)/skills/ws-ckpt
-COSH_SKILLS_DIR ?= $(DATADIR)/anolisa/skills/ws-ckpt
+COSH_SKILLS_DIR ?= $(DATADIR)/ws-ckpt/skills/ws-ckpt
 
 COMPONENT_DIR ?= $(DATADIR)/anolisa/components/ws-ckpt
-ADAPTER_DIR ?= $(DATADIR)/anolisa/adapters/ws-ckpt
-PLUGINS_DIR ?= $(RUNTIME_DIR)/ws-ckpt/plugins
+COMPONENT_CONTRACT ?=
+ADAPTER_DIR ?= $(DATADIR)/ws-ckpt/adapters
+PLUGINS_DIR ?= $(RUNTIME_DIR)/adapters
 SYSTEMD_SYSTEM_DIR ?= $(LIBDIR)/systemd/system
 CONFIG_DIR ?= $(SYSCONFDIR)/ws-ckpt
 
@@ -49,9 +50,11 @@ else
 	install -d -m 0755 "$(DESTDIR)$(RUNTIME_SKILLS_DIR)"
 	install -d -m 0755 "$(DESTDIR)$(COSH_SKILLS_DIR)"
 	cp -pr src/skills/ws-ckpt/. "$(DESTDIR)$(RUNTIME_SKILLS_DIR)"
-	cp -pr src/skills/ws-ckpt/. "$(DESTDIR)$(COSH_SKILLS_DIR)"
-	install -d -m 0755 "$(DESTDIR)$(COMPONENT_DIR)"
-	install -p -m 0644 component.toml "$(DESTDIR)$(COMPONENT_DIR)/component.toml"
+	@if [ "$(COSH_SKILLS_DIR)" != "$(RUNTIME_SKILLS_DIR)" ]; then cp -pr src/skills/ws-ckpt/. "$(DESTDIR)$(COSH_SKILLS_DIR)"; fi
+	@if [ -n "$(COMPONENT_CONTRACT)" ]; then \
+		install -d -m 0755 "$(DESTDIR)$(COMPONENT_DIR)"; \
+		install -p -m 0644 "$(COMPONENT_CONTRACT)" "$(DESTDIR)$(COMPONENT_DIR)/component.toml"; \
+	fi
 	install -d -m 0755 "$(DESTDIR)$(ADAPTER_DIR)"
 	rm -rf "$(DESTDIR)$(ADAPTER_DIR)/scripts" 2>/dev/null || true
 	install -d -m 0755 "$(DESTDIR)$(ADAPTER_DIR)/openclaw"

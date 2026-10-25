@@ -114,6 +114,7 @@ python3 "$COMMON_DIR/reproducible-build.py" \
         OUTPUT_DIR="$OUTPUT_DIR" \
         TARGET_OS="$TARGET_OS" TARGET_ARCH="$TARGET_ARCH" \
         RAW_RUST_TARGET="$RUST_TARGET" \
+        RAW_CONTRACT="$COMPONENT_ROOT/.anolisa/component.toml" \
         RAW_RUST_BUILDER="$COMMON_DIR/cross-profile.sh $PROFILE" \
         NPM_INSTALL='npm ci --include=dev'
 

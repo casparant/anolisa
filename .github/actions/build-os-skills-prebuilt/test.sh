@@ -6,10 +6,10 @@ ROOT="$(cd "$ACTION_DIR/../../.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 export OS_SKILLS_SOURCE_WORKTREE="$WORK/source"
-VERSION="$(python3 - "$ROOT/src/os-skills/component.toml" <<'PY'
+VERSION="$(python3 - "$ROOT/src/os-skills/packaging/raw/layout.toml" <<'PY'
 import sys, tomllib
 with open(sys.argv[1], 'rb') as stream:
-    print(tomllib.load(stream)['component']['version'])
+    print(tomllib.load(stream)['package']['version'])
 PY
 )"
 build() {

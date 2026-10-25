@@ -20,8 +20,8 @@ TARGET_SOURCES = {
         "bin/agentsight",
         "bin/agentsight-enforcer",
         "bin/agentsight-start",
-        "share/anolisa/agentsight/agentsight.service",
-        "share/anolisa/agentsight/agentsight-enforcer.service",
+        "share/agentsight/templates/agentsight.service",
+        "share/agentsight/templates/agentsight-enforcer.service",
     },
     ("macos", "aarch64"): {
         ".anolisa/component.toml",
@@ -41,7 +41,7 @@ def read_toml(path: Path) -> dict[str, object]:
         raise SystemExit(f"ERROR: cannot read {path}: {error}") from error
 
 
-def verify_release(root: Path, contract_path: Path, os_name: str, arch: str) -> str:
+def verify_release(root: Path, contract_path: Path | None, os_name: str, arch: str) -> str:
     """Return the synchronized version after validating the raw contract."""
     cargo = read_toml(root / "Cargo.toml")
     package = cargo.get("package")
@@ -49,6 +49,8 @@ def verify_release(root: Path, contract_path: Path, os_name: str, arch: str) -> 
     if not isinstance(source_version, str) or SEMVER.fullmatch(source_version) is None:
         raise SystemExit(f"ERROR: {root / 'Cargo.toml'} has no valid package version")
 
+    if contract_path is None:
+        return source_version
     contract = read_toml(contract_path)
     component = contract.get("component")
     if not isinstance(component, dict):
@@ -93,7 +95,7 @@ def parse_args() -> argparse.Namespace:
     """Parse source, contract, and target identity arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("source_root", type=Path)
-    parser.add_argument("contract", type=Path)
+    parser.add_argument("contract", nargs="?", default="")
     parser.add_argument("--os", choices=("linux", "macos"), required=True)
     parser.add_argument("--arch", choices=("x86_64", "aarch64"), required=True)
     return parser.parse_args()
@@ -108,7 +110,7 @@ def main() -> int:
     print(
         verify_release(
             args.source_root.resolve(),
-            args.contract.resolve(),
+            Path(args.contract).resolve() if args.contract else None,
             args.os,
             args.arch,
         )

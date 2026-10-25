@@ -1,5 +1,6 @@
 
-%define anolis_release 1
+%bcond_with anolisa_integration
+%define anolis_release 2
 %global debug_package %{nil}
 
 # Disable stripping of ELF binaries.  Bundled .so files (the crate-backed
@@ -54,6 +55,7 @@ BuildRequires:  systemd-rpm-macros
 # Metapackage: pull all subpackages
 Requires:       agent-sec-cli = %{version}-%{release}
 Requires:       agent-sec-cosh-hook = %{version}-%{release}
+Requires:       agent-sec-sandbox = %{version}-%{release}
 Requires:       agent-sec-codex-hook = %{version}-%{release}
 Requires:       agent-sec-qoder-hook = %{version}-%{release}
 Requires:       agent-sec-openclaw-hook = %{version}-%{release}
@@ -87,10 +89,12 @@ Built with maturin as a Rust native Python extension.
 %attr(0755,root,root) /usr/bin/agent-sec-daemon
 %{_userunitdir}/agent-sec-core.service
 /opt/agent-sec/lib/python3.11/site-packages/*
+%if %{with anolisa_integration}
 %dir %{_datadir}/anolisa
 %dir %{_datadir}/anolisa/components
 %dir %{_datadir}/anolisa/components/sec-core
 %{_datadir}/anolisa/components/sec-core/component.toml
+%endif
 %license LICENSE
 
 %post -n agent-sec-cli
@@ -108,7 +112,7 @@ Built with maturin as a Rust native Python extension.
 %package -n agent-sec-cosh-hook
 Summary:        CoPilot Shell security hooks with linux-sandbox
 Requires:       agent-sec-cli = %{version}-%{release}
-Requires:       bubblewrap
+Requires:       agent-sec-sandbox = %{version}-%{release}
 Requires:       python3 >= 3.11
 Requires:       python3 < 3.12
 
@@ -117,10 +121,10 @@ Provides code_scanner_hook and linux-sandbox for copilot-shell integration.
 The linux-sandbox binary provides secure sandboxed execution environments.
 
 %files -n agent-sec-cosh-hook
+/usr/share/anolisa/extensions/agent-sec-core
 %defattr(0644,root,root,0755)
-%attr(0755,root,root) /usr/local/bin/linux-sandbox
-%attr(0755,root,root) /usr/share/anolisa/extensions/agent-sec-core/hooks/*.py
-/usr/share/anolisa/extensions/agent-sec-core/
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/cosh/hooks/*.py
+%{_datadir}/agent-sec-core/adapters/cosh/
 %license LICENSE
 
 # =============================================================================
@@ -137,15 +141,18 @@ OpenClaw IDE plugin providing agent security integration.
 Hooks into OpenClaw to perform code scanning before tool execution.
 
 %files -n agent-sec-openclaw-hook
+/opt/agent-sec/openclaw-plugin
 %defattr(0644,root,root,0755)
-%attr(0755,root,root) /opt/agent-sec/openclaw-plugin/scripts/deploy.sh
-/opt/agent-sec/openclaw-plugin/
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/openclaw/scripts/deploy.sh
+%{_datadir}/agent-sec-core/adapters/openclaw/
 %license LICENSE
 
 # =============================================================================
 # Subpackage 4: agent-sec-hermes-hook
 # =============================================================================
 %package -n agent-sec-hermes-hook
+Requires:       python3 >= 3.11
+Requires:       python3 < 3.12
 Summary:        Hermes Agent plugin for agent security
 Requires:       agent-sec-cli = %{version}-%{release}
 Requires:       jq
@@ -155,9 +162,10 @@ Hermes Agent security plugin powered by agent-sec-core.
 Provides OS-level security guardrails for Hermes Agent via agent-sec-cli.
 
 %files -n agent-sec-hermes-hook
+/opt/agent-sec/hermes-plugin
 %defattr(0644,root,root,0755)
-%attr(0755,root,root) /opt/agent-sec/hermes-plugin/scripts/deploy.sh
-/opt/agent-sec/hermes-plugin/
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/hermes/scripts/deploy.sh
+%{_datadir}/agent-sec-core/adapters/hermes/
 %license LICENSE
 
 # =============================================================================
@@ -175,12 +183,13 @@ Provides prompt and PII policy enforcement, lifecycle observability, and
 managed Skill Ledger validation through Qwen Code command hooks.
 
 %files -n agent-sec-qwen-code-hook
+/opt/agent-sec/qwen-code-extension
 %defattr(0644,root,root,0755)
-%attr(0755,root,root) /opt/agent-sec/qwen-code-extension/scripts/deploy.sh
-%attr(0755,root,root) /opt/agent-sec/qwen-code-extension/hooks/observability_hook.py
-%attr(0755,root,root) /opt/agent-sec/qwen-code-extension/hooks/pii_checker_hook.py
-%attr(0755,root,root) /opt/agent-sec/qwen-code-extension/hooks/skill_ledger_hook.py
-/opt/agent-sec/qwen-code-extension/
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/qwencode/scripts/deploy.sh
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/qwencode/hooks/observability_hook.py
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/qwencode/hooks/pii_checker_hook.py
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/qwencode/hooks/skill_ledger_hook.py
+%{_datadir}/agent-sec-core/adapters/qwencode/
 %license LICENSE
 
 # =============================================================================
@@ -196,7 +205,8 @@ Includes skill-ledger, code-scanner, prompt-scanner and related skill definition
 
 %files -n agent-sec-skills
 %defattr(0644,root,root,0755)
-%{_datadir}/anolisa/skills/
+%{_datadir}/agent-sec-core/skills/
+%{_datadir}/anolisa/skills/*
 %license LICENSE
 
 # =============================================================================
@@ -213,9 +223,10 @@ Codex security hooks providing code scanning, PII checking, prompt scanning
 and skill ledger verification for Codex agent.
 
 %files -n agent-sec-codex-hook
+/opt/agent-sec/codex-plugin
 %defattr(0644,root,root,0755)
-%attr(0755,root,root) /opt/agent-sec/codex-plugin/install.sh
-/opt/agent-sec/codex-plugin/
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/codex/install.sh
+%{_datadir}/agent-sec-core/adapters/codex/
 %license LICENSE
 
 # =============================================================================
@@ -231,9 +242,10 @@ Requires:       python3 < 3.12
 Qoder CLI security hooks providing agent-sec-core protection for Qoder agents.
 
 %files -n agent-sec-qoder-hook
+/opt/agent-sec/qoder-plugin
 %defattr(0644,root,root,0755)
-%attr(0755,root,root) /opt/agent-sec/qoder-plugin/install.sh
-/opt/agent-sec/qoder-plugin/
+%attr(0755,root,root) %{_datadir}/agent-sec-core/adapters/qoder/install.sh
+%{_datadir}/agent-sec-core/adapters/qoder/
 %license LICENSE
 
 # =============================================================================
@@ -245,6 +257,19 @@ Qoder CLI security hooks providing agent-sec-core protection for Qoder agents.
 # =============================================================================
 # Build & Install
 # =============================================================================
+
+%package -n agent-sec-sandbox
+Summary:        Agent security Linux sandbox backend
+Requires:       bubblewrap
+
+%description -n agent-sec-sandbox
+Agent security Linux sandbox backend.
+
+%files -n agent-sec-sandbox
+%license LICENSE
+%{_bindir}/linux-sandbox
+/usr/local/bin/linux-sandbox
+
 %prep
 %setup -q
 
@@ -255,7 +280,36 @@ make stage-cli
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make install-all-for-rpmbuild DESTDIR=$RPM_BUILD_ROOT
+make install-all-for-rpmbuild DESTDIR=$RPM_BUILD_ROOT COMPONENT_CONTRACT=%{?with_anolisa_integration:.anolisa/component.toml}
+
+# Move immutable native resources; active config, state and service identity stay unchanged.
+install -d %{buildroot}%{_datadir}/agent-sec-core/adapters
+mv %{buildroot}/usr/share/anolisa/extensions/agent-sec-core %{buildroot}%{_datadir}/agent-sec-core/adapters/cosh
+cp -rp %{buildroot}%{_datadir}/agent-sec-core/adapters/cosh %{buildroot}/usr/share/anolisa/extensions/agent-sec-core
+install -d %{buildroot}%{_datadir}/agent-sec-core/adapters
+mv %{buildroot}/opt/agent-sec/openclaw-plugin %{buildroot}%{_datadir}/agent-sec-core/adapters/openclaw
+cp -rp %{buildroot}%{_datadir}/agent-sec-core/adapters/openclaw %{buildroot}/opt/agent-sec/openclaw-plugin
+install -d %{buildroot}%{_datadir}/agent-sec-core/adapters
+mv %{buildroot}/opt/agent-sec/hermes-plugin %{buildroot}%{_datadir}/agent-sec-core/adapters/hermes
+cp -rp %{buildroot}%{_datadir}/agent-sec-core/adapters/hermes %{buildroot}/opt/agent-sec/hermes-plugin
+install -d %{buildroot}%{_datadir}/agent-sec-core/adapters
+mv %{buildroot}/opt/agent-sec/codex-plugin %{buildroot}%{_datadir}/agent-sec-core/adapters/codex
+cp -rp %{buildroot}%{_datadir}/agent-sec-core/adapters/codex %{buildroot}/opt/agent-sec/codex-plugin
+install -d %{buildroot}%{_datadir}/agent-sec-core/adapters
+mv %{buildroot}/opt/agent-sec/qoder-plugin %{buildroot}%{_datadir}/agent-sec-core/adapters/qoder
+cp -rp %{buildroot}%{_datadir}/agent-sec-core/adapters/qoder %{buildroot}/opt/agent-sec/qoder-plugin
+install -d %{buildroot}%{_datadir}/agent-sec-core/adapters
+mv %{buildroot}/opt/agent-sec/qwen-code-extension %{buildroot}%{_datadir}/agent-sec-core/adapters/qwencode
+cp -rp %{buildroot}%{_datadir}/agent-sec-core/adapters/qwencode %{buildroot}/opt/agent-sec/qwen-code-extension
+install -d %{buildroot}%{_datadir}/agent-sec-core
+mv %{buildroot}%{_datadir}/anolisa/skills %{buildroot}%{_datadir}/agent-sec-core/skills
+install -d %{buildroot}%{_datadir}/anolisa/skills
+for skill in %{buildroot}%{_datadir}/agent-sec-core/skills/*; do
+    cp -rp "$skill" %{buildroot}%{_datadir}/anolisa/skills/
+done
+install -d %{buildroot}%{_bindir}
+mv %{buildroot}/usr/local/bin/linux-sandbox %{buildroot}%{_bindir}/linux-sandbox
+ln -s %{_bindir}/linux-sandbox %{buildroot}/usr/local/bin/linux-sandbox
 
 %changelog
 * Thu Sep 24 2026 YiZheng Yang <YiZheng.Yang@linux.alibaba.com> - 0.13.2-1

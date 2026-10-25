@@ -1,0 +1,78 @@
+{
+  "build": {
+    "package_id": "agent-memory",
+    "source": "src/agent-memory",
+    "version_file": "src/agent-memory/Cargo.toml",
+    "version_key": "package.version",
+    "builder": "agent-memory",
+    "profile": "gnu2.28",
+    "dependencies": [],
+    "entrypoints": {
+      "agent-memory": "bin/agent-memory"
+    },
+    "required": [
+      "bin/agent-memory",
+      "share/anolisa/adapters/agent-memory/manifest.json",
+      "share/anolisa/adapters/agent-memory/openclaw/dist/index.js",
+      "share/anolisa/agent-memory/default.toml",
+      "share/anolisa/agent-memory/anolisa-memory@.service"
+    ]
+  },
+  "schema_version": 1,
+  "id": "agent-memory",
+  "source_dir": "src/agent-memory",
+  "resource_namespace": "agent-memory",
+  "packages": [
+    {
+      "id": "agent-memory-core",
+      "kind": "core",
+      "requires": [],
+      "sources": [
+        {
+          "from": "bin/",
+          "to": "bin/"
+        },
+        {
+          "from": "share/agent-memory/templates/",
+          "to": "share/agent-memory/templates/"
+        },
+        {
+          "from": "share/agent-memory/metadata/",
+          "to": "share/agent-memory/metadata/",
+          "optional": true
+        },
+        {
+          "from": "share/doc/agent-memory/",
+          "to": "share/doc/agent-memory/",
+          "optional": true
+        },
+        {
+          "from": "share/agent-memory/mcp-servers/",
+          "to": "share/agent-memory/mcp-servers/",
+          "optional": true
+        }
+      ],
+      "entrypoints": {
+        "agent-memory": "bin/agent-memory"
+      }
+    },
+    {
+      "id": "agent-memory-plugins",
+      "kind": "plugin",
+      "agents": [
+        "openclaw"
+      ],
+      "requires": [
+        "agent-memory-core"
+      ],
+      "sources": [
+        {
+          "from": "share/agent-memory/adapters/",
+          "to": "share/agent-memory/adapters/"
+        }
+      ]
+    }
+  ],
+  "rpm_spec": "src/agent-memory/agent-memory.spec.in",
+  "raw_script": "src/agent-memory/packaging/raw/package.py"
+}

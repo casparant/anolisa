@@ -17,7 +17,6 @@ sources=(
     "scripts/agentsight.service"
     "scripts/agentsight-enforcer.service"
     "agentsight.json"
-    "component.toml"
     "README.md"
     "README_zh.md"
     "LICENSE"
@@ -28,7 +27,6 @@ targets=(
     "agentsight.service"
     "agentsight-enforcer.service"
     "agentsight.json"
-    "component.toml"
     "README.md"
     "README_zh.md"
     "LICENSE"
@@ -42,6 +40,10 @@ for source in "${sources[@]}"; do
     fi
 done
 if (( missing != 0 )); then
+    exit 1
+fi
+if [[ -n "${COMPONENT_CONTRACT:-}" && ! -f "$COMPONENT_CONTRACT" ]]; then
+    echo "optional component contract not found: $COMPONENT_CONTRACT" >&2
     exit 1
 fi
 
@@ -66,3 +68,6 @@ for index in "${!sources[@]}"; do
     install -p -m "$mode" \
         "$project_root/${sources[$index]}" "$destination/${targets[$index]}"
 done
+if [[ -n "${COMPONENT_CONTRACT:-}" ]]; then
+    install -p -m 0644 "$COMPONENT_CONTRACT" "$destination/component.toml"
+fi

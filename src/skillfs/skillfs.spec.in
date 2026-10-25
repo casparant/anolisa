@@ -1,4 +1,5 @@
-%define anolis_release 1
+%bcond_with anolisa_integration
+%define anolis_release 2
 %global         rustflags -C opt-level=3 -C codegen-units=1
 %global         debug_package %{nil}
 %global         _localbindir /usr/local/bin
@@ -21,14 +22,35 @@ BuildRequires:  gcc
 BuildRequires:  make
 BuildRequires:  pkgconfig(fuse3)
 
-Requires:       fuse3
-Requires:       fuse3-libs%{?_isa}
-Provides:       anolisa-component(skillfs)
+Requires:       skillfs-core = %{version}-%{release}
+Requires:       skillfs-skills = %{version}-%{release}
 
 %description
 SkillFS is a FUSE-based filesystem that exposes AI agent skills through
 filesystem views, while preserving ordinary POSIX passthrough behavior and
 SkillFS-specific security boundaries.
+
+
+%package -n skillfs-core
+Conflicts:      skillfs < %{version}-%{release}
+%if %{with anolisa_integration}
+Provides:       anolisa-component(skillfs)
+%endif
+Summary:        SkillFS FUSE filesystem and management command
+Requires:       fuse3
+Requires:       fuse3-libs%{?_isa}
+
+%description -n skillfs-core
+SkillFS FUSE filesystem and management command.
+
+%package -n skillfs-skills
+Conflicts:      skillfs < %{version}-%{release}
+Summary:        SkillFS mount workflow skills
+BuildArch:      noarch
+Requires:       skillfs-core = %{version}-%{release}
+
+%description -n skillfs-skills
+SkillFS mount workflow skills.
 
 %prep
 %setup -q -a 1 -n %{name}-%{version}
@@ -43,23 +65,34 @@ rm -rf %{buildroot}
 install -d -m 0755 %{buildroot}%{_localbindir}
 install -p -m 0755 target/release/skillfs %{buildroot}%{_localbindir}/skillfs
 
+%if %{with anolisa_integration}
 install -d -m 0755 %{buildroot}%{_datadir}/anolisa/components/skillfs
 install -p -m 0644 component.toml \
     %{buildroot}%{_datadir}/anolisa/components/skillfs/component.toml
+%endif
 
-install -d -m 0755 %{buildroot}%{_datadir}/anolisa/runtime/skills/skillfs
+install -d -m 0755 %{buildroot}%{_datadir}/skillfs/skills/skillfs
 cp -rp docs/skills/skillfs-mount/. \
-    %{buildroot}%{_datadir}/anolisa/runtime/skills/skillfs/
+    %{buildroot}%{_datadir}/skillfs/skills/skillfs/
+
+install -d %{buildroot}%{_datadir}/anolisa/runtime/skills
+cp -rp %{buildroot}%{_datadir}/skillfs/skills/skillfs %{buildroot}%{_datadir}/anolisa/runtime/skills/skillfs
 
 %files
 %license LICENSE
-%doc README.md CHANGELOG.md
-%attr(0755,root,root) %{_localbindir}/skillfs
-%dir %{_datadir}/anolisa/components/skillfs
-%{_datadir}/anolisa/components/skillfs/component.toml
-%dir %{_datadir}/anolisa/runtime
-%dir %{_datadir}/anolisa/runtime/skills
-%{_datadir}/anolisa/runtime/skills/skillfs/
+
+
+%files -n skillfs-core
+%license LICENSE
+%{_localbindir}/skillfs
+%if %{with anolisa_integration}
+%{_datadir}/anolisa/components/skillfs/
+%endif
+
+%files -n skillfs-skills
+%license LICENSE
+%{_datadir}/skillfs/skills/
+%{_datadir}/anolisa/runtime/skills/skillfs
 
 %changelog
 * Fri Oct 23 2026 kongche-jbw <kongche.jbw@alibaba-inc.com> - 0.5.3-1

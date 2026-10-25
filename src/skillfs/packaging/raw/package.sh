@@ -2,10 +2,10 @@
 # Assemble skillfs runtime files without building or executing cross binaries.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_ROOT="${SKILLFS_SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SOURCE_ROOT="${SKILLFS_SOURCE_DIR:-${COMPONENT_SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd -P)}}"
 BIN_DIR="${BIN_DIR:-$SOURCE_ROOT/target/release}"
-CONTRACT="${RAW_CONTRACT:-$SOURCE_ROOT/.anolisa/component.toml}"
+CONTRACT="${RAW_CONTRACT:-}"
 TARGET_OS="${TARGET_OS:-linux}"
 TARGET_ARCH="${TARGET_ARCH:-$(uname -m)}"
 BUILD_METADATA="${SKILLFS_BUILD_METADATA:-$BIN_DIR/skillfs-build.toml}"
@@ -42,9 +42,12 @@ stage_payload() {
     if [ -d "$stage" ] && [ -n "$(find "$stage" -mindepth 1 -print -quit)" ]; then
         die "staging directory must be empty: $stage"
     fi
-    local skills="$stage/share/anolisa/runtime/skills/skillfs"
-    install -d -m 0755 "$stage/.anolisa" "$stage/bin" "$skills" "$stage/share/doc/skillfs"
-    install -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    local skills="$stage/share/skillfs/skills/skillfs"
+    install -d -m 0755 "$stage/bin" "$skills" "$stage/share/doc/skillfs"
+    if [ -n "$CONTRACT" ]; then
+        install -d -m 0755 "$stage/.anolisa"
+        install -m 0644 "$CONTRACT" "$stage/.anolisa/component.toml"
+    fi
     install -m 0755 "$BIN_DIR/skillfs" "$stage/bin/skillfs"
     cp -pr "$SOURCE_ROOT/docs/skills/skillfs-mount/." "$skills/"
     # LICENSE is a source symlink in the monorepo; install copies its bytes.
@@ -60,16 +63,15 @@ if [ "$COMMAND" = stage ]; then
     stage_payload "$DESTDIR"
     exit 0
 fi
+ARCHIVE_TOOL="$SCRIPT_DIR/archive.py"
 OUTPUT_DIR="${OUTPUT_DIR:-$SOURCE_ROOT/target/raw}"
 EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$SOURCE_ROOT" log -1 --format=%ct -- .)}"
 case "$EPOCH" in '' | *[!0-9]*) die "SOURCE_DATE_EPOCH must be a non-negative integer" ;; esac
-tar --version | grep -q 'GNU tar' || die "GNU tar is required for reproducible packages"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 stage_payload "$WORK/stage"
 install -d -m 0755 "$OUTPUT_DIR"
 ARTIFACT="skillfs-$VERSION-$TARGET_OS-$TARGET_ARCH.tar.gz"
-LC_ALL=C tar --sort=name --mtime="@$EPOCH" --owner=0 --group=0 --numeric-owner \
-    --hard-dereference --format=gnu -C "$WORK/stage" -cf - . | gzip -n -9 > "$WORK/$ARTIFACT"
+python3 "$ARCHIVE_TOOL" --source "$WORK/stage" --output "$WORK/$ARTIFACT" --epoch "$EPOCH"
 mv "$WORK/$ARTIFACT" "$OUTPUT_DIR/$ARTIFACT"
 printf '%s\n' "$OUTPUT_DIR/$ARTIFACT"
