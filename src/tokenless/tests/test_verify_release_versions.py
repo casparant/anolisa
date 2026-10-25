@@ -72,10 +72,7 @@ def _requirements_text(path_version: str, wheel_version: str) -> str:
 class TestReferencedWheelVersions(unittest.TestCase):
     def test_prerelease_version_captured_whole(self):
         """A pre-release version must not be truncated at the first dash."""
-        text = (
-            "anolisa_tokenless-0.9.0-rc.1-cp311-cp311-"
-            "manylinux_2_28_x86_64.whl\n"
-        )
+        text = "anolisa_tokenless-0.9.0-rc.1-cp311-cp311-" "manylinux_2_28_x86_64.whl\n"
         self.assertEqual(_referenced_wheel_versions(text), {"0.9.0-rc.1"})
 
     def test_normalized_prerelease_version(self):
@@ -143,9 +140,7 @@ class TestRequirementsReferenceContract(unittest.TestCase):
 
     def test_prerelease_release_with_normalized_wheel_filename_accepted(self):
         """Contract (a): Cargo 0.9.0-rc.1 plus wheel filename 0.9.0rc1."""
-        self.assert_accepts(
-            "0.9.0-rc.1", _requirements_text("0.9.0-rc.1", "0.9.0rc1")
-        )
+        self.assert_accepts("0.9.0-rc.1", _requirements_text("0.9.0-rc.1", "0.9.0rc1"))
 
     def test_unnormalized_wheel_filename_rejected(self):
         """Contract (b): a wheel filename keeping 0.9.0-rc.1 is pip-rejected."""
@@ -168,9 +163,7 @@ class TestRequirementsReferenceContract(unittest.TestCase):
         self.assert_accepts("9.8.7", _requirements_text("9.8.7", "9.8.7"))
 
     def test_unstamped_template_rejected(self):
-        self.assert_rejects(
-            "0.9.0-rc.1", "anolisa-tokenless @ .../v@VERSION@/...\n", "@VERSION@"
-        )
+        self.assert_rejects("0.9.0-rc.1", "anolisa-tokenless @ .../v@VERSION@/...\n", "@VERSION@")
 
     def test_normalized_release_tag_rejected(self):
         """The normalized Python spelling must not leak into the tag path.
@@ -257,12 +250,11 @@ def _stamp_templates(version: str) -> tuple:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(template, target)
     (root / "Cargo.toml").write_text(
-        "[workspace]\nmembers = []\n\n[workspace.package]\n"
-        f'version = "{version}"\n',
+        "[workspace]\nmembers = []\n\n[workspace.package]\n" f'version = "{version}"\n',
         encoding="utf-8",
     )
     result = subprocess.run(
-        ["make", "-B", "stamp-adapter-templates"],
+        ["make", "-B", "stamp-adapter-templates", "generate-component-contract"],
         cwd=root,
         capture_output=True,
         text=True,
@@ -304,9 +296,7 @@ class TestStampedRequirementsPipeline(unittest.TestCase):
             f"make -B stamp-adapter-templates failed for {version}: "
             f"{stamped.stdout[-400:]} {stamped.stderr[-400:]}",
         )
-        requirements = (
-            root / "adapters" / "tokenless" / "qwenpaw" / "requirements.txt"
-        )
+        requirements = root / "adapters" / "tokenless" / "qwenpaw" / "requirements.txt"
         text = requirements.read_text(encoding="utf-8")
         self.assertIn(f"/tokenless/v{version}/", text)
         self.assertIn(f"anolisa_tokenless-{wheel}-cp311-abi3-", text)

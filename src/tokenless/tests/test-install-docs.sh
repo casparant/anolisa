@@ -31,8 +31,8 @@ UNINSTALL_SH="$TOKENLESS_ROOT/scripts/uninstall.sh"
 # src/os-skills/<category>/<skill>/ into {datadir}/skills/<skill>/, so a
 # SKILL.md that is missing from the bundle lists ships but is never deployed.
 OS_SKILLS_ROOT="$REPO_ROOT/src/os-skills"
-BUNDLE_COMPONENT="$OS_SKILLS_ROOT/component.toml"
-BUNDLE_DISTRIBUTION="$REPO_ROOT/distribution/anolisa/manifests/components/os-skills/component.toml"
+BUNDLE_COMPONENT="$OS_SKILLS_ROOT/.anolisa/component.toml.in"
+BUNDLE_DISTRIBUTION="$OS_SKILLS_ROOT/.anolisa/component.toml.in"
 OS_SKILLS_INDEX_EN="$OS_SKILLS_ROOT/README.md"
 OS_SKILLS_INDEX_ZH="$OS_SKILLS_ROOT/README_zh.md"
 SKILL_NAME="install-tokenless"
@@ -191,13 +191,12 @@ check_bundle() {
   pass "$label [$fw] declares only skills that exist on disk"
 }
 
-# The catalog version tracks the source component, while index.toml records
-# independently published artifacts and may lag behind it. A version sync alone
-# does not publish a new bundle, so install-tokenless belongs in the source
-# manifest until a release ships it through the managed distribution path.
+# The optional integration definition tracks the current component source.
+# index.toml records independently published artifacts and may lag behind it;
+# changing source metadata does not publish or rewrite those historical bundles.
 INDEX_TOML="$REPO_ROOT/distribution/anolisa/manifests/components/index.toml"
 [ -f "$INDEX_TOML" ] || { echo "FAIL missing file: $INDEX_TOML" >&2; exit 1; }
-SOURCE_VERSION=$(awk -F'"' '/^version = /{ print $2; exit }' "$BUNDLE_COMPONENT")
+SOURCE_VERSION=$(awk -F'"' '/^version = /{ print $2; exit }' "$OS_SKILLS_ROOT/packaging/raw/layout.toml")
 [ -n "$SOURCE_VERSION" ] || fail "cannot read the os-skills source component version"
 DIST_VERSION=$(awk -F'"' '/^version = /{ print $2; exit }' "$BUNDLE_DISTRIBUTION")
 [ -n "$DIST_VERSION" ] || fail "cannot read the os-skills distribution contract version"
@@ -213,21 +212,12 @@ PUBLISHED_VERSIONS=$(awk -F'"' '
 pass "index.toml records published os-skills versions independently of the catalog"
 
 for fw in openclaw hermes; do
-  check_bundle "src/os-skills/component.toml" "$BUNDLE_COMPONENT" "$fw"
-  # The catalog may not advertise the new skill before its bundle is published,
-  # and everything it already declares must still exist on disk.
-  if declared_skills "$BUNDLE_DISTRIBUTION" "$fw" | grep -qxF "$SKILL_NAME"; then
-    fail "manifests os-skills component.toml [$fw] declares $SKILL_NAME before a published bundle ships it"
-  fi
-  pass "manifests os-skills component.toml [$fw] does not declare $SKILL_NAME ahead of its artifact"
-  while IFS= read -r name; do
-    [ -n "$name" ] || continue
-    found=$(find "$OS_SKILLS_ROOT" -mindepth 3 -maxdepth 3 -type f -name SKILL.md \
-              -path "*/$name/SKILL.md" | head -1)
-    [ -n "$found" ] || fail "manifests os-skills component.toml [$fw] declares '$name', which has no SKILL.md under src/os-skills"
-  done < <(declared_skills "$BUNDLE_DISTRIBUTION" "$fw")
-  pass "manifests os-skills component.toml [$fw] declares only skills that exist on disk"
+  check_bundle "src/os-skills/.anolisa/component.toml.in" "$BUNDLE_COMPONENT" "$fw"
+  check_bundle "src/os-skills/.anolisa/component.toml.in" "$BUNDLE_DISTRIBUTION" "$fw"
 done
+cmp -s "$BUNDLE_COMPONENT" "$BUNDLE_DISTRIBUTION" \
+  || fail "the compatibility manifest differs from the component integration definition"
+pass "the compatibility manifest matches the component integration definition"
 
 # The component manifest is the authoritative bundle: every skill on disk must be
 # reachable through it, or the RPM installs a directory no agent ever loads.
@@ -236,7 +226,7 @@ while IFS= read -r skill_md; do
   name=$(basename "$(dirname "$skill_md")")
   for fw in openclaw hermes; do
     declared_skills "$BUNDLE_COMPONENT" "$fw" | grep -qxF "$name" || {
-      echo "FAIL src/os-skills/component.toml [$fw] is missing the on-disk skill '$name'" >&2
+      echo "FAIL src/os-skills/.anolisa/component.toml.in [$fw] is missing the on-disk skill '$name'" >&2
       missing_bundle_entries=1
     }
   done
@@ -244,10 +234,10 @@ done < <(find "$OS_SKILLS_ROOT" -mindepth 3 -maxdepth 3 -type f -name SKILL.md |
 [ "$missing_bundle_entries" = "0" ] || exit 1
 pass "every on-disk OS Skill is declared in both bundle lists of the component manifest"
 
-has "$BUNDLE_COMPONENT" 'source = "{datadir}/skills/install-tokenless/"' \
-  "the component bundle points at the flattened RPM skill path"
-hasnt "$BUNDLE_DISTRIBUTION" 'source = "{datadir}/skills/install-tokenless/"' \
-  "the distribution bundle does not point at a skill its published artifacts lack"
+has "$BUNDLE_COMPONENT" 'source = "{sharedir}/os-skills/skills/install-tokenless/"' \
+  "the component bundle points at its canonical installed skill path"
+has "$BUNDLE_DISTRIBUTION" 'source = "{sharedir}/os-skills/skills/install-tokenless/"' \
+  "the integration definition points at the current component payload"
 has "$OS_SKILLS_INDEX_EN" "**install-tokenless**" "en OS Skills index lists the new skill"
 has "$OS_SKILLS_INDEX_ZH" "**install-tokenless**" "zh OS Skills index lists the new skill"
 

@@ -98,7 +98,7 @@ def check_inventory(root: Path, metadata: dict, run: Callable) -> None:
         raise ValueError("opt-in test targets require an explicit acceptance rationale")
     workspaces = [(root, metadata)] + [
         (Path(provider["workspace_root"]), provider)
-        for provider in metadata.get("provider_workspaces", [])
+        for provider in [*metadata.get("provider_workspaces", []), *metadata.get("shared_workspaces", [])]
     ]
     targets = set()
     runnable = {}

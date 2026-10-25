@@ -155,6 +155,13 @@ class ScopeTests(GateFixture):
         removed = self.git("rev-parse", "HEAD")
         self.assertTrue(gate.scope("push", {"before": head, "after": removed}, removed, self.root))
 
+    def test_shared_installer_and_preview_changes_select_the_gate(self) -> None:
+        base = self.init_git()
+        for path in ("distribution/crates/local-package/src/plan.rs", "distribution/tooling/aw-preview/src/package.rs"):
+            head = self.commit(path, "shared change")
+            self.assertTrue(gate.scope("pull_request", {"pull_request": {"base": {"sha": base}, "head": {"sha": head}}}, head, self.root))
+            base = head
+
     def test_merge_group_selects_only_aw_changes(self) -> None:
         base = self.init_git()
         head = self.commit("src/tokenless/unrelated.txt", "unrelated")
@@ -203,6 +210,12 @@ class GateTests(GateFixture):
             "aw-provider-sec-core": self.root.parents[1] / "providers/agent-sec-core",
             "aw-provider-tokenless": self.root.parents[1] / "providers/tokenless",
         }
+        shared_directories = {
+            "local-package": self.root.parents[1] / "distribution/crates/local-package",
+            "local-package-runtime": self.root.parents[1] / "distribution/crates/local-package/runtime",
+            "anolisa-aw-preview": self.root.parents[1] / "distribution/tooling/aw-preview",
+        }
+        local_directories = {**provider_directories, **shared_directories}
         packages = []
         for name, directory, dependencies in (
             ("aw-contracts", self.root / "crates/aw-contracts", ["serde_json"]),
@@ -217,7 +230,7 @@ class GateTests(GateFixture):
                 self.root / "crates/aw-provider",
                 ["aw-config", "jsonschema", "serde", "serde_json", "sha2", "thiserror"],
             ),
-            ("aw-exec", self.root / "crates/aw-exec", ["libc", "thiserror"]),
+            ("aw-exec", self.root / "crates/aw-exec", ["libc", "thiserror", "local-package-runtime"]),
             (
                 "aw-host", self.root / "crates/aw-host",
                 ["aw-config", "aw-exec", "aw-provider", "serde_json", "sha2", "thiserror"],
@@ -232,7 +245,7 @@ class GateTests(GateFixture):
             ),
             (
                 "aw-package", self.root / "crates/aw-package",
-                ["aw-config", "aw-exec", "aw-service", "serde", "serde_json", "serde_yaml_ng", "sha2", "thiserror", "libc", "flate2", "tar", "tempfile"],
+                ["local-package", "aw-config", "aw-exec", "aw-service", "serde", "serde_json", "serde_yaml_ng", "libc", "tempfile"],
             ),
             (
                 "aw-provider-tokenless", self.root.parents[1] / "providers/tokenless",
@@ -266,10 +279,10 @@ class GateTests(GateFixture):
                         {
                             "name": dependency,
                             "path": (
-                                str(provider_directories.get(dependency, self.root / "crates" / dependency))
-                                if dependency.startswith("aw-") else None
+                                str(local_directories.get(dependency, self.root / "crates" / dependency))
+                                if dependency.startswith(("aw-", "local-package")) else None
                             ),
-                            "source": None if dependency.startswith("aw-") else "registry+fixture",
+                            "source": None if dependency.startswith(("aw-", "local-package")) else "registry+fixture",
                         }
                         for dependency in dependencies
                     ],
@@ -284,7 +297,51 @@ class GateTests(GateFixture):
                 for p in packages if p["name"] in provider_directories
             ],
         }
+        shared_packages = []
+        for name, dependencies in (
+            ("local-package", ["serde", "serde_json", "serde_yaml_ng", "sha2", "thiserror", "libc", "tempfile", "local-package-runtime"]),
+            ("local-package-runtime", ["libc", "thiserror"]),
+            ("anolisa-aw-preview", ["local-package", "aw-exec", "serde_json", "flate2", "tar", "tempfile", "libc"]),
+        ):
+            directory = shared_directories[name]
+            (directory / "src").mkdir(parents=True, exist_ok=True)
+            (directory / "src/lib.rs").write_text("//! Fixture.\n", encoding="utf-8")
+            targets = [{"name": name.replace("-", "_"), "src_path": str(directory / "src/lib.rs"), "kind": ["lib"]}]
+            if name == "anolisa-aw-preview":
+                targets.append({"name": name, "kind": ["bin"], "src_path": str(directory / "src/bin" / f"{name}.rs")})
+            shared_packages.append({"id": name, "name": name, "manifest_path": str(directory / "Cargo.toml"), "targets": targets,
+                "dependencies": [{"name": dependency,
+                    "path": str(local_directories.get(dependency, self.root / "crates" / dependency)) if dependency.startswith(("aw-", "local-package")) else None,
+                    "source": None if dependency.startswith(("aw-", "local-package")) else "registry+fixture"} for dependency in dependencies]})
+        metadata["shared_workspaces"] = [
+            {"workspace_root": str(shared_directories["local-package"]), "packages": shared_packages[:2], "workspace_members": [p["id"] for p in shared_packages[:2]]},
+            {"workspace_root": str(shared_directories["anolisa-aw-preview"]), "packages": shared_packages[2:], "workspace_members": ["anolisa-aw-preview"]},
+        ]
         gate.structure(metadata, self.root)
+        for changes in ([], metadata["shared_workspaces"][:1], metadata["shared_workspaces"][:1] * 2):
+            with self.assertRaises(ValueError):
+                gate.structure({**metadata, "shared_workspaces": changes}, self.root)
+        for path in ("/foreign", str(self.root)):
+            invalid = deepcopy(metadata)
+            invalid["shared_workspaces"][0]["workspace_root"] = path
+            with self.assertRaises(ValueError):
+                gate.structure(invalid, self.root)
+        for dependency in ("aw-cli", "aw-config", "aw-exec"):
+            invalid = deepcopy(metadata)
+            invalid["shared_workspaces"][0]["packages"][0]["dependencies"].append({"name": dependency})
+            with self.assertRaisesRegex(ValueError, "unreviewed dependency"):
+                gate.structure(invalid, self.root)
+        invalid = deepcopy(metadata)
+        shared_dependency = next(d for d in invalid["packages"][4]["dependencies"] if d["name"] == "local-package-runtime")
+        shared_dependency["path"] = str(self.root / "foreign-runtime")
+        with self.assertRaisesRegex(ValueError, "local dependency"):
+            gate.structure(invalid, self.root)
+        for name in ("local-package", "anolisa-aw-preview"):
+            source = shared_directories[name] / "src/lib.rs"
+            source.write_text("// fixture\n" * 700)
+            with self.assertRaisesRegex(ValueError, "exceed"):
+                gate.structure(metadata, self.root)
+            source.write_text("//! Fixture.\n")
         for name in ("aw-cli", "aw-package", "aw-core", "aw-provider-sec-core"):
             invalid = deepcopy(metadata)
             package = next(p for p in invalid["packages"] if p["name"] == name)

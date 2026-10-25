@@ -4,8 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-CATALOG="distribution/anolisa/manifests/components/tokenless/component.toml"
-VERSION=$(grep '^version' src/tokenless/Cargo.toml | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+CATALOG="src/tokenless/.anolisa/component.toml.in"
 
 WORK_DIR=$(mktemp -d)
 SNAPSHOT="$WORK_DIR/catalog.snapshot"
@@ -66,7 +65,7 @@ restore_from_backup() {
 # Case 1: a drifted catalog version is rejected and the fixture comes back
 # byte-for-byte from its backup.
 cp "$CATALOG" "$BACKUP"
-drift_version "$CATALOG" "$VERSION"
+drift_version "$CATALOG" '@VERSION@'
 expect_version_mismatch
 restore_from_backup
 
@@ -74,7 +73,7 @@ restore_from_backup
 # synchronized survives the test byte-for-byte.
 printf '\n# local wip: note unrelated to the version field\n' >> "$CATALOG"
 cp "$CATALOG" "$BACKUP"
-drift_version "$CATALOG" "$VERSION"
+drift_version "$CATALOG" '@VERSION@'
 expect_version_mismatch
 restore_from_backup
 if ! grep -qF 'local wip' "$CATALOG"; then
@@ -100,7 +99,7 @@ mkdir -p "$NOGIT_DIR"
 cp "$CATALOG" "$NOGIT_DIR/component.toml"
 NOGIT_BACKUP="$NOGIT_DIR/component.toml.backup"
 cp "$NOGIT_DIR/component.toml" "$NOGIT_BACKUP"
-drift_version "$NOGIT_DIR/component.toml" "$VERSION"
+drift_version "$NOGIT_DIR/component.toml" '@VERSION@'
 cp "$NOGIT_BACKUP" "$NOGIT_DIR/component.toml"
 if ! cmp -s "$NOGIT_DIR/component.toml" "$NOGIT_BACKUP"; then
     echo "ERROR: catalog was not restored byte-for-byte outside a Git tree" >&2

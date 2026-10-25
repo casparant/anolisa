@@ -11,7 +11,7 @@ OLD_CLI_VERSION="0.0.0-old"
 REAL_TAR="$(command -v tar)"
 TOOL_DIR="${TEST_ROOT}/tools"
 REQUIRED_TOOLS="
-  awk bash cat chmod cp dirname env grep gzip install ln mkdir mv readlink rm sed
+  awk bash cat chmod cp dd dirname env grep gzip install ln mkdir mv readlink rm sed
   sh tar tr
 "
 SYSTEM_PATH="$TOOL_DIR"
@@ -256,6 +256,10 @@ run_case install-cosh-ng-system \
   "--install-mode system install cosh-ng --backend raw" \
   --cosh-ng --install-mode=system
 test -s "${TEST_ROOT}/install-cosh-ng-system/sudo.log"
+ANOLISA_TEST_OS=Linux run_case install-complete-rpm \
+  "--install-mode system install --all --backend rpm
+--install-mode system setup --non-interactive --scope system" --rpm
+test -s "${TEST_ROOT}/install-complete-rpm/sudo.log"
 run_case install-cosh-ng-rpm \
   "--install-mode system install cosh-ng --backend rpm" \
   --cosh-ng --backend=rpm --install-mode=system
@@ -516,5 +520,18 @@ expect_rejected backend-with-action \
 expect_rejected unknown-argument \
   "unknown argument: --unknown" \
   --unknown
+expect_rejected rpm-on-macos "--rpm requires Linux" --rpm
+expect_rejected rpm-with-component \
+  "--rpm cannot be combined with CLI-only or component options" \
+  --rpm --component tokenless
+expect_rejected rpm-with-cli-only \
+  "--rpm cannot be combined with CLI-only or component options" \
+  --cli-only --rpm
+expect_rejected rpm-with-product \
+  "product release options and legacy CLI overrides cannot be combined" \
+  --rpm --scope system
 
+echo "legacy installer tests passed"
+command -v python3 >/dev/null 2>&1 || fail "Python 3 is required for product bootstrap tests"
+python3 "${SCRIPT_DIR}/test-release-install.py"
 echo "installer tests passed"

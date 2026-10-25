@@ -5,12 +5,18 @@ on:
     branches: [main, 'release/**']
     paths:
       - 'src/aw/**'
+      - 'distribution/crates/local-package/**'
+      - 'distribution/tooling/aw-preview/**'
       - 'providers/**'
+      - 'distribution/packaging/**'
       - '.github/workflows/aw-ci.yml'
   pull_request:
     paths:
       - 'src/aw/**'
+      - 'distribution/crates/local-package/**'
+      - 'distribution/tooling/aw-preview/**'
       - 'providers/**'
+      - 'distribution/packaging/**'
   merge_group:
   workflow_dispatch:
     inputs:
@@ -71,6 +77,15 @@ jobs:
         if: steps.scope.outputs.selected == 'true'
         with:
           node-version: '24.15.0'
+      - name: Select trusted Python for native fixtures
+        if: steps.scope.outputs.selected == 'true'
+        run: |
+          # The hosted setup-python cache is writable by other users. Keep it
+          # for gate control, and let native trust fixtures use the OS runtime.
+          aw_native_tools_dir=$(mktemp -d /tmp/aw-native-tools.XXXXXX)
+          ln -s /usr/bin/python3 "$aw_native_tools_dir/python3"
+          "$aw_native_tools_dir/python3" -I -S -c 'import sys; assert sys.version_info >= (3, 11)'
+          echo "$aw_native_tools_dir" >> "$GITHUB_PATH"
       - name: Prepare the pinned Rust toolchain
         if: steps.scope.outputs.selected == 'true'
         working-directory: src/aw
@@ -79,6 +94,8 @@ jobs:
         if: steps.scope.outputs.selected == 'true'
         with:
           workspaces: |
+            distribution/crates/local-package
+            distribution/tooling/aw-preview
             src/aw
             providers/agent-sec-core
             providers/tokenless
@@ -87,7 +104,7 @@ jobs:
       - name: Run AW checks
         if: steps.scope.outputs.selected == 'true'
         id: checks
-        run: python3 src/aw/scripts/check.py
+        run: '"${pythonLocation}/bin/python3" src/aw/scripts/check.py'
 
       - name: Require the expected result
         if: always()

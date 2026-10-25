@@ -124,7 +124,7 @@ def scope(event_name: str, event: dict, actual: str, repo: Path = REPO) -> bool:
             )
         )
     return any(
-        path.startswith(("src/aw/", "providers/"))
+        path.startswith(("src/aw/", "providers/", "distribution/crates/local-package/", "distribution/tooling/aw-preview/"))
         or (
             event_name != "pull_request"
             and path in {".github/workflows/aw-ci.yml", ".github/workflows/aw-preview.yml"}
@@ -185,6 +185,7 @@ def package_permissions() -> None:
         ["cargo", "test", "--locked", "-p", "aw-service", "--lib", "inspect::package_leases"],
         ["cargo", "test", "--locked", "-p", "aw-exec", "--test", "packages"],
         ["cargo", "test", "--locked", "-p", "aw-cli", "--test", "packages"],
+        ["cargo", "test", "--locked", "--manifest-path", "../../distribution/crates/local-package/Cargo.toml", "--workspace"],
     ]
     for mask in (0o022, 0o002):
         for command in commands:
@@ -214,18 +215,26 @@ def check() -> None:
             ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
             root, capture=True,
         )))
+    shared_roots = [REPO / "distribution/crates/local-package", REPO / "distribution/tooling/aw-preview"]
+    metadata["shared_workspaces"] = []
+    for root in shared_roots:
+        run(["cargo", "fmt", "--all", "--", "--check"], root)
+        metadata["shared_workspaces"].append(json.loads(run(
+            ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
+            root, capture=True,
+        )))
     structure(metadata, AW)
-    for root in [AW, *provider_roots]:
+    for root in [AW, *provider_roots, *shared_roots]:
         run(["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"], root)
     from check_legacy_cli import prepare_legacy_cli
 
     os.environ["AW_LEGACY_PACKAGE_CLI"] = str(prepare_legacy_cli(AW, REPO, run))
     check_inventory(metadata)
-    for root in [AW, *provider_roots]:
+    for root in [AW, *provider_roots, *shared_roots]:
         run(["cargo", "test", "--workspace", "--locked", "--no-fail-fast"], root)
     package_permissions()
     run([sys.executable, "tests/check_canonical.py"], AW, timeout=30)
-    for root in [AW, *provider_roots]:
+    for root in [AW, *provider_roots, *shared_roots]:
         run(["cargo", "doc", "--workspace", "--no-deps", "--locked"], root)
     if candidate() != actual:
         raise ValueError("checkout changed during validation")

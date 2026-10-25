@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Check source layout independently from release archive identity."""
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
-
 
 HERE = Path(__file__).resolve().parent
 ACTION = (HERE.parent / "actions/package-source/action.yaml").read_text(encoding="utf-8")
@@ -29,6 +30,10 @@ class PackageSourcePathsTest(unittest.TestCase):
             ("anolisa", "distribution/anolisa"),
             ("copilot-shell", "deprecated/copilot-shell"),
             ("cosh-ng", "src/cosh-ng"),
+            ("agent-sec-core", "src/agent-sec-core"),
+            ("os-skills", "src/os-skills"),
+            ("skillfs", "src/skillfs"),
+            ("ws-ckpt", "src/ws-ckpt"),
         ):
             for suffix in ("", ".preview"):
                 with self.subTest(component=component, suffix=suffix):
@@ -42,9 +47,34 @@ class PackageSourcePathsTest(unittest.TestCase):
             (source_dir / "payload.txt").write_text(component, encoding="utf-8")
             (root / "LICENSE").write_text("fixture license\n", encoding="utf-8")
             (source_dir / "LICENSE").symlink_to("../../LICENSE")
+            identity = {"anolisa": "anolisa-cli", "agent-sec-core": "sec-core"}.get(
+                component, component
+            )
+            if component != "copilot-shell":
+                recipe = source_dir / ".anolisa"
+                recipe.mkdir(parents=True, exist_ok=True)
+                (recipe / "recipe.json").write_text(
+                    json.dumps({"id": identity, "source_dir": source})
+                )
+                (recipe / "component.toml.in").write_text("# committed fixture recipe\n")
+                shared = root / "distribution/packaging"
+                shared.mkdir(parents=True)
+                for filename in ("snapshot.py", "recipes.py"):
+                    shutil.copyfile(
+                        HERE.parents[1] / "distribution/packaging" / filename, shared / filename
+                    )
+                if component == "anolisa":
+                    (root / "distribution/release").mkdir()
             env_file = root / "github-env"
             env_file.touch()
-            env = dict(os.environ, GITHUB_ENV=str(env_file), TOKENLESS_SOURCE_ROOT=".")
+            env = dict(
+                os.environ,
+                GITHUB_ENV=str(env_file),
+                GITHUB_WORKSPACE=str(root),
+                COPYFILE_DISABLE="1",
+                TOKENLESS_SOURCE_ROOT=".",
+                GPG_PUBLIC_KEY="",
+            )
             inputs = {
                 "component": component,
                 "version": "1.2.3",
@@ -54,8 +84,11 @@ class PackageSourcePathsTest(unittest.TestCase):
                 "Resolve source directory",
                 "Resolve LICENSE",
                 "Create source archive",
+                "Include ANOLISA distribution metadata",
                 "Create source archive (tar)",
             ):
+                if component == "copilot-shell" and name == "Include ANOLISA distribution metadata":
+                    continue
                 script = run_block(name)
                 for key, value in inputs.items():
                     script = script.replace("${{ inputs." + key + " }}", value)
@@ -87,7 +120,15 @@ class PackageSourcePathsTest(unittest.TestCase):
                 self.assertEqual(payload.read().decode(), component)
                 license_member = archive.getmember(f"{archive_name}/LICENSE")
                 self.assertTrue(license_member.isfile())
+                self.assertEqual(archive.extractfile(license_member).read(), b"fixture license\n")
                 self.assertTrue((source_dir / "LICENSE").is_symlink())
+                if component != "copilot-shell":
+                    metadata = archive.extractfile(f"{archive_name}/.anolisa/recipe.json")
+                    self.assertIsNotNone(metadata)
+                    self.assertEqual(json.loads(metadata.read())["id"], identity)
+                    self.assertFalse(
+                        any("/distribution/components/" in name for name in archive.getnames())
+                    )
 
 
 if __name__ == "__main__":

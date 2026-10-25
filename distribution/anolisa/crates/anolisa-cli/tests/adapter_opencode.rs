@@ -27,7 +27,9 @@ fn opencode_cli_lifecycle_and_dry_run() {
         Some(cache.clone()),
         Some(runtime.clone()),
     );
-    let plugin = layout.datadir.join("adapters/tokenless/opencode/plugin.js");
+    let plugin = layout
+        .sharedir()
+        .join("tokenless/adapters/opencode/plugin.js");
     let source = "export const Plugin = async () => ({});\n";
     std::fs::create_dir_all(plugin.parent().unwrap()).unwrap();
     std::fs::write(&plugin, source).unwrap();

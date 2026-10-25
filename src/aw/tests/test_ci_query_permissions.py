@@ -52,9 +52,8 @@ class QueryPermissionTests(unittest.TestCase):
         after.write_text("parent mode")
         self.assertEqual(stat.S_IMODE(before.stat().st_mode), stat.S_IMODE(after.stat().st_mode))
         calls = [json.loads(line) for line in capture.read_text().splitlines()]
-        self.assertEqual(calls, [
-            [["test", "--locked", "-p", *target], mode]
-            for mode in (0o644, 0o664)
+        expected = [
+            ["test", "--locked", "-p", *target]
             for target in (
                 ("aw-package", "--test", "database"), ("aw-cli", "--test", "inventory"),
                 ("aw-package", "--lib"), ("aw-package", "--test", "management"),
@@ -62,7 +61,8 @@ class QueryPermissionTests(unittest.TestCase):
                 ("aw-service", "--lib", "inspect::package_leases"),
                 ("aw-exec", "--test", "packages"), ("aw-cli", "--test", "packages"),
             )
-        ])
+        ] + [["test", "--locked", "--manifest-path", "../../distribution/crates/local-package/Cargo.toml", "--workspace"]]
+        self.assertEqual(calls, [[command, mode] for mode in (0o644, 0o664) for command in expected])
 
     def test_a_failure_in_the_group_writable_mask_fails_the_gate(self) -> None:
         root, capture = self.fixture()
@@ -72,7 +72,7 @@ class QueryPermissionTests(unittest.TestCase):
             gate.package_permissions()
         self.assertEqual(failure.exception.returncode, 7)
         calls = [json.loads(line) for line in capture.read_text().splitlines()]
-        self.assertEqual(len(calls), 9)
+        self.assertEqual(len(calls), 10)
         self.assertEqual(calls[-1][1], 0o664)
 
 

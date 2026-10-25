@@ -127,31 +127,31 @@ jobs:
           if echo "$CHANGED" | grep -q "^deprecated/copilot-shell/"; then
             COPILOT_SHELL=true
           fi
-          if echo "$CHANGED" | grep -q "^src/agent-sec-core/"; then
+          if echo "$CHANGED" | grep -Eq "^src/agent-sec-core/"; then
             AGENT_SEC=true
           fi
-          if echo "$CHANGED" | grep -q "^src/agentsight/"; then
+          if echo "$CHANGED" | grep -Eq "^src/agentsight/"; then
             AGENTSIGHT=true
           fi
-          if echo "$CHANGED" | grep -q "^src/tokenless/"; then
+          if echo "$CHANGED" | grep -Eq "^src/tokenless/"; then
             TOKENLESS=true
           fi
-          if echo "$CHANGED" | grep -q "^src/ws-ckpt/"; then
+          if echo "$CHANGED" | grep -Eq "^src/ws-ckpt/"; then
             WS_CKPT=true
           fi
-          if echo "$CHANGED" | grep -q "^src/agent-memory/"; then
+          if echo "$CHANGED" | grep -Eq "^src/agent-memory/"; then
             AGENT_MEMORY=true
           fi
-          if echo "$CHANGED" | grep -q "^distribution/anolisa/"; then
+          if echo "$CHANGED" | grep -Eq "^distribution/anolisa/|^distribution/(packaging|release|containers)/|^src/[^/]+/\.anolisa/|^providers/[^/]+/\.anolisa/"; then
             ANOLISA=true
           fi
-          if echo "$CHANGED" | grep -q "^src/skillfs/"; then
+          if echo "$CHANGED" | grep -Eq "^src/skillfs/"; then
             SKILLFS=true
           fi
-          if echo "$CHANGED" | grep -q "^src/cosh-ng/"; then
+          if echo "$CHANGED" | grep -Eq "^src/cosh-ng/"; then
             COSH_NG=true
           fi
-          if echo "$CHANGED" | grep -q "^src/ktuner/"; then
+          if echo "$CHANGED" | grep -Eq "^src/ktuner/"; then
             KTUNER=true
           fi
 

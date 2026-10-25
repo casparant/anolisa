@@ -57,7 +57,8 @@ pub enum ManagementCommands {
 }
 `,
     [`${paths.anolisa}/manifests/components/cosh/component.toml`]: 'os = ["linux"]\narch = ["amd64"]\n',
-    [`${paths.anolisa}/manifests/components/tokenless/component.toml`]: 'os = ["linux", "macos"]\narch = ["arm64"]\n',
+    [`${paths.anolisa}/manifests/components/tokenless/component.toml`]: 'os = ["linux"]\narch = ["amd64"]\n',
+    [`${paths.tokenless}/.anolisa/component.toml.in`]: 'os = ["linux", "macos"]\narch = ["arm64"]\n',
     [`${paths['copilot-shell']}/package.json`]: JSON.stringify({version: '2.3.4'}),
     [`${paths['copilot-shell']}/CHANGELOG.md`]: '# Shell changelog\n\n## 2.3.4\n\nShell release.\n',
     [`${paths['copilot-shell']}/docs/user-guide/en/QUICKSTART.md`]: '# Archived Copilot Shell quickstart\n',
@@ -147,7 +148,7 @@ for (const migrated of [false, true]) {
     assert.equal(components.anolisa.version, '1.2.3');
     assert.equal(components.tokenless.version, '3.4.5');
     assert.equal(components['without-changelog'].version, 'unversioned');
-    assert.equal(index.platform_support.source, `${paths.anolisa}/manifests/components/*/component.toml with AGENTS.md fallback`);
+    assert.equal(index.platform_support.source, 'component-local .anolisa/component.toml.in with AGENTS.md fallback');
     assert.deepEqual(components.anolisa.platform_support, {
       linux: true, macos: 'aarch64', windows: false, architectures: ['x86_64', 'aarch64'],
     });

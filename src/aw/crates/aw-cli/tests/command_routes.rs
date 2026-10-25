@@ -28,6 +28,32 @@ fn invoke(arguments: &[&str], cwd: &Path) -> aw_exec::Output {
 }
 
 #[test]
+fn native_agent_catalog_uses_the_launch_registry_without_creating_runtime_or_configuration() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = invoke(&["agent", "list", "--json"], directory.path());
+    assert!(output.status.success(), "{:?}", output);
+    assert!(output.stderr.is_empty());
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["format"], 1);
+    let names: Vec<_> = value["adapters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+    let expected: Vec<_> = aw_adapter::registered_adapters()
+        .iter()
+        .map(|item| item.name)
+        .collect();
+    assert_eq!(names, expected);
+    assert!(!names.is_empty());
+    for name in names {
+        aw_adapter::select(name).unwrap();
+    }
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+}
+
+#[test]
 fn native_connect_and_legacy_install_preserve_the_same_validation_failure() {
     let directory = tempfile::tempdir().unwrap();
     let old = invoke(
@@ -124,6 +150,7 @@ fn every_public_level_has_help_without_accessing_files_or_services() {
         "uninstall",
         "agent",
         "agent connect",
+        "agent list",
         "config",
         "config init",
         "config show",

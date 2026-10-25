@@ -52,6 +52,7 @@ class PackageSelectionTests(GateFixture):
         self.assertEqual(
             commands,
             [
+                ["test", "--locked", "--manifest-path", "distribution/tooling/aw-preview/Cargo.toml"],
                 [
                     "test", "--locked", "--manifest-path", "src/aw/Cargo.toml",
                     "-p", "aw-package",
@@ -63,7 +64,7 @@ class PackageSelectionTests(GateFixture):
                 ],
                 [
                     "run", "--locked", "--release", "--manifest-path",
-                    "src/aw/Cargo.toml", "-p", "aw-package", "--bin", "aw-build",
+                    "distribution/tooling/aw-preview/Cargo.toml", "--bin", "anolisa-aw-preview",
                     "--", "--version", "0.1.0-preview.1", "--output",
                     str(preview / "packages"), "--component", "all",
                 ],

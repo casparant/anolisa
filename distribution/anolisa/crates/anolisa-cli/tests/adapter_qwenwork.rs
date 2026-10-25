@@ -31,7 +31,7 @@ impl Fixture {
         std::fs::create_dir_all(&home).unwrap();
         let home = home.canonicalize().unwrap();
         let layout = FsLayout::user(home.clone());
-        let source = layout.datadir.join("adapters/tokenless/qwenwork");
+        let source = layout.sharedir().join("tokenless/adapters/qwenwork");
         let app = home.join("Applications/QwenWorkCN.app");
         let host = home.join(".qwenworkcn");
         let bin = home.join(".local/bin");

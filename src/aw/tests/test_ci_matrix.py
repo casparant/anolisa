@@ -117,12 +117,14 @@ class MatrixTests(GateFixture):
                 "packages": [{"id": name, "name": name} for name in sorted(packages)],
             }
 
-        metadata = workspace(names - providers, self.root)
+        shared = {"local-package", "local-package-runtime"}
+        metadata = workspace(names - providers - shared, self.root)
+        metadata["shared_workspaces"] = [workspace(shared, self.root / "shared"), workspace({"anolisa-aw-preview"}, self.root / "preview")]
         metadata["provider_workspaces"] = [
             workspace({name}, self.root / name) for name in sorted(providers)
         ]
         (self.root / "tests").mkdir()
-        for mode in ("valid", "missing-provider", "duplicate-target", "unknown-opt-in"):
+        for mode in ("valid", "missing-provider", "missing-shared", "duplicate-target", "unknown-opt-in"):
             matrix = copy.deepcopy(self.matrix)
             if mode == "unknown-opt-in":
                 matrix["opt_in_targets"]["unknown/test/acceptance"] = "fixture"
@@ -131,7 +133,7 @@ class MatrixTests(GateFixture):
             def collected(root: Path, data: dict, run: object, opt_in: frozenset) -> dict:
                 owned = set(data["workspace_members"])
                 self.assertTrue(all(target.split("/", 1)[0] in owned for target in opt_in))
-                if mode == "missing-provider" and owned == {"aw-provider-tokenless"}:
+                if (mode == "missing-provider" and owned == {"aw-provider-tokenless"}) or (mode == "missing-shared" and owned == shared):
                     return {}
                 result = {
                     target: tests for target, tests in self.runnable.items()
@@ -144,7 +146,7 @@ class MatrixTests(GateFixture):
             with self.subTest(mode=mode), patch("check_inventory.collect", side_effect=collected) as build:
                 if mode == "valid":
                     check_inventory(self.root, metadata, object())
-                    self.assertEqual(build.call_count, 3)
+                    self.assertEqual(build.call_count, 5)
                 else:
                     with self.assertRaises(ValueError):
                         check_inventory(self.root, metadata, object())

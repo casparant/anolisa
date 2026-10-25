@@ -21,15 +21,12 @@ def structure(metadata: dict, root: Path) -> None:
             "serde",
             "serde_json",
             "serde_yaml_ng",
-            "sha2",
-            "thiserror",
             "libc",
-            "flate2",
-            "tar",
             "tempfile",
             "aw-config",
             "aw-exec",
             "aw-service",
+            "local-package",
         },
         "aw-provider-tokenless": {
             "aw-exec",
@@ -56,7 +53,7 @@ def structure(metadata: dict, root: Path) -> None:
         "aw-core": {"aw-contracts", "serde_json", "thiserror"},
         "aw-config": {"jsonschema", "serde", "serde_json", "serde_yaml_ng", "thiserror"},
         "aw-provider": {"aw-config", "jsonschema", "serde", "serde_json", "sha2", "thiserror"},
-        "aw-exec": {"libc", "thiserror"},
+        "aw-exec": {"libc", "thiserror", "local-package-runtime"},
         "aw-host": {"aw-config", "aw-exec", "aw-provider", "serde_json", "sha2", "thiserror"},
         "aw-service": {
             "aw-adapter",
@@ -76,11 +73,21 @@ def structure(metadata: dict, root: Path) -> None:
             "tempfile",
         },
     }
+    allowed.update({
+        "local-package": {"serde", "serde_json", "serde_yaml_ng", "sha2", "thiserror", "libc", "tempfile", "local-package-runtime"},
+        "local-package-runtime": {"libc", "thiserror"},
+        "anolisa-aw-preview": {"local-package", "aw-exec", "serde_json", "flate2", "tar", "tempfile", "libc"},
+    })
+    shared = {
+        "local-package": root.parents[1] / "distribution/crates/local-package",
+        "local-package-runtime": root.parents[1] / "distribution/crates/local-package/runtime",
+        "anolisa-aw-preview": root.parents[1] / "distribution/tooling/aw-preview",
+    }
     members = {
         p["name"]: p for p in metadata["packages"] if p["id"] in metadata["workspace_members"]
     }
     providers = {"aw-provider-sec-core": "agent-sec-core", "aw-provider-tokenless": "tokenless"}
-    if members.keys() != allowed.keys() - providers.keys():
+    if members.keys() != allowed.keys() - providers.keys() - shared.keys():
         raise ValueError("AW workspace members changed; review the crate boundaries")
     independent = metadata.get("provider_workspaces", [])
     if len(independent) != len(providers):
@@ -95,9 +102,29 @@ def structure(metadata: dict, root: Path) -> None:
         if name in members or Path(workspace["workspace_root"]).resolve() != directory.resolve():
             raise ValueError("Provider workspace is duplicated or outside the collaboration directory")
         members[name] = package
+    expected_shared = {
+        (root.parents[1] / "distribution/crates/local-package").resolve(): {"local-package", "local-package-runtime"},
+        shared["anolisa-aw-preview"].resolve(): {"anolisa-aw-preview"},
+    }
+    shared_workspaces = metadata.get("shared_workspaces", [])
+    if len(shared_workspaces) != len(expected_shared):
+        raise ValueError("shared installer and Preview tooling need independent audited workspaces")
+    seen_shared = set()
+    for workspace in shared_workspaces:
+        directory = Path(workspace["workspace_root"]).resolve()
+        packages = [p for p in workspace["packages"] if p["id"] in workspace["workspace_members"]]
+        if directory in seen_shared or {p["name"] for p in packages} != expected_shared.get(directory):
+            raise ValueError("shared workspace location or members changed")
+        seen_shared.add(directory)
+        for package in packages:
+            if package["name"] in members:
+                raise ValueError("shared package must belong to exactly one workspace")
+            members[package["name"]] = package
     locations = {name: root / "crates" / name for name in allowed}
     locations.update({name: root.parents[1] / "providers" / directory for name, directory in providers.items()})
+    locations.update(shared)
     binaries = {
+        "anolisa-aw-preview": {"anolisa-aw-preview"},
         "aw-cli": {"aw"},
         "aw-package": {"aw-build"},
         **{name: {name} for name in providers},
@@ -111,7 +138,7 @@ def structure(metadata: dict, root: Path) -> None:
             target["name"] for target in package["targets"] if "bin" in target.get("kind", [])
         }
         if actual_binaries != binaries.get(name, set()):
-            raise ValueError(f"{name}: executable targets changed; aw is the software management command")
+            raise ValueError(f"{name}: executable targets changed; review CLI ownership")
         for target in package["targets"]:
             source = Path(target["src_path"]).resolve()
             if not any(source.is_relative_to(path.resolve()) for path in source_roots):
@@ -132,7 +159,7 @@ def structure(metadata: dict, root: Path) -> None:
             ):
                 raise ValueError(f"{name}: dependency must come from the locked registry")
     source_sizes(root)
-    for name in providers:
+    for name in [*providers, "local-package", "anolisa-aw-preview"]:
         source_sizes(locations[name])
 
 
