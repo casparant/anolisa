@@ -13,6 +13,7 @@ pub use model::{
     Communication, DeploymentConfig, DeploymentError, Preset, PresetService, Readiness, RunAs,
     Scope, Service,
 };
+pub(crate) use preset::bounded_command;
 pub use preset::{
     PresetAction, PresetActionKind, PresetPlan, PresetReport, Systemctl, SystemctlRunner,
     UnitState, apply_preset, plan_preset,

@@ -13,10 +13,12 @@ pub mod tier1;
 pub mod adapter;
 pub mod migrate;
 pub mod osbase;
+pub mod overview;
 pub mod preset;
 pub mod register;
 pub mod release;
 pub mod serve;
+pub mod setup;
 pub mod system;
 pub mod telemetry;
 
@@ -120,6 +122,10 @@ pub enum ComponentCommands {
 /// Management commands.
 #[derive(Subcommand)]
 pub enum ManagementCommands {
+    /// Show installed versions, usable commands, service state and offline upgrade comparisons
+    Overview(overview::OverviewArgs),
+    /// Guide first use and explicitly create invoking-user Agent configuration
+    Setup(setup::SetupArgs),
     /// Install and inspect an immutable, offline product release
     Release(release::ReleaseArgs),
     /// Review and apply service presets independently of package installation
@@ -245,6 +251,8 @@ pub fn dispatch(cli: Cli, ctx: &CliContext) -> Result<(), CliError> {
             ComponentCommands::Adapter(args) => adapter::handle(args, ctx),
         },
         Commands::Management(cmd) => match cmd {
+            ManagementCommands::Overview(args) => overview::handle(args, ctx),
+            ManagementCommands::Setup(args) => setup::handle(args, ctx),
             ManagementCommands::Release(args) => release::handle(args, ctx),
             ManagementCommands::Preset(args) => preset::handle(args, ctx),
             ManagementCommands::Serve(args) => serve::handle(args, ctx),
@@ -538,6 +546,11 @@ fn command_policy(command: &Commands) -> CommandPolicy {
             }
         },
         Commands::Management(cmd) => match cmd {
+            ManagementCommands::Overview(_) => {
+                CommandPolicy::new("overview", CommandScope::ReadOnly)
+            }
+            // setup validates its optional invoking-user writes itself; visibility never grants system authority.
+            ManagementCommands::Setup(_) => CommandPolicy::new("setup", CommandScope::ReadOnly),
             ManagementCommands::Release(_) => CommandPolicy::new("release", CommandScope::ReadOnly),
             ManagementCommands::Preset(_) => CommandPolicy::new("preset", CommandScope::ReadOnly),
             ManagementCommands::Serve(_) => CommandPolicy::new("serve", CommandScope::ReadOnly),
