@@ -47,6 +47,7 @@ pub fn ctx_with_prefix(json: bool, prefix: Option<PathBuf>) -> CliContext {
 
 pub fn args(component: &str) -> InstallArgs {
     InstallArgs {
+        release: Default::default(),
         component: Some(component.to_string()),
         all: false,
         fail_fast: false,

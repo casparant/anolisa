@@ -330,6 +330,7 @@ pub(crate) fn plan_component(
     let index_base_override = normalized_repo_override(args)?;
     let (component, view) =
         common::resolve_install_target(input, ctx, &command, index_base_override.as_deref())?;
+    let layout = common::component_layout(&layout, &component, &command)?;
     let store = view.writable.state;
 
     if let Some(explicit) = args.backend.as_deref()
@@ -654,7 +655,7 @@ pub(super) fn execute_planned(
         plan: _,
         route,
     } = planned;
-    let layout = common::resolve_layout(ctx);
+    let layout = common::component_layout(&common::resolve_layout(ctx), &component, &command)?;
     let repo_config = common::load_repo_config(ctx, &layout, COMMAND, RepoPersistPolicy::Require)?;
     let index_base_override = normalized_repo_override(args)?;
     let state_path = layout.state_dir.join("installed.toml");

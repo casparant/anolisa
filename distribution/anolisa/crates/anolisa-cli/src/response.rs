@@ -109,6 +109,16 @@ pub enum CliError {
     #[error("execution failed: {reason}")]
     Runtime { command: String, reason: String },
 
+    /// Foreground services completed signal-driven cleanup before returning.
+    /// Exit status retains the conventional 128 + signal container contract.
+    #[error("interrupted by signal {signal}")]
+    Interrupted {
+        /// Foreground entrypoint that completed shutdown.
+        command: String,
+        /// TERM or INT received by the supervisor.
+        signal: u8,
+    },
+
     /// The command completed but the resulting state is degraded
     /// (e.g. sandbox install where one or more phases emitted warnings
     /// rather than hard failure). Maps to exit code 2 so wrapping
@@ -152,6 +162,7 @@ impl CliError {
             Self::InvalidArgument { .. } => "INVALID_ARGUMENT",
             Self::NotInstalled { .. } => "NOT_INSTALLED",
             Self::Runtime { .. } => "EXECUTION_FAILED",
+            Self::Interrupted { .. } => "INTERRUPTED",
             Self::Degraded { .. } => "DEGRADED",
             Self::PermissionDenied { .. } => "PERMISSION_DENIED",
             Self::BatchPartial { .. } => "BATCH_PARTIAL",
@@ -165,6 +176,7 @@ impl CliError {
             Self::InvalidArgument { .. } => 2,
             Self::NotInstalled { .. } => 2,
             Self::Runtime { .. } => 1,
+            Self::Interrupted { signal, .. } => 128_u8.saturating_add(*signal),
             Self::Degraded { .. } => 2,
             Self::PermissionDenied { .. } => 5,
             Self::BatchPartial { .. } => 1,
@@ -178,6 +190,7 @@ impl CliError {
             Self::InvalidArgument { command, .. } => command,
             Self::NotInstalled { command, .. } => command,
             Self::Runtime { command, .. } => command,
+            Self::Interrupted { command, .. } => command,
             Self::Degraded { command, .. } => command,
             Self::PermissionDenied { command, .. } => command,
             Self::BatchPartial { command } => command,
@@ -191,6 +204,7 @@ impl CliError {
             Self::InvalidArgument { .. } => None,
             Self::NotInstalled { .. } => None,
             Self::Runtime { .. } => None,
+            Self::Interrupted { .. } => None,
             Self::Degraded { .. } => None,
             Self::PermissionDenied { hint, .. } => hint.as_deref(),
             Self::BatchPartial { .. } => None,
@@ -206,6 +220,9 @@ impl CliError {
             Self::InvalidArgument { reason, .. } => reason.clone(),
             Self::NotInstalled { reason, .. } => reason.clone(),
             Self::Runtime { reason, .. } => reason.clone(),
+            Self::Interrupted { signal, .. } => {
+                format!("foreground services stopped after signal {signal}")
+            }
             Self::Degraded { reason, .. } => reason.clone(),
             Self::PermissionDenied { reason, .. } => reason.clone(),
             Self::BatchPartial { .. } => "batch completed with failures".to_string(),
@@ -240,6 +257,7 @@ impl CliError {
             | Self::InvalidArgument { command: c, .. }
             | Self::NotInstalled { command: c, .. }
             | Self::Runtime { command: c, .. }
+            | Self::Interrupted { command: c, .. }
             | Self::Degraded { command: c, .. }
             | Self::PermissionDenied { command: c, .. }
             | Self::BatchPartial { command: c }

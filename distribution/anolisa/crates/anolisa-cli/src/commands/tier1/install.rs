@@ -63,9 +63,13 @@ const ANOLISA_RPM_REPO_ID: &str = "anolisa-configured";
 #[command(group(
     clap::ArgGroup::new("target")
         .required(true)
-        .args(["component", "all"]),
+        .multiple(true)
+        .args(["component", "all", "bundle"]),
 ))]
 pub struct InstallArgs {
+    /// Offline product selection, independent of the component repository backend.
+    #[command(flatten)]
+    pub release: ProductInstallArgs,
     /// Component name to install
     #[arg(value_name = "COMPONENT")]
     pub component: Option<String>,
@@ -89,6 +93,20 @@ pub struct InstallArgs {
     pub package: Option<String>,
 }
 
+/// Explicit offline product installation; legacy component options retain their protocol.
+#[derive(Debug, Default, clap::Args)]
+pub struct ProductInstallArgs {
+    /// Verified unpacked all-in-one product directory.
+    #[arg(long, conflicts_with_all = ["all", "version", "backend", "repo", "package"])]
+    pub bundle: Option<std::path::PathBuf>,
+    /// Package combination defined by the bundle, never a native Agent profile.
+    #[arg(long, requires = "bundle", conflicts_with = "component")]
+    pub profile: Option<String>,
+    /// Explicit product scope; defaults to user even under sudo.
+    #[arg(long, requires = "bundle", value_enum)]
+    pub scope: Option<crate::commands::release::ReleaseScope>,
+}
+
 mod types;
 // Re-export shared types for external consumers (update.rs, adopt.rs, etc.)
 // and for tests accessing via `super::*`.
@@ -97,6 +115,19 @@ pub(crate) use types::*;
 mod provision;
 
 pub fn handle(args: InstallArgs, ctx: &CliContext) -> Result<(), CliError> {
+    if let Some(bundle) = args.release.bundle {
+        return crate::commands::release::handle(
+            crate::commands::release::ReleaseArgs {
+                command: crate::commands::release::ReleaseCommand::Install {
+                    bundle,
+                    scope: args.release.scope.unwrap_or_default(),
+                    profile: args.release.profile,
+                    components: args.component.into_iter().collect(),
+                },
+            },
+            ctx,
+        );
+    }
     if args.fail_fast && !args.all {
         return Err(CliError::InvalidArgument {
             command: COMMAND.to_string(),

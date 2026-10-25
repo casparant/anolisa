@@ -34,6 +34,20 @@ pub fn resolve_layout(ctx: &CliContext) -> FsLayout {
     ctx.layout().clone()
 }
 
+/// Authorize only the resource namespace of the already-resolved operation target.
+pub(crate) fn component_layout(
+    layout: &FsLayout,
+    component: &str,
+    command: &str,
+) -> Result<FsLayout, CliError> {
+    layout
+        .for_component(component)
+        .map_err(|error| CliError::InvalidArgument {
+            command: command.to_owned(),
+            reason: error.to_string(),
+        })
+}
+
 /// Build a consistent package-transaction permission error.
 pub(crate) fn package_permission_error(command: &str, bin: &str, action: &str) -> CliError {
     CliError::Runtime {

@@ -178,6 +178,7 @@ fn uninstall_component(
     let (resolved, view) = common::resolve_mutation_target(input, ctx, &scope_command)?;
     let store = view.writable.state;
     let target = resolved.as_str();
+    let layout = common::component_layout(&layout, target, &command)?;
     reporter.report(&format!("Resolving {target}..."));
     reject_dropped_capability(&store, target, &command)?;
 

@@ -2377,6 +2377,7 @@ fn install_all_dry_run_rejects_conflicts_between_planned_components() {
     )
     .expect("write repo config");
     let batch_args = InstallArgs {
+        release: Default::default(),
         component: None,
         all: true,
         fail_fast: false,
@@ -2466,6 +2467,7 @@ package = "agentsight"
     .expect("override component index");
 
     let batch_args = InstallArgs {
+        release: Default::default(),
         component: None,
         all: true,
         fail_fast: false,

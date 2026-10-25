@@ -547,6 +547,7 @@ pub(crate) fn plan_component_update(
     let (resolved, view) = common::resolve_mutation_target(input, ctx, &command)?;
     let store = view.writable.state;
     let target = resolved.as_str();
+    let layout = common::component_layout(&layout, target, &command)?;
 
     // The probe target comes from the record; update never switches the
     // package a component is bound to.

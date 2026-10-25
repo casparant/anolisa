@@ -11,8 +11,12 @@ pub mod tier1;
 
 // Tier 2 surfaces
 pub mod adapter;
+pub mod migrate;
 pub mod osbase;
+pub mod preset;
 pub mod register;
+pub mod release;
+pub mod serve;
 pub mod system;
 pub mod telemetry;
 
@@ -116,6 +120,14 @@ pub enum ComponentCommands {
 /// Management commands.
 #[derive(Subcommand)]
 pub enum ManagementCommands {
+    /// Install and inspect an immutable, offline product release
+    Release(release::ReleaseArgs),
+    /// Review and apply service presets independently of package installation
+    Preset(preset::PresetArgs),
+    /// Supervise the selected foreground services without systemd
+    Serve(serve::ServeArgs),
+    /// Plan and apply an explicit legacy installation migration
+    Migrate(migrate::MigrateArgs),
     /// Join the Agentic OS Co-Build Program (requires root/sudo)
     Register(register::RegisterArgs),
     /// Leave the Agentic OS Co-Build Program (requires root/sudo)
@@ -201,6 +213,19 @@ fn render_grouped_help(cap: &[(String, String)], mgmt: &[(String, String)]) -> S
 /// surfaces. Handlers must not re-parse global flags from their own
 /// `args` struct.
 pub fn dispatch(cli: Cli, ctx: &CliContext) -> Result<(), CliError> {
+    if (matches!(
+        &cli.command,
+        Commands::Management(ManagementCommands::Release(_) | ManagementCommands::Migrate(_))
+    ) || matches!(
+        &cli.command,
+        Commands::Component(ComponentCommands::Install(args)) if args.release.bundle.is_some()
+    )) && (cli.prefix.is_some() || cli.install_mode.is_some())
+    {
+        return Err(CliError::InvalidArgument {
+            command: "release".into(),
+            reason: "release commands use --scope; legacy --prefix and --install-mode cannot select a release layout".into(),
+        });
+    }
     let policy = command_policy(&cli.command);
     validate_command_args(&cli, ctx, policy)?;
     match cli.command {
@@ -220,6 +245,10 @@ pub fn dispatch(cli: Cli, ctx: &CliContext) -> Result<(), CliError> {
             ComponentCommands::Adapter(args) => adapter::handle(args, ctx),
         },
         Commands::Management(cmd) => match cmd {
+            ManagementCommands::Release(args) => release::handle(args, ctx),
+            ManagementCommands::Preset(args) => preset::handle(args, ctx),
+            ManagementCommands::Serve(args) => serve::handle(args, ctx),
+            ManagementCommands::Migrate(args) => migrate::handle(args, ctx),
             ManagementCommands::Register(args) => register::handle_register_group(args, ctx),
             ManagementCommands::Unregister(args) => register::handle_unregister_cmd(args, ctx),
             ManagementCommands::Env(args) => tier1::env::handle(args, ctx),
@@ -509,6 +538,10 @@ fn command_policy(command: &Commands) -> CommandPolicy {
             }
         },
         Commands::Management(cmd) => match cmd {
+            ManagementCommands::Release(_) => CommandPolicy::new("release", CommandScope::ReadOnly),
+            ManagementCommands::Preset(_) => CommandPolicy::new("preset", CommandScope::ReadOnly),
+            ManagementCommands::Serve(_) => CommandPolicy::new("serve", CommandScope::ReadOnly),
+            ManagementCommands::Migrate(_) => CommandPolicy::new("migrate", CommandScope::ReadOnly),
             ManagementCommands::Register(args) => {
                 CommandPolicy::new("register", register_command_scope(args))
             }

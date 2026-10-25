@@ -284,6 +284,7 @@ fn repair_attempt(
 
     let (resolved, view) = common::resolve_mutation_target(input, ctx, &command)?;
     let mut store = view.writable.state;
+    let layout = common::component_layout(&layout, &resolved, &command)?;
     effects.hydrate_owned_file_contracts(&mut store, &layout);
     let target = resolved.as_str();
 

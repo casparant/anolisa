@@ -2316,15 +2316,19 @@ fn owned_file_damage_matches(
 ) -> bool {
     let Some(Installation {
         binding: ProviderBinding::Owned { artifact },
+        name,
         ..
     }) = object
     else {
         return false;
     };
+    let Ok(layout) = layout.for_component(name) else {
+        return false;
+    };
     artifact
         .files
         .iter()
-        .any(|file| matches_evidence(&file.path) && check_owned_file(layout, file).is_failure())
+        .any(|file| matches_evidence(&file.path) && check_owned_file(&layout, file).is_failure())
 }
 
 /// Map a diagnostic fact to commands the lifecycle planner can actually

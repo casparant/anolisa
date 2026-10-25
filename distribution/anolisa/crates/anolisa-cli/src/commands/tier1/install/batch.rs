@@ -297,6 +297,7 @@ struct MergedItem {
 /// loop always passed: no per-component version pin, batch flags stripped.
 fn per_component_args(name: &str, args: &InstallArgs) -> InstallArgs {
     InstallArgs {
+        release: Default::default(),
         component: Some(name.to_string()),
         all: false,
         fail_fast: false,
@@ -952,6 +953,7 @@ mod tests {
 
     fn batch_args() -> InstallArgs {
         InstallArgs {
+            release: Default::default(),
             component: None,
             all: true,
             fail_fast: false,

@@ -1233,7 +1233,9 @@ mod tests {
             let manifest = ComponentManifest::from_file(&manifest_dir.join(contract))
                 .expect("ws-ckpt Raw contract must parse");
             let sandbox = tempdir().unwrap();
-            let layout = FsLayout::system(Some(sandbox.path().join("system")));
+            let layout = FsLayout::system(Some(sandbox.path().join("system")))
+                .for_component("ws-ckpt")
+                .unwrap();
             let mut files = resolve_manifest_files(&manifest, &layout, "ws-ckpt").unwrap();
             files.extend(resolve_adapter_files(&manifest, &layout, "ws-ckpt").unwrap());
             let sources = files
@@ -1260,8 +1262,8 @@ mod tests {
             runner.install_prepared(prepared).unwrap();
             for framework in ["openclaw", "hermes"] {
                 let plugin = layout
-                    .datadir
-                    .join(format!("runtime/ws-ckpt/plugins/{framework}/fixture.txt"));
+                    .sharedir()
+                    .join(format!("ws-ckpt/adapters/{framework}/fixture.txt"));
                 assert_eq!(std::fs::read(plugin).unwrap(), b"fixture");
             }
         }
